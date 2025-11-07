@@ -1,16 +1,28 @@
-// scripts/cf-postbuild.mjs
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
 const outDir = ".open-next";
 await fs.mkdir(outDir, { recursive: true });
 
-// Route EVERYTHING to the worker (keep it minimal for now)
-const routes = { version: 1, include: ["/*"], exclude: [] };
-await fs.writeFile(path.join(outDir, "_routes.json"),
-  JSON.stringify(routes, null, 2), "utf8");
+// Let the worker handle everything EXCEPT static assets
+const routes = {
+  version: 1,
+  include: ["/*"],
+  exclude: [
+    "/_next/*",
+    "/assets/*",
+    "/favicon.ico",
+    "/static/*",
+    "/.well-known/*",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/manifest.json",
+    "/can.png"      // your image in /public
+  ],
+};
+await fs.writeFile(path.join(outDir, "_routes.json"), JSON.stringify(routes, null, 2));
 
-// Forward fetch explicitly to the OpenNext worker
+// Worker shim (keep as-is)
 const shim = `
 import worker from "./worker.js";
 export default {
@@ -21,7 +33,4 @@ export default {
 `;
 await fs.writeFile(path.join(outDir, "_worker.js"), shim, "utf8");
 
-// Optional: drop a health file so we can verify static asset serving
-await fs.writeFile(path.join(outDir, "health.txt"), "ok\n", "utf8");
-
-console.log("✅ Wrote .open-next/_routes.json, .open-next/_worker.js, and health.txt");
+console.log("✅ wrote .open-next/_routes.json and .open-next/_worker.js");
