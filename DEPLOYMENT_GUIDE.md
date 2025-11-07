@@ -1,0 +1,147 @@
+# Deployment Guide for Unholy Co Website
+
+This guide will walk you through deploying the fixed version of your website to Cloudflare Pages.
+
+## Prerequisites
+
+Before you begin, make sure you have:
+- A GitHub account
+- A Cloudflare account (free tier works fine)
+- Git installed on your computer (optional, but recommended)
+
+## Step 1: Get the Latest Code
+
+### Option A: Download the ZIP file (Easiest)
+1. Go to your GitHub repository: `https://github.com/f5yc9n7ygb-web/unholy-co-website`
+2. Click the green "Code" button
+3. Select "Download ZIP"
+4. Extract the ZIP file to a folder on your computer
+5. You now have a local copy of all the latest updates!
+
+### Option B: Use Git (Recommended)
+If you have Git installed:
+```bash
+git clone https://github.com/f5yc9n7ygb-web/unholy-co-website.git
+cd unholy-co-website
+```
+
+## Step 2: Connect Your Repository to Cloudflare Pages
+
+1. **Log in to Cloudflare Dashboard**
+   - Go to https://dash.cloudflare.com/
+   - Sign in with your Cloudflare account
+
+2. **Navigate to Pages**
+   - On the left sidebar, click on "Workers & Pages"
+   - Click the "Create application" button
+   - Select the "Pages" tab
+
+3. **Connect to GitHub**
+   - Click "Connect to Git"
+   - If prompted, authorize Cloudflare to access your GitHub repositories
+   - Select your repository: `f5yc9n7ygb-web/unholy-co-website`
+
+4. **Configure Build Settings**
+   - **Project name**: `unholy-co-website` (or choose your own)
+   - **Production branch**: `main` (or the branch you want to deploy)
+   - **Framework preset**: Select "Next.js"
+   - **Build command**: `npm run cf:bundle`
+   - **Build output directory**: `.open-next`
+
+5. **Environment Variables (if needed)**
+   - Check your `.env.example` file for required variables
+   - Add any necessary environment variables in the "Environment variables" section
+   - Click "Add variable" for each one you need
+
+6. **Start Deployment**
+   - Click "Save and Deploy"
+   - Cloudflare will now build and deploy your site!
+
+## Step 3: Monitor the Deployment
+
+1. **Watch the Build Logs**
+   - After clicking deploy, you'll see a build log screen
+   - The build process will:
+     - Clone your repository
+     - Install dependencies (`npm install`)
+     - Run the build command (`npm run cf:bundle`)
+     - Deploy to Cloudflare's global network
+
+2. **Wait for Completion**
+   - The build typically takes 2-5 minutes
+   - You'll see "Success!" when it's done
+   - If there are any errors, they'll be shown in the logs
+
+## Step 4: Access Your Deployed Site
+
+1. **Get Your URL**
+   - Once deployed, Cloudflare provides a URL like: `unholy-co-website.pages.dev`
+   - You can also set up a custom domain if you have one
+
+2. **Test Your Site**
+   - Click on the provided URL
+   - Verify that your site loads correctly
+   - Test the main features to ensure everything works
+
+## Step 5: Set Up Automatic Deployments (Optional)
+
+Good news! This is already set up by default:
+- Every time you push to your `main` branch (or production branch), Cloudflare will automatically rebuild and redeploy
+- Pull requests also get preview deployments with unique URLs
+
+## Troubleshooting
+
+### Build Fails
+- Check the build logs for specific error messages
+- Ensure all environment variables are set correctly
+- Verify that `wrangler.toml` is properly formatted (this was our recent fix!)
+
+### Site Doesn't Load
+- Wait a few minutes for DNS propagation
+- Clear your browser cache
+- Check the "Functions" tab in Cloudflare Pages for any runtime errors
+
+### Need to Rollback
+- Go to your Cloudflare Pages project
+- Click on "Deployments"
+- Find a previous successful deployment
+- Click "..." → "Rollback to this deployment"
+
+## Making Updates After Initial Deployment
+
+1. **Make Changes Locally**
+   - Edit your code files
+   - Test locally with `npm run dev`
+
+2. **Push to GitHub**
+   ```bash
+   git add .
+   git commit -m "Your update message"
+   git push
+   ```
+
+3. **Automatic Deployment**
+   - Cloudflare automatically detects the push
+   - A new build starts automatically
+   - Your site updates in a few minutes!
+
+## Key Files Explained
+
+- **`wrangler.toml`**: Cloudflare configuration (we just fixed this!)
+- **`package.json`**: Dependencies and build scripts
+- **`next.config.mjs`**: Next.js framework configuration
+- **`.env.example`**: Template for environment variables (copy to `.env` locally)
+
+## Getting Help
+
+- Cloudflare Pages Docs: https://developers.cloudflare.com/pages/
+- Check build logs for specific error messages
+- GitHub Issues: Create an issue in your repository for questions
+
+## Summary of What We Fixed
+
+The previous deployment error was caused by the `wrangler.toml` file containing literal `\n` text instead of actual line breaks. This has been corrected, and your deployments should now work smoothly!
+
+---
+
+**Congratulations!** Your site should now be live on Cloudflare Pages! 🎉
