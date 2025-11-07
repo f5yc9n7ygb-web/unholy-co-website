@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "cf:bundle": "npx @cloudflare/next-on-pages --outdir .open-next",
+    "cf:bundle": "npx -y @opennextjs/cloudflare@1.11.1 build && node scripts/cf-postbuild.mjs",
     "preview": "wrangler dev --local",
     "deploy": "npm run cf:bundle && npx wrangler pages deploy .open-next"
   },
@@ -23,7 +23,6 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "@cloudflare/next-on-pages": "^1.13.16",
     "@types/node": "22.5.4",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
