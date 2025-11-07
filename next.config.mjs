@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  images: { formats: ['image/avif', 'image/webp'] },
-  experimental: { typedRoutes: true }
-}
-export default nextConfig
+  experimental: { typedRoutes: true },
+  output: 'standalone',
+  images: {
+    unoptimized: true, // 👈 serve from /public directly (no optimizer)
+  },
+};
+
+export default nextConfig;
