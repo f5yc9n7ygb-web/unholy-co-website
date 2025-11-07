@@ -1,1 +1,7 @@
-name = "unholy-co-website"\npages_build_output_dir = ".open-next"\ncompatibility_date = "2025-11-07"\ncompatibility_flags = ["nodejs_compat"]\n\n[observability]\nenabled = true\n
+name = "unholy-co-website"
+pages_build_output_dir = ".open-next"
+compatibility_date = "2025-11-07"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
