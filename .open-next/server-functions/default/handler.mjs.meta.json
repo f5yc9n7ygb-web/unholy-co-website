@@ -3070,13 +3070,13 @@
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/qr/page_client-reference-manifest.js": {
-      "bytes": 7866,
+    ".open-next/server-functions/default/.next/server/app/thanks/page_client-reference-manifest.js": {
+      "bytes": 7616,
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/story/page_client-reference-manifest.js": {
-      "bytes": 7614,
+    ".open-next/server-functions/default/.next/server/app/qr/page_client-reference-manifest.js": {
+      "bytes": 7866,
       "imports": [],
       "format": "cjs"
     },
@@ -3085,13 +3085,13 @@
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/drops/page_client-reference-manifest.js": {
-      "bytes": 7760,
+    ".open-next/server-functions/default/.next/server/app/legal/page_client-reference-manifest.js": {
+      "bytes": 7872,
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/legal/page_client-reference-manifest.js": {
-      "bytes": 7872,
+    ".open-next/server-functions/default/.next/server/app/drops/page_client-reference-manifest.js": {
+      "bytes": 7760,
       "imports": [],
       "format": "cjs"
     },
@@ -3105,18 +3105,18 @@
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js": {
-      "bytes": 7882,
-      "imports": [],
-      "format": "cjs"
-    },
     ".open-next/server-functions/default/.next/server/app/bloodthirst/page_client-reference-manifest.js": {
       "bytes": 7748,
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/thanks/page_client-reference-manifest.js": {
-      "bytes": 7616,
+    ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js": {
+      "bytes": 7882,
+      "imports": [],
+      "format": "cjs"
+    },
+    ".open-next/server-functions/default/.next/server/app/story/page_client-reference-manifest.js": {
+      "bytes": 7614,
       "imports": [],
       "format": "cjs"
     },
@@ -3149,14 +3149,14 @@
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/page_client-reference-manifest.js"
         },
         {
+          "path": ".open-next/server-functions/default/.next/server/app/thanks/page_client-reference-manifest.js",
+          "kind": "require-call",
+          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/thanks/page_client-reference-manifest.js"
+        },
+        {
           "path": ".open-next/server-functions/default/.next/server/app/qr/page_client-reference-manifest.js",
           "kind": "require-call",
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/qr/page_client-reference-manifest.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/.next/server/app/story/page_client-reference-manifest.js",
-          "kind": "require-call",
-          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/story/page_client-reference-manifest.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/shop/page_client-reference-manifest.js",
@@ -3164,14 +3164,14 @@
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/shop/page_client-reference-manifest.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/drops/page_client-reference-manifest.js",
-          "kind": "require-call",
-          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/drops/page_client-reference-manifest.js"
-        },
-        {
           "path": ".open-next/server-functions/default/.next/server/app/legal/page_client-reference-manifest.js",
           "kind": "require-call",
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/legal/page_client-reference-manifest.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/.next/server/app/drops/page_client-reference-manifest.js",
+          "kind": "require-call",
+          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/drops/page_client-reference-manifest.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/contact/page_client-reference-manifest.js",
@@ -3184,19 +3184,19 @@
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/bloodverse/page_client-reference-manifest.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js",
-          "kind": "require-call",
-          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js"
-        },
-        {
           "path": ".open-next/server-functions/default/.next/server/app/bloodthirst/page_client-reference-manifest.js",
           "kind": "require-call",
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/bloodthirst/page_client-reference-manifest.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/thanks/page_client-reference-manifest.js",
+          "path": ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js",
           "kind": "require-call",
-          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/thanks/page_client-reference-manifest.js"
+          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/.next/server/app/story/page_client-reference-manifest.js",
+          "kind": "require-call",
+          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/story/page_client-reference-manifest.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/bloodverse/chapter-1/page_client-reference-manifest.js",
@@ -3684,8 +3684,8 @@
       ],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/bloodverse/chapter-1/page.js": {
-      "bytes": 13258,
+    ".open-next/server-functions/default/.next/server/app/qr/page.js": {
+      "bytes": 7028,
       "imports": [
         {
           "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js",
@@ -3715,13 +3715,13 @@
         {
           "path": ".open-next/server-functions/default/.next/server/webpack-runtime.js",
           "kind": "require-call",
-          "original": "../../../webpack-runtime.js"
+          "original": "../../webpack-runtime.js"
         }
       ],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/bloodthirst/page.js": {
-      "bytes": 12692,
+    ".open-next/server-functions/default/.next/server/app/drops/page.js": {
+      "bytes": 11685,
       "imports": [
         {
           "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js",
@@ -3792,8 +3792,8 @@
       ],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/bloodverse/page.js": {
-      "bytes": 10120,
+    ".open-next/server-functions/default/.next/server/app/shop/page.js": {
+      "bytes": 17154,
       "imports": [
         {
           "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js",
@@ -3828,8 +3828,8 @@
       ],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/qr/page.js": {
-      "bytes": 7028,
+    ".open-next/server-functions/default/.next/server/app/bloodverse/page.js": {
+      "bytes": 10120,
       "imports": [
         {
           "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js",
@@ -3900,44 +3900,8 @@
       ],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/shop/page.js": {
-      "bytes": 17154,
-      "imports": [
-        {
-          "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js",
-          "kind": "require-call",
-          "original": "next/dist/compiled/next-server/app-page.runtime.prod.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/node_modules/next/dist/server/app-render/action-async-storage.external.js",
-          "kind": "require-call",
-          "original": "next/dist/server/app-render/action-async-storage.external.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/node_modules/next/dist/server/app-render/work-async-storage.external.js",
-          "kind": "require-call",
-          "original": "next/dist/server/app-render/work-async-storage.external.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/node_modules/next/dist/server/app-render/work-unit-async-storage.external.js",
-          "kind": "require-call",
-          "original": "next/dist/server/app-render/work-unit-async-storage.external.js"
-        },
-        {
-          "path": "path",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": ".open-next/server-functions/default/.next/server/webpack-runtime.js",
-          "kind": "require-call",
-          "original": "../../webpack-runtime.js"
-        }
-      ],
-      "format": "cjs"
-    },
-    ".open-next/server-functions/default/.next/server/app/drops/page.js": {
-      "bytes": 11685,
+    ".open-next/server-functions/default/.next/server/app/bloodthirst/page.js": {
+      "bytes": 12692,
       "imports": [
         {
           "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js",
@@ -4044,6 +4008,42 @@
       ],
       "format": "cjs"
     },
+    ".open-next/server-functions/default/.next/server/app/bloodverse/chapter-1/page.js": {
+      "bytes": 13258,
+      "imports": [
+        {
+          "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js",
+          "kind": "require-call",
+          "original": "next/dist/compiled/next-server/app-page.runtime.prod.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/node_modules/next/dist/server/app-render/action-async-storage.external.js",
+          "kind": "require-call",
+          "original": "next/dist/server/app-render/action-async-storage.external.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/node_modules/next/dist/server/app-render/work-async-storage.external.js",
+          "kind": "require-call",
+          "original": "next/dist/server/app-render/work-async-storage.external.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/node_modules/next/dist/server/app-render/work-unit-async-storage.external.js",
+          "kind": "require-call",
+          "original": "next/dist/server/app-render/work-unit-async-storage.external.js"
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": ".open-next/server-functions/default/.next/server/webpack-runtime.js",
+          "kind": "require-call",
+          "original": "../../../webpack-runtime.js"
+        }
+      ],
+      "format": "cjs"
+    },
     ".open-next/server-functions/default/node_modules/next/dist/server/require.js": {
       "bytes": 21608,
       "imports": [
@@ -4118,14 +4118,14 @@
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/legal/page.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/bloodverse/chapter-1/page.js",
+          "path": ".open-next/server-functions/default/.next/server/app/qr/page.js",
           "kind": "require-call",
-          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/bloodverse/chapter-1/page.js"
+          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/qr/page.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/bloodthirst/page.js",
+          "path": ".open-next/server-functions/default/.next/server/app/drops/page.js",
           "kind": "require-call",
-          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/bloodthirst/page.js"
+          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/drops/page.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/contact/page.js",
@@ -4133,14 +4133,14 @@
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/contact/page.js"
         },
         {
+          "path": ".open-next/server-functions/default/.next/server/app/shop/page.js",
+          "kind": "require-call",
+          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/shop/page.js"
+        },
+        {
           "path": ".open-next/server-functions/default/.next/server/app/bloodverse/page.js",
           "kind": "require-call",
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/bloodverse/page.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/.next/server/app/qr/page.js",
-          "kind": "require-call",
-          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/qr/page.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/thanks/page.js",
@@ -4148,14 +4148,9 @@
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/thanks/page.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/shop/page.js",
+          "path": ".open-next/server-functions/default/.next/server/app/bloodthirst/page.js",
           "kind": "require-call",
-          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/shop/page.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/.next/server/app/drops/page.js",
-          "kind": "require-call",
-          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/drops/page.js"
+          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/bloodthirst/page.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/story/page.js",
@@ -4166,6 +4161,11 @@
           "path": ".open-next/server-functions/default/.next/server/app/page.js",
           "kind": "require-call",
           "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/page.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/.next/server/app/bloodverse/chapter-1/page.js",
+          "kind": "require-call",
+          "original": "/Users/aakashsingh/Downloads/unholy-co-website/.open-next/server-functions/default/.next/server/app/bloodverse/chapter-1/page.js"
         }
       ],
       "format": "cjs"
@@ -7232,20 +7232,20 @@
         ".open-next/server-functions/default/.next/server/app/page_client-reference-manifest.js": {
           "bytesInOutput": 7260
         },
+        ".open-next/server-functions/default/.next/server/app/thanks/page_client-reference-manifest.js": {
+          "bytesInOutput": 7089
+        },
         ".open-next/server-functions/default/.next/server/app/qr/page_client-reference-manifest.js": {
           "bytesInOutput": 7335
-        },
-        ".open-next/server-functions/default/.next/server/app/story/page_client-reference-manifest.js": {
-          "bytesInOutput": 7086
         },
         ".open-next/server-functions/default/.next/server/app/shop/page_client-reference-manifest.js": {
           "bytesInOutput": 7442
         },
-        ".open-next/server-functions/default/.next/server/app/drops/page_client-reference-manifest.js": {
-          "bytesInOutput": 7232
-        },
         ".open-next/server-functions/default/.next/server/app/legal/page_client-reference-manifest.js": {
           "bytesInOutput": 7344
+        },
+        ".open-next/server-functions/default/.next/server/app/drops/page_client-reference-manifest.js": {
+          "bytesInOutput": 7232
         },
         ".open-next/server-functions/default/.next/server/app/contact/page_client-reference-manifest.js": {
           "bytesInOutput": 7198
@@ -7253,14 +7253,14 @@
         ".open-next/server-functions/default/.next/server/app/bloodverse/page_client-reference-manifest.js": {
           "bytesInOutput": 7116
         },
-        ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js": {
-          "bytesInOutput": 7359
-        },
         ".open-next/server-functions/default/.next/server/app/bloodthirst/page_client-reference-manifest.js": {
-          "bytesInOutput": 7227
+          "bytesInOutput": 7226
         },
-        ".open-next/server-functions/default/.next/server/app/thanks/page_client-reference-manifest.js": {
-          "bytesInOutput": 7090
+        ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js": {
+          "bytesInOutput": 7360
+        },
+        ".open-next/server-functions/default/.next/server/app/story/page_client-reference-manifest.js": {
+          "bytesInOutput": 7087
         },
         ".open-next/server-functions/default/.next/server/app/bloodverse/chapter-1/page_client-reference-manifest.js": {
           "bytesInOutput": 7253
@@ -7349,35 +7349,35 @@
         ".open-next/server-functions/default/.next/server/app/legal/page.js": {
           "bytesInOutput": 6933
         },
-        ".open-next/server-functions/default/.next/server/app/bloodverse/chapter-1/page.js": {
-          "bytesInOutput": 13627
+        ".open-next/server-functions/default/.next/server/app/qr/page.js": {
+          "bytesInOutput": 7200
         },
-        ".open-next/server-functions/default/.next/server/app/bloodthirst/page.js": {
-          "bytesInOutput": 13038
+        ".open-next/server-functions/default/.next/server/app/drops/page.js": {
+          "bytesInOutput": 12009
         },
         ".open-next/server-functions/default/.next/server/app/contact/page.js": {
           "bytesInOutput": 13491
         },
+        ".open-next/server-functions/default/.next/server/app/shop/page.js": {
+          "bytesInOutput": 17771
+        },
         ".open-next/server-functions/default/.next/server/app/bloodverse/page.js": {
           "bytesInOutput": 10401
-        },
-        ".open-next/server-functions/default/.next/server/app/qr/page.js": {
-          "bytesInOutput": 7200
         },
         ".open-next/server-functions/default/.next/server/app/thanks/page.js": {
           "bytesInOutput": 8463
         },
-        ".open-next/server-functions/default/.next/server/app/shop/page.js": {
-          "bytesInOutput": 17771
-        },
-        ".open-next/server-functions/default/.next/server/app/drops/page.js": {
-          "bytesInOutput": 12010
+        ".open-next/server-functions/default/.next/server/app/bloodthirst/page.js": {
+          "bytesInOutput": 13038
         },
         ".open-next/server-functions/default/.next/server/app/story/page.js": {
           "bytesInOutput": 12985
         },
         ".open-next/server-functions/default/.next/server/app/page.js": {
           "bytesInOutput": 37848
+        },
+        ".open-next/server-functions/default/.next/server/app/bloodverse/chapter-1/page.js": {
+          "bytesInOutput": 13628
         },
         ".open-next/server-functions/default/node_modules/next/dist/server/require.js": {
           "bytesInOutput": 17372

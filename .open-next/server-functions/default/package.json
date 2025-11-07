@@ -3,14 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-  "dev": "next dev",
-  "build:next": "next build",
-  "build": "npm run build:next && opennextjs-cloudflare build --skipBuild",
-  "preview": "wrangler dev --local",
-  "deploy": "npm run build:next && opennextjs-cloudflare deploy --skipBuild"
-},
+    "dev": "next dev",
+    "build": "next build",
+    "cf:bundle": "npx -y @opennextjs/cloudflare@1.11.1 build && node scripts/cf-postbuild.mjs",
+    "preview": "wrangler dev --local",
+    "deploy": "npm run build && npx wrangler pages deploy .open-next"
+  },
   "dependencies": {
-    "@opennextjs/cloudflare": "^1.11.1",
+    "@opennextjs/cloudflare": "1.11.1",
     "clsx": "2.1.1",
     "framer-motion": "^11.2.10",
     "lenis": "^1.3.14",
