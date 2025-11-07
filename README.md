@@ -13,7 +13,7 @@ npm run dev
 ## Deploy on Cloudflare Pages
 1. Push to GitHub.
 2. Create a new Pages project from the repo.
-3. Build command: `npm run build`  |  Output dir: `.next`
+3. Build command: `npm run cf:bundle`  |  Output dir: `.open-next`
 4. Set env vars from `.env.example` in Pages settings.
 5. Add a Worker route `/api/submit` or use the external Worker endpoint in `WORKER_ENDPOINT`.
 
