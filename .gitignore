@@ -26,4 +26,5 @@ functions/.wrangler/
 
 # Local zips or exports
 *.zip
+!unholy-co-website-latest.zip
 unholy-co-deploy.zip
