@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "cf:bundle": "npx -y @opennextjs/cloudflare@1.11.1 build",
+    "cf:bundle": "npx -y @opennextjs/cloudflare@1.11.1 build && node scripts/cf-postbuild.mjs",
     "preview": "wrangler dev --local",
     "deploy": "npm run build && npx wrangler pages deploy .open-next"
   },
