@@ -3,11 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
     "build:next": "next build",
-    "build": "npm run build:next && opennextjs-cloudflare build --skipBuild && node -e \"require('fs').cpSync('.open-next/worker.js','.open-next/_worker.js',{force:true})\"",
-    "preview": "wrangler dev --local",
-    "deploy": "npm run build:next && opennextjs-cloudflare deploy --skipBuild"
+    "build:opennext": "opennext build",
+    "build": "npm run build:next && npm run build:opennext",
+    "postbuild": "cp cf-pages-routes.json .open-next/_routes.json"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.11.1",
