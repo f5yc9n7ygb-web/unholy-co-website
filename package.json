@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "next dev",
     "build:next": "next build",
-    "build:opennext": "opennext build",
+    "build:opennext": "npx -y @opennextjs/cloudflare@1.11.1 build",
     "build": "npm run build:next && npm run build:opennext",
-    "postbuild": "cp cf-pages-routes.json .open-next/_routes.json"
+    "postbuild": "cp cf-pages-routes.json .open-next/_routes.json",
+    "preview": "wrangler dev --local",
+    "deploy": "npm run build && npx wrangler pages deploy .open-next"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "1.11.1",
     "clsx": "2.1.1",
     "framer-motion": "^11.2.10",
     "lenis": "^1.3.14",
@@ -22,7 +26,6 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "^1.11.1",
     "@types/node": "22.5.4",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
