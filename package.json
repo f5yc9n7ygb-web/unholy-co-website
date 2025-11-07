@@ -4,10 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build:next": "next build",
-    "build:opennext": "npx -y @opennextjs/cloudflare@1.11.1 build",
-    "build": "npm run build:next && npm run build:opennext",
-    "postbuild": "cp cf-pages-routes.json .open-next/_routes.json",
+    "build": "next build",
+    "cf:bundle": "npx -y @opennextjs/cloudflare@1.11.1 build",
     "preview": "wrangler dev --local",
     "deploy": "npm run build && npx wrangler pages deploy .open-next"
   },
