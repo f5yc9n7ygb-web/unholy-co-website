@@ -1,0 +1,27 @@
+# Node & dependencies
+node_modules/
+.pnpm-store/
+
+# Builds
+.next/
+dist/
+out/
+.turbo/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Cloudflare / tooling
+.wrangler/
+functions/.wrangler/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local zips or exports
+*.zip
+unholy-co-deploy.zip

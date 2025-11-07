@@ -1,0 +1,285 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #000000;
+  --text: #F6F6F6;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.body-glow {
+  background-image: theme('backgroundImage.obsidian');
+}
+
+.red-glow {
+  box-shadow: theme('boxShadow.unholy');
+}
+
+a { @apply text-bone hover:text-blood transition-colors; }
+.btn {
+  @apply inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-medium transition-transform will-change-transform;
+}
+.btn-primary { @apply bg-blood text-white hover:scale-[1.02] red-glow; }
+.btn-ghost { @apply text-offwhite border border-ash hover:border-blood; }
+.badge { @apply text-xs uppercase tracking-wide border border-ash rounded-full px-3 py-1 text-offwhite; }
+.section { @apply py-16 md:py-24; }
+.container { @apply max-w-6xl mx-auto px-4; }
+.h1 { @apply text-4xl md:text-6xl font-semibold; }
+.h2 { @apply text-2xl md:text-4xl font-semibold; }
+.p { @apply text-base md:text-lg text-offwhite/80; }
+.divider { @apply h-px w-full bg-ash/60 my-12; }
+.runes { background: repeating-linear-gradient(90deg, rgba(201,201,201,0.15) 0, rgba(201,201,201,0.15) 1px, transparent 1px, transparent 10px); height:1px; opacity:.6; }
+/* --- Bloodverse globals --- */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+.animate-pulse-slow { animation: pulse-slow 6s ease-in-out infinite; }
+
+.rune-bg {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: -10;
+  opacity: .10;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 35%;
+  mix-blend-mode: overlay;
+  transition: opacity .7s ease;
+}
+.rune-bg:hover { opacity: .20; }
+
+/* title “blood drip” */
+@keyframes drip {
+  0% { height: 0; opacity: 1; }
+  80% { height: 1.5rem; opacity: 1; }
+  100% { height: 1.5rem; opacity: 0; }
+}
+.title-drip {
+  position: relative;
+}
+.title-drip:hover::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 2px;
+  height: 0;
+  background: rgb(176 0 32); /* blood */
+  transform: translateX(-50%);
+  animation: drip 1s forwards;
+}
+/* ===== BLOODVERSE EFFECTS (always visible, Safari-safe) ===== */
+
+/* Big red pulse: sits ABOVE the black bg, BELOW text */
+.bg-blood-pulse {
+  position: absolute;
+  inset: 0;
+  z-index: 0;            /* <- not negative, so it’s not hidden by the black bg */
+  pointer-events: none;
+  background:
+    radial-gradient(900px 520px at 50% 18%, rgba(176,0,32,0.28), transparent 62%),
+    radial-gradient(1100px 700px at 50% 82%, rgba(176,0,32,0.14), transparent 72%);
+  animation: bloodPulse 7s ease-in-out infinite;
+}
+
+@keyframes bloodPulse {
+  0%, 100% { filter: brightness(0.9); opacity: .85; }
+  50%      { filter: brightness(1.05); opacity: 1; }
+}
+
+/* Vignette (edge darkening) */
+.vignette::after {
+  content: "";
+  position: absolute; inset: 0;
+  z-index: 2;           /* above pulse, below content (we put content at z-10) */
+  pointer-events: none;
+  background:
+    radial-gradient(130% 130% at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,.55) 100%);
+}
+
+/* Grain: visible on black using soft-light + slight opacity */
+.grain::before {
+  content: "";
+  position: absolute; inset: 0;
+  z-index: 1;           /* above pulse, below content */
+  pointer-events: none;
+  opacity: .10;
+  mix-blend-mode: soft-light;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0 1px, transparent 1px 2px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 1px, transparent 1px 2px);
+}
+
+/* Title drip */
+@keyframes drip { 0%{height:0;opacity:1} 80%{height:1.4rem;opacity:1} 100%{height:1.4rem;opacity:0} }
+.title-drip { position: relative; }
+.title-drip:hover::after {
+  content: ""; position: absolute; left: 50%; top: 100%;
+  width: 2px; height: 0; background: rgb(176 0 32);
+  transform: translateX(-50%); animation: drip 1s forwards;
+}
+
+/* Rune overlay (we’ll feed a data-URI inline) */
+.rune-bg {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  opacity: .14; background-repeat: no-repeat; background-position: center;
+  background-size: 38%; mix-blend-mode: overlay; transition: opacity .6s ease, transform .6s ease;
+}
+.rune-bg:hover { opacity: .24; transform: scale(1.02); }
+/* --- Button hover contrast fix --- */
+.btn:hover,
+button.btn:hover {
+  color: #fff !important;            /* keep text white */
+}
+
+/* For ghost buttons (like “Stay Unholy”) */
+.btn-ghost:hover {
+  color: rgb(176, 0, 32) !important; /* blood red text on hover */
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* For primary buttons (solid red) */
+.btn-primary:hover {
+  background-color: rgb(176, 0, 32) !important;
+  color: #fff !important;
+  filter: brightness(1.05);
+}
+
+@keyframes float {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
+}
+
+/* Add these new animations */
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(20px); }
+}
+
+@layer utilities {
+  .hero-gradient {
+    background:
+      radial-gradient(900px 500px at 70% 20%, rgba(176,0,32,0.18), transparent 60%),
+      radial-gradient(700px 400px at 10% 90%, rgba(176,0,32,0.12), transparent 70%);
+  }
+
+  .glass-panel {
+    @apply relative rounded-2xl border border-ash/50 bg-ash/20 backdrop-blur-xl p-5 md:p-6;
+    box-shadow:
+      0 10px 40px rgba(0,0,0,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+    transition: transform 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+  }
+
+  .glass-panel:hover {
+    transform: translateY(-4px);
+    border-color: rgba(176, 0, 32, 0.45);
+    box-shadow: 0 32px 120px rgba(176, 0, 32, 0.18);
+  }
+
+  .stat-card {
+    @apply relative rounded-xl border border-ash/50 bg-ash/20 backdrop-blur-md p-3;
+    transition: transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+  }
+
+  .stat-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3rem;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(176, 0, 32, 0.9), transparent);
+    opacity: 0.9;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(176, 0, 32, 0.35);
+    box-shadow: 0 18px 60px rgba(176, 0, 32, 0.15);
+  }
+
+  .red-glow-strong {
+    box-shadow: 0 30px 80px rgba(176, 0, 32, 0.35);
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .animate-float-slow {
+    animation: float-slow 8s ease-in-out infinite;
+  }
+
+  .animate-float-delayed {
+    animation: float-slow 8s ease-in-out infinite;
+    animation-delay: -4s;
+  }
+
+  .body-glow::before {
+    content: "";
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(60% 50% at 50% 20%, rgba(176,0,32,0.12), transparent 60%);
+    z-index: -1;
+  }
+
+  .micro-hero {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(2.5rem, 4vw, 4rem);
+    border-radius: 2rem;
+    border: 1px solid rgba(80, 80, 80, 0.55);
+    background: linear-gradient(140deg, rgba(22, 22, 22, 0.92), rgba(18, 18, 18, 0.85));
+    backdrop-filter: blur(22px);
+    box-shadow: 0 24px 90px rgba(0, 0, 0, 0.5);
+  }
+
+  .micro-hero::before,
+  .micro-hero::after {
+    content: "";
+    position: absolute;
+    inset: -40% -20%;
+    pointer-events: none;
+    transition: transform 0.6s ease, opacity 0.6s ease;
+  }
+
+  .micro-hero::before {
+    background: radial-gradient(55% 55% at 70% 20%, rgba(176,0,32,0.35), transparent 70%);
+    opacity: 0.75;
+  }
+
+  .micro-hero::after {
+    background: radial-gradient(45% 45% at 10% 80%, rgba(176,0,32,0.22), transparent 75%);
+    opacity: 0.55;
+  }
+
+  .micro-hero:hover::before,
+  .micro-hero:hover::after {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+
+  .micro-hero-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .bg-blood-pulse {
+    background: radial-gradient(
+      1100px 700px at 50% 82%,
+      rgba(176, 0, 32, 0.14),
+      transparent 72%
+    );
+  }
+}
