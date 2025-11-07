@@ -5,19 +5,15 @@ const outDir = ".open-next";
 await fs.mkdir(outDir, { recursive: true });
 
 // Let the worker handle everything EXCEPT static assets
+// IMPORTANT: Exclude patterns must match the actual file paths
 const routes = {
   version: 1,
   include: ["/*"],
   exclude: [
-    "/_next/*",
-    "/assets/*",
-    "/favicon.ico",
-    "/static/*",
-    "/.well-known/*",
-    "/robots.txt",
-    "/sitemap.xml",
-    "/manifest.json",
-    "/can.png"      // your image in /public
+    "/_next/static/*",  // Next.js static assets (JS, CSS)
+    "/Can.PNG",         // Case-sensitive: actual filename in public/
+    "/favicon.svg",     // Favicon
+    "/og.png"           // OG image
   ],
 };
 await fs.writeFile(path.join(outDir, "_routes.json"), JSON.stringify(routes, null, 2));
