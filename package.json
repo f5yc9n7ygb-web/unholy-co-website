@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-  "dev": "next dev",
-  "build:next": "next build",
-  "build": "npm run build:next && opennextjs-cloudflare build --skipBuild",
-  "preview": "wrangler dev --local",
-  "deploy": "npm run build:next && opennextjs-cloudflare deploy --skipBuild"
-},
+    "dev": "next dev",
+    "build:next": "next build",
+    "build": "npm run build:next && opennextjs-cloudflare build --skipBuild && node -e \"require('fs').cpSync('.open-next/worker.js','.open-next/_worker.js',{force:true})\"",
+    "preview": "wrangler dev --local",
+    "deploy": "npm run build:next && opennextjs-cloudflare deploy --skipBuild"
+  },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.11.1",
     "clsx": "2.1.1",
