@@ -32,7 +32,7 @@ export function ShopClient() {
   })
 
   const key = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
-  const orderEndpoint = process.env.WORKER_ORDER_ENDPOINT
+  const orderEndpoint = process.env.NEXT_PUBLIC_WORKER_ORDER_ENDPOINT
 
   const onPay = async (pack: Pack) => {
     if (!key || !orderEndpoint) {

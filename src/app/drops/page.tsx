@@ -37,7 +37,7 @@ export default function DropsPage() {
                 </div>
 
                 {drop.notify ? (
-                  <form className="flex flex-col gap-3 sm:flex-row sm:items-center" action={process.env.WORKER_ENDPOINT} method="post">
+                  <form className="flex flex-col gap-3 sm:flex-row sm:items-center" action={process.env.NEXT_PUBLIC_WORKER_ENDPOINT} method="post">
                     <input type="hidden" name="source" value={`drop_${drop.id}`} />
                     <input
                       required
