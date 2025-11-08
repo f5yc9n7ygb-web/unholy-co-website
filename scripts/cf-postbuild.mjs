@@ -2,31 +2,40 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 const outDir = ".open-next";
-await fs.mkdir(outDir, { recursive: true });
 
-// Let the worker handle everything EXCEPT static assets
-// IMPORTANT: Exclude patterns must match the actual file paths
-const routes = {
-  version: 1,
-  include: ["/*"],
-  exclude: [
-    "/_next/static/*",  // Next.js static assets (JS, CSS)
-    "/Can.PNG",         // Case-sensitive: actual filename in public/
-    "/favicon.svg",     // Favicon
-    "/og.png"           // OG image
-  ],
-};
-await fs.writeFile(path.join(outDir, "_routes.json"), JSON.stringify(routes, null, 2));
+// OpenNext generates .open-next/worker.js automatically
+// We just need to ensure _routes.json exists with the correct configuration
+// for Cloudflare Pages to properly route static assets
 
-// Worker shim (keep as-is)
-const shim = `
-import worker from "./worker.js";
-export default {
-  async fetch(request, env, ctx) {
-    return worker.fetch(request, env, ctx);
-  }
-};
-`;
-await fs.writeFile(path.join(outDir, "_worker.js"), shim, "utf8");
+// Check if OpenNext already created _routes.json
+let routesExist = false;
+try {
+  await fs.access(path.join(outDir, "_routes.json"));
+  routesExist = true;
+  console.log("✅ _routes.json already exists from OpenNext");
+} catch {
+  // Create it if it doesn't exist
+  const routes = {
+    version: 1,
+    include: ["/*"],
+    exclude: [
+      "/_next/*",         // All Next.js assets
+      "/favicon.svg",     // Favicon
+      "/og.png",          // OG image  
+      "/Can.PNG",         // Case-sensitive: actual filename in public/
+    ],
+  };
+  await fs.writeFile(path.join(outDir, "_routes.json"), JSON.stringify(routes, null, 2));
+  console.log("✅ Created _routes.json");
+}
 
-console.log("✅ wrote .open-next/_routes.json and .open-next/_worker.js");
+// Check if worker.js exists (should be created by OpenNext)
+try {
+  await fs.access(path.join(outDir, "worker.js"));
+  console.log("✅ worker.js exists from OpenNext build");
+} catch {
+  console.error("❌ worker.js not found - OpenNext build may have failed");
+  process.exit(1);
+}
+
+console.log("✅ Post-build setup complete");
