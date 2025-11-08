@@ -54,7 +54,7 @@ export default function ContactPage() {
           </div>
 
           <div className="space-y-3">
-            <ContactForm action={process.env.NEXT_PUBLIC_WORKER_ENDPOINT} />
+            <ContactForm action={process.env.NEXT_PUBLIC_WORKER_ENDPOINT || undefined} />
             <p className="text-xs text-offwhite/50">
               By submitting, you agree to receive mission-critical updates from UNHOLY CO. No spam, only rituals.
             </p>
