@@ -238,7 +238,7 @@ export default function HomePage() {
 
               <form
                 className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2"
-                action={process.env.NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT}
+                action={process.env.NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT || "#"}
                 method="post"
               >
                 <input type="hidden" name="source" value="homepage" />
