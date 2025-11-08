@@ -16,7 +16,7 @@ export function Footer() {
         </nav>
         <div>
           <p className="p">Join the circle</p>
-          <form className="mt-3 flex gap-2" action={process.env.WORKER_ENDPOINT} method="post">
+          <form className="mt-3 flex gap-2" action={process.env.NEXT_PUBLIC_WORKER_ENDPOINT} method="post">
             <input type="hidden" name="source" value="footer" />
             <input required name="email" type="email" placeholder="you@domain" className="flex-1 bg-ash/40 border border-ash rounded-xl px-3 py-2 text-offwhite" />
             <button className="btn btn-primary" type="submit">Subscribe</button>
