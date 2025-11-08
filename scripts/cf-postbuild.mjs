@@ -2,31 +2,75 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 const outDir = ".open-next";
+const assetsDir = path.join(outDir, "assets");
 
 // OpenNext generates .open-next/worker.js automatically
 // We just need to ensure _routes.json exists with the correct configuration
 // for Cloudflare Pages to properly route static assets
 
-// Check if OpenNext already created _routes.json
-let routesExist = false;
+async function getPublicAssetRoutes() {
+  const publicDir = path.join(process.cwd(), "public");
+  async function walk(currentDir, prefix = "") {
+    const entries = await fs.readdir(currentDir, { withFileTypes: true });
+    const files = await Promise.all(entries.map(async (entry) => {
+      const relativePath = path.posix.join(prefix, entry.name);
+      const diskPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        return walk(diskPath, relativePath);
+      }
+      return `/${relativePath}`;
+    }));
+    return files.flat();
+  }
+  try {
+    const publicFiles = await walk(publicDir);
+    return publicFiles;
+  } catch {
+    return [];
+  }
+}
+
+// Always (re)generate _routes.json so new public assets are excluded automatically
+const routesPath = path.join(outDir, "_routes.json");
+const publicAssets = await getPublicAssetRoutes();
+const staticExcludes = Array.from(
+  new Set([
+    "/_next/*",         // All Next.js assets
+    ...publicAssets,
+  ])
+).sort();
+const routes = {
+  version: 1,
+  include: ["/*"],
+  exclude: staticExcludes,
+};
+await fs.writeFile(routesPath, JSON.stringify(routes, null, 2));
+console.log(`✅ Regenerated _routes.json with ${staticExcludes.length} exclusions`);
+
+async function copyDir(src, dest) {
+  await fs.mkdir(dest, { recursive: true });
+  const entries = await fs.readdir(src, { withFileTypes: true });
+  await Promise.all(
+    entries.map(async (entry) => {
+      const srcPath = path.join(src, entry.name);
+      const destPath = path.join(dest, entry.name);
+      if (entry.isDirectory()) {
+        await copyDir(srcPath, destPath);
+      } else {
+        await fs.copyFile(srcPath, destPath);
+      }
+    })
+  );
+}
+
+// Cloudflare Pages static bucket serves files from the project root.
+// Copy the generated assets bundle so /_next/* and public files exist at the top level.
 try {
-  await fs.access(path.join(outDir, "_routes.json"));
-  routesExist = true;
-  console.log("✅ _routes.json already exists from OpenNext");
-} catch {
-  // Create it if it doesn't exist
-  const routes = {
-    version: 1,
-    include: ["/*"],
-    exclude: [
-      "/_next/*",         // All Next.js assets
-      "/favicon.svg",     // Favicon
-      "/og.png",          // OG image  
-      "/Can.PNG",         // Case-sensitive: actual filename in public/
-    ],
-  };
-  await fs.writeFile(path.join(outDir, "_routes.json"), JSON.stringify(routes, null, 2));
-  console.log("✅ Created _routes.json");
+  await copyDir(assetsDir, outDir);
+  console.log("✅ Copied assets/ contents to .open-next/");
+} catch (error) {
+  console.error("❌ Failed to copy assets into .open-next/:", error);
+  process.exit(1);
 }
 
 // Check if worker.js exists (should be created by OpenNext)
@@ -35,6 +79,19 @@ try {
   console.log("✅ worker.js exists from OpenNext build");
 } catch {
   console.error("❌ worker.js not found - OpenNext build may have failed");
+  process.exit(1);
+}
+
+// Cloudflare Pages expects `_worker.js` at the project root.
+// Copy/overwrite on every build to keep things in sync.
+try {
+  await fs.copyFile(
+    path.join(outDir, "worker.js"),
+    path.join(outDir, "_worker.js"),
+  );
+  console.log("✅ Synced worker.js -> _worker.js for Cloudflare Pages");
+} catch (error) {
+  console.error("❌ Failed to copy worker.js to _worker.js:", error);
   process.exit(1);
 }
 

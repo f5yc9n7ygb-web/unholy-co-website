@@ -8,8 +8,8 @@ export const metadata = {
 }
 
 const contactChannels = [
-  { label: "Email", value: "rituals@theunholy.co", href: "mailto:rituals@theunholy.co" },
-  { label: "WhatsApp Hotline", value: "+91 98 700 66 131", href: "https://wa.me/919870066131" },
+  { label: "Email", value: "abyss@theunholy.co", href: "mailto:rituals@theunholy.co" },
+  { label: "WhatsApp Hotline", value: "+91 8650868868", href: "https://wa.me/919870066131" },
   { label: "Press & Media", value: "press@theunholy.co", href: "mailto:press@theunholy.co" },
 ]
 
