@@ -1,6 +1,10 @@
 # Deployment Guide for Unholy Co Website
 
-This guide will walk you through deploying the fixed version of your website to Cloudflare Pages.
+This guide will walk you through deploying your website to Cloudflare Pages using the OpenNext adapter.
+
+> **✅ LATEST UPDATE (November 8, 2025)**: 
+> The deployment configuration has been fixed to resolve the `@opennextjs/cloudflare` import error.
+> See [DEPLOYMENT_FIX.md](./DEPLOYMENT_FIX.md) for technical details.
 
 ## Prerequisites
 
@@ -127,20 +131,27 @@ Good news! This is already set up by default:
 
 ## Key Files Explained
 
-- **`wrangler.toml`**: Cloudflare configuration (we just fixed this!)
+- **`wrangler.toml`**: Cloudflare Pages configuration (specifies build output directory and compatibility settings)
+- **`open-next.config.ts`**: OpenNext adapter configuration (simplified to avoid import resolution issues)
 - **`package.json`**: Dependencies and build scripts
 - **`next.config.mjs`**: Next.js framework configuration
 - **`.env.example`**: Template for environment variables (copy to `.env` locally)
+- **`scripts/cf-postbuild.mjs`**: Post-build script that creates `_routes.json` and `_worker.js`
 
 ## Getting Help
 
 - Cloudflare Pages Docs: https://developers.cloudflare.com/pages/
+- OpenNext Cloudflare Docs: https://opennext.js.org/cloudflare/get-started
 - Check build logs for specific error messages
 - GitHub Issues: Create an issue in your repository for questions
 
-## Summary of What We Fixed
+## Summary of Recent Fixes
 
-The previous deployment error was caused by the `wrangler.toml` file containing literal `\n` text instead of actual line breaks. This has been corrected, and your deployments should now work smoothly!
+### November 8, 2025 - Fixed OpenNext Config Import Error
+The deployment was failing because `open-next.config.ts` was importing from `@opennextjs/cloudflare`, which wasn't available during the build process. The fix was to export a plain configuration object instead of using the imported `defineCloudflareConfig` helper. See [DEPLOYMENT_FIX.md](./DEPLOYMENT_FIX.md) for details.
+
+### Previous Fix - Fixed wrangler.toml Format
+An earlier deployment error was caused by the `wrangler.toml` file containing literal `\n` text instead of actual line breaks. This has been corrected.
 
 ---
 
