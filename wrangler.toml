@@ -6,9 +6,8 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 
-# NOTE: NEXT_PUBLIC_* environment variables must be set in Cloudflare Pages Dashboard
-# (Settings > Environment Variables) to be available at build time.
-# The [vars] section in wrangler.toml is for runtime bindings only and won't work
-# for build-time variable inlining that Next.js requires for NEXT_PUBLIC_* variables.
-# 
-# See CLOUDFLARE_ENV_SETUP.md for detailed instructions on setting up environment variables.
+[vars]
+NEXT_PUBLIC_WORKER_ENDPOINT = "https://unholy-co-website.pages.dev/api/contact"
+NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT = "https://unholy-co-website.pages.dev/api/subscribe"
+NEXT_PUBLIC_WORKER_ORDER_ENDPOINT = "https://unholy-co-website.pages.dev/api/order"
+NEXT_PUBLIC_RAZORPAY_KEY_ID = "rzp_test_AbCdEf12345678"
