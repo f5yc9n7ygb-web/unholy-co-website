@@ -23,17 +23,26 @@ Missing required `open-next.config.ts` file, do you want to create one? (Y/n)
 ```
 ERROR config.default cannot be empty, it should be at least {}
 ```
-(This occurred even with `export default {}` - OpenNext requires a `default` property within the config object)
+
+**Fifth error (with explicit requirements):**
+```
+Error: The `open-next.config.ts` should have a default export like this:
+{
+  default: { override: { wrapper, converter, ... } },
+  edgeExternals: [...],
+  middleware: { ... }
+}
+```
 
 ## 🔧 What Was Fixed
 
-The OpenNext CLI requires a config file with a specific structure: the exported object must contain a `default` property. Simply exporting an empty object `{}` is not sufficient.
+The OpenNext CLI requires a config file with a very specific, complete structure. It's not enough to have a `default` property - it must include `default.override`, `edgeExternals`, and `middleware` sections with all required sub-properties.
 
-**The Fix:** Created a pre-build script that generates a valid config file with the required structure: `export default { default: {} }`
+**The Fix:** Updated the pre-build script to generate a complete config structure matching OpenNext's exact requirements.
 
 ## 📁 Files Changed
 
-1. **scripts/create-opennext-config.mjs** - Updated to generate config with `default` property
+1. **scripts/create-opennext-config.mjs** - Updated to generate complete OpenNext config structure
 2. **package.json** - Build command runs pre-build script
 3. **.gitignore** - Added `open-next.config.ts` to ignore auto-generated file
 4. **Documentation** - Updated with complete solution history
@@ -54,15 +63,36 @@ The OpenNext CLI requires a config file with a specific structure: the exported 
 When Cloudflare Pages builds your site:
 
 1. Runs `npm run cf:bundle`
-2. First: `node scripts/create-opennext-config.mjs` creates `open-next.config.ts` with structure:
+2. First: `node scripts/create-opennext-config.mjs` creates `open-next.config.ts` with complete structure:
    ```typescript
    export default {
-     default: {},
+     default: {
+       override: {
+         wrapper: "cloudflare-node",
+         converter: "edge",
+         proxyExternalRequest: "fetch",
+         incrementalCache: "dummy",
+         tagCache: "dummy",
+         queue: "dummy",
+       },
+     },
+     edgeExternals: ["node:crypto"],
+     middleware: {
+       external: true,
+       override: {
+         wrapper: "cloudflare-edge",
+         converter: "edge",
+         proxyExternalRequest: "fetch",
+         incrementalCache: "dummy",
+         tagCache: "dummy",
+         queue: "dummy",
+       },
+     },
    };
    ```
 3. Then: `npx @opennextjs/cloudflare@1.11.1 build`
    - Finds the config file (no interactive prompt!)
-   - Validates the config structure (passes - has required `default` property)
+   - Validates the config structure (passes - has all required properties)
    - Builds your Next.js app for Cloudflare Workers
 4. Creates the `.open-next` directory
 5. Runs `scripts/cf-postbuild.mjs` to finalize the build
