@@ -14,7 +14,9 @@ const configContent = `// Auto-generated configuration for OpenNext Cloudflare a
 // This file is created by scripts/create-opennext-config.mjs to avoid interactive prompts in CI/CD
 // For custom configuration, see: https://opennext.js.org/cloudflare/get-started
 
-export default {};
+export default {
+  default: {},
+};
 `;
 
 const configPath = join(__dirname, '..', 'open-next.config.ts');

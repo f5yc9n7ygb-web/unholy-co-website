@@ -19,16 +19,22 @@ ERROR config.default cannot be empty, it should be at least {}
 Missing required `open-next.config.ts` file, do you want to create one? (Y/n)
 ```
 
+**Fourth error:**
+```
+ERROR config.default cannot be empty, it should be at least {}
+```
+(This occurred even with `export default {}` - OpenNext requires a `default` property within the config object)
+
 ## 🔧 What Was Fixed
 
-The OpenNext CLI requires a config file but cannot use imports (not in node_modules) and cannot auto-generate in CI/CD (triggers interactive prompt).
+The OpenNext CLI requires a config file with a specific structure: the exported object must contain a `default` property. Simply exporting an empty object `{}` is not sufficient.
 
-**The Fix:** Created a pre-build script that generates a minimal valid config file before the build starts.
+**The Fix:** Created a pre-build script that generates a valid config file with the required structure: `export default { default: {} }`
 
 ## 📁 Files Changed
 
-1. **scripts/create-opennext-config.mjs** - New pre-build script (auto-generates config)
-2. **package.json** - Updated build command to run pre-build script
+1. **scripts/create-opennext-config.mjs** - Updated to generate config with `default` property
+2. **package.json** - Build command runs pre-build script
 3. **.gitignore** - Added `open-next.config.ts` to ignore auto-generated file
 4. **Documentation** - Updated with complete solution history
 
@@ -48,10 +54,15 @@ The OpenNext CLI requires a config file but cannot use imports (not in node_modu
 When Cloudflare Pages builds your site:
 
 1. Runs `npm run cf:bundle`
-2. First: `node scripts/create-opennext-config.mjs` creates `open-next.config.ts`
+2. First: `node scripts/create-opennext-config.mjs` creates `open-next.config.ts` with structure:
+   ```typescript
+   export default {
+     default: {},
+   };
+   ```
 3. Then: `npx @opennextjs/cloudflare@1.11.1 build`
    - Finds the config file (no interactive prompt!)
-   - Validates the minimal config (passes)
+   - Validates the config structure (passes - has required `default` property)
    - Builds your Next.js app for Cloudflare Workers
 4. Creates the `.open-next` directory
 5. Runs `scripts/cf-postbuild.mjs` to finalize the build
