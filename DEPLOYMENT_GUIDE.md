@@ -132,7 +132,7 @@ Good news! This is already set up by default:
 ## Key Files Explained
 
 - **`wrangler.toml`**: Cloudflare Pages configuration (specifies build output directory and compatibility settings)
-- **`open-next.config.ts`**: OpenNext adapter configuration (simplified to avoid import resolution issues)
+- **`open-next.config.ts`**: ~~Not included~~ - OpenNext auto-generates this with defaults during build
 - **`package.json`**: Dependencies and build scripts
 - **`next.config.mjs`**: Next.js framework configuration
 - **`.env.example`**: Template for environment variables (copy to `.env` locally)
@@ -147,8 +147,8 @@ Good news! This is already set up by default:
 
 ## Summary of Recent Fixes
 
-### November 8, 2025 - Fixed OpenNext Config Import Error
-The deployment was failing because `open-next.config.ts` was importing from `@opennextjs/cloudflare`, which wasn't available during the build process. The fix was to export a plain configuration object instead of using the imported `defineCloudflareConfig` helper. See [DEPLOYMENT_FIX.md](./DEPLOYMENT_FIX.md) for details.
+### November 8, 2025 - Fixed OpenNext Config Import Error (FINAL FIX)
+The deployment was failing because `open-next.config.ts` was importing from `@opennextjs/cloudflare`, which wasn't available during the build process. Initial fix attempt (removing import) caused a "config.default cannot be empty" error. **Final solution:** Deleted the config file entirely - OpenNext auto-generates it with proper defaults. See [DEPLOYMENT_FIX.md](./DEPLOYMENT_FIX.md) for details.
 
 ### Previous Fix - Fixed wrangler.toml Format
 An earlier deployment error was caused by the `wrangler.toml` file containing literal `\n` text instead of actual line breaks. This has been corrected.
