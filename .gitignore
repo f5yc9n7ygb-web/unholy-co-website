@@ -28,3 +28,4 @@ functions/.wrangler/
 *.zip
 !unholy-co-website-latest.zip
 unholy-co-deploy.zip
+open-next.config.ts
