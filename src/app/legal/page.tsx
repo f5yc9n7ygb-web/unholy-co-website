@@ -1,3 +1,10 @@
+/**
+ * The legal page for the website.
+ * This component serves as a placeholder for legal information,
+ * such as terms of service, privacy policy, and return policy.
+ *
+ * @returns {JSX.Element} The rendered legal page.
+ */
 export default function LegalPage() {
   return (
     <div className="section">

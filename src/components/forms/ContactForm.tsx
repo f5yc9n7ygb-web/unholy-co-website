@@ -12,6 +12,14 @@ type Status =
   | { state: "success" }
   | { state: "error"; message: string }
 
+/**
+ * A client-side component for the contact form.
+ * Handles form state, validation, and submission to a specified endpoint.
+ *
+ * @param {ContactFormProps} props - The props for the component.
+ * @param {string} [props.action] - The URL endpoint to which the form data will be submitted.
+ * @returns {JSX.Element} The rendered contact form.
+ */
 export function ContactForm({ action }: ContactFormProps) {
   const [status, setStatus] = useState<Status>({ state: "idle" })
   const [form, setForm] = useState({

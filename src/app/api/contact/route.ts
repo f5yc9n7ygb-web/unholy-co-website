@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+/**
+ * Handles POST requests for the contact form.
+ * It parses form data from JSON, URL-encoded, or multipart/form-data formats,
+ * validates the email, and logs the submission.
+ *
+ * @param {NextRequest} request - The incoming Next.js request object containing the form data.
+ * @returns {Promise<NextResponse>} A JSON response indicating success or failure.
+ */
 export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || ''
@@ -47,6 +55,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Handles GET requests to the contact API endpoint.
+ * This method is not allowed for this endpoint and will return a 405 error.
+ *
+ * @returns {Promise<NextResponse>} A JSON response indicating the method is not allowed.
+ */
 export async function GET() {
   return NextResponse.json(
     { error: 'Method not allowed. Use POST.' },

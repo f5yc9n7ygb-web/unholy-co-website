@@ -8,6 +8,13 @@ export const metadata = {
   description: "Limited-edition BloodThirst runs, collabs, and ritual-only flavors. Reserve yours before the coven drinks them dry."
 }
 
+/**
+ * The "Drops" page, which showcases limited-edition product releases.
+ * This component displays a list of current and upcoming drops,
+ * complete with countdown timers and notification forms.
+ *
+ * @returns {JSX.Element} The rendered drops page.
+ */
 export default function DropsPage() {
   return (
     <div className="section">

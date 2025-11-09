@@ -7,6 +7,14 @@ import { Badges } from "@/components/shared/Badges"
 
 export const revalidate = 60
 
+/**
+ * The main landing page for the UNHOLY CO. BloodThirst website.
+ * This component showcases the product, its features, the brand's philosophy,
+ * testimonials, and an email subscription form. It is composed of several
+ * sections: Hero, Feature Grid, Ritual, Testimonials, and Email Capture.
+ *
+ * @returns {JSX.Element} The rendered home page.
+ */
 export default function HomePage() {
   const stats = [
     { label: "Mineral Blend", value: "12 trace elements" },

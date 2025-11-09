@@ -13,6 +13,15 @@ export interface Env {
 }
 
 export default {
+  /**
+   * Handles incoming fetch requests to the Cloudflare Worker.
+   * It processes POST requests from the website's forms, validates the data,
+   * writes submissions to Airtable, and sends a confirmation email via Mailjet.
+   *
+   * @param {Request} request - The incoming request object.
+   * @param {Env} env - The environment variables containing secrets and configuration.
+   * @returns {Promise<Response>} A response indicating the result of the operation.
+   */
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method !== 'POST') {
       return new Response('Method not allowed', { status: 405 })

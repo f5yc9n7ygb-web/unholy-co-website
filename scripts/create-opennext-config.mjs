@@ -1,7 +1,15 @@
 #!/usr/bin/env node
 
-// Pre-build script to create open-next.config.ts for CI/CD environments
-// This avoids the interactive prompt that occurs when the file is missing
+/**
+ * @file Pre-build script for OpenNext.
+ *
+ * This script creates a default `open-next.config.ts` file in the project root.
+ * Its primary purpose is to prevent the interactive prompt that OpenNext shows
+ * when this configuration file is missing, which is essential for non-interactive
+ * CI/CD environments.
+ *
+ * The generated configuration is optimized for Cloudflare Pages.
+ */
 
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

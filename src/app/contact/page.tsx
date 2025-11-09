@@ -13,6 +13,12 @@ const contactChannels = [
   { label: "Press & Media", value: "press@theunholy.co", href: "mailto:press@theunholy.co" },
 ]
 
+/**
+ * The contact page for the website.
+ * This component displays the contact form, various contact channels, and office hours.
+ *
+ * @returns {JSX.Element} The rendered contact page.
+ */
 export default function ContactPage() {
   return (
     <div className="section">

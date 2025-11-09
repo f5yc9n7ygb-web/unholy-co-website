@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+/**
+ * Handles POST requests for newsletter subscriptions.
+ * It parses form data, validates the email address, and logs the subscription request.
+ *
+ * @param {NextRequest} request - The incoming Next.js request object containing the subscription data.
+ * @returns {Promise<NextResponse>} A JSON response indicating success or failure.
+ */
 export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || ''
@@ -44,6 +51,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Handles GET requests to the subscribe API endpoint.
+ * This method is not allowed for this endpoint and will return a 405 error.
+ *
+ * @returns {Promise<NextResponse>} A JSON response indicating the method is not allowed.
+ */
 export async function GET() {
   return NextResponse.json(
     { error: 'Method not allowed. Use POST.' },

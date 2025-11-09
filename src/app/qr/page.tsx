@@ -1,4 +1,11 @@
 export const revalidate = 0
+
+/**
+ * The landing page for users who scan a QR code on a BloodThirst can.
+ * This component provides a call to action for users to sign up for perks and drops.
+ *
+ * @returns {JSX.Element} The rendered QR code landing page.
+ */
 export default function QRBloodThirst() {
   return (
     <div className="section">

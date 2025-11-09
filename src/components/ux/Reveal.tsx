@@ -8,6 +8,15 @@ type RevealProps = {
   delay?: number
 }
 
+/**
+ * A component that reveals its children with a fade-in and slide-up animation
+ * when it becomes visible in the viewport. It respects the user's preference for reduced motion.
+ *
+ * @param {RevealProps} props - The props for the component.
+ * @param {ReactNode} props.children - The content to be animated.
+ * @param {number} [props.delay=0] - The delay in seconds before the animation starts.
+ * @returns {JSX.Element} The rendered motion div with the reveal effect.
+ */
 export default function Reveal({ children, delay = 0 }: RevealProps) {
   const prefersReducedMotion = useReducedMotion()
   const ref = useRef<HTMLDivElement | null>(null)
