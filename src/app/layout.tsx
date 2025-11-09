@@ -15,6 +15,14 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://theunholy.co')
 }
 
+/**
+ * The root layout for the entire application.
+ * This component wraps all pages and includes the header, main content, and footer.
+ *
+ * @param {object} props - The props for the component.
+ * @param {ReactNode} props.children - The child components to be rendered within the main content area.
+ * @returns {JSX.Element} The rendered HTML structure for the application.
+ */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">

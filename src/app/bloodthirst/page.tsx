@@ -31,6 +31,13 @@ const specs = [
   { label: "Upkeep", value: "Store cold · Crack with intent · Crush · Recycle" },
 ]
 
+/**
+ * The BloodThirst product page.
+ * This component provides a detailed overview of the BloodThirst product,
+ * including tasting notes, specifications, and a call to action to shop.
+ *
+ * @returns {JSX.Element} The rendered BloodThirst product page.
+ */
 export default function BloodThirstPage() {
   return (
     <div className="section">

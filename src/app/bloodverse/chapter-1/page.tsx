@@ -17,6 +17,13 @@ const RUNE_DATA_URI =
   </g>\
 </svg>\")"
 
+/**
+ * The page for Chapter I of the Bloodverse lore, titled "The Reaper Knocks".
+ * This component displays the story content for the first chapter, along with
+ * related in-universe details and navigation to other parts of the site.
+ *
+ * @returns {JSX.Element} The rendered Chapter I page.
+ */
 export default function ChapterOne() {
   return (
     <section className="relative section overflow-hidden">

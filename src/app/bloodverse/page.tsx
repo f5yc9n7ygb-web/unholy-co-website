@@ -8,6 +8,12 @@ export const metadata = {
   description: "A living myth. Scan the can, unlock the chapter. Start with: The Reaper Knocks."
 }
 
+/**
+ * The main page for the Bloodverse, the interactive lore section of the website.
+ * This component introduces the concept of the Bloodverse and provides links to available chapters.
+ *
+ * @returns {JSX.Element} The rendered Bloodverse page.
+ */
 export default function BloodversePage() {
   return (
     <section className="section">

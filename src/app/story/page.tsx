@@ -44,6 +44,12 @@ const pillars = [
   },
 ]
 
+/**
+ * The story page for the UNHOLY CO. brand.
+ * This component tells the story of the brand's origins, milestones, and core principles.
+ *
+ * @returns {JSX.Element} The rendered story page.
+ */
 export default function StoryPage() {
   return (
     <div className="section">

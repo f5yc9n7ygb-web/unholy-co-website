@@ -1,5 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
+/**
+ * A client-side component that displays a countdown timer to a specific target date.
+ *
+ * @param {object} props - The props for the component.
+ * @param {string} props.target - The target date and time in a string format parsable by `new Date()`.
+ * @returns {JSX.Element} The rendered countdown timer, showing days, hours, minutes, and seconds.
+ */
 export function Countdown({ target }: { target: string }) {
   const [time, setTime] = useState<{d:number,h:number,m:number,s:number}>({d:0,h:0,m:0,s:0})
   useEffect(() => {

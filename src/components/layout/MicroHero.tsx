@@ -15,6 +15,17 @@ type MicroHeroProps = {
   actions?: HeroAction[]
 }
 
+/**
+ * A compact "hero" section component for page headers.
+ * It displays an optional eyebrow, a title, a description, and a set of action buttons.
+ *
+ * @param {MicroHeroProps} props - The props for the component.
+ * @param {string} [props.eyebrow] - An optional text displayed above the title, often in uppercase.
+ * @param {string} props.title - The main title of the hero section.
+ * @param {ReactNode} [props.description] - The description text or JSX content.
+ * @param {HeroAction[]} [props.actions] - An array of action objects to be rendered as buttons.
+ * @returns {JSX.Element} The rendered micro-hero section.
+ */
 export function MicroHero({ eyebrow, title, description, actions }: MicroHeroProps) {
   return (
     <section className="micro-hero">

@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+/**
+ * Handles POST requests to create a new order.
+ * This endpoint is intended for integration with a payment gateway like Razorpay.
+ * It currently returns a mock order for demonstration purposes.
+ *
+ * @param {NextRequest} request - The incoming Next.js request object containing order details.
+ * @returns {Promise<NextResponse>} A JSON response with the created order or an error message.
+ */
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
@@ -46,6 +54,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Handles GET requests to the order API endpoint.
+ * This method is not allowed for this endpoint and will return a 405 error.
+ *
+ * @returns {Promise<NextResponse>} A JSON response indicating the method is not allowed.
+ */
 export async function GET() {
   return NextResponse.json(
     { error: 'Method not allowed. Use POST.' },

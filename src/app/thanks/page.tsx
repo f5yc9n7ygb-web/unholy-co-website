@@ -6,6 +6,12 @@ export const metadata = {
   description: "Your order has been received. Check your email for confirmation and ritual tracking details."
 }
 
+/**
+ * The "Thank You" page, displayed after a user completes a purchase.
+ * This component confirms the order and provides links for support and to track future drops.
+ *
+ * @returns {JSX.Element} The rendered thank you page.
+ */
 export default function ThanksPage() {
   return (
     <div className="section">

@@ -18,6 +18,13 @@ declare global {
   }
 }
 
+/**
+ * The client-side component for the shop page.
+ * This component handles user interaction, form state, and the Razorpay payment integration.
+ * It allows users to select a product pack, fill in shipping details, and complete the purchase.
+ *
+ * @returns {JSX.Element} The rendered shop interface.
+ */
 export function ShopClient() {
   const [selected, setSelected] = useState<Pack | null>(null)
   const [loading, setLoading] = useState(false)

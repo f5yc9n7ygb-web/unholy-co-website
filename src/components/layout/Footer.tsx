@@ -1,5 +1,11 @@
 import Link from 'next/link'
 
+/**
+ * The footer component for the website.
+ * It includes navigation links, a subscription form, and copyright information.
+ *
+ * @returns {JSX.Element} The rendered footer.
+ */
 export function Footer() {
   return (
     <footer className="mt-24 border-t border-ash/60">

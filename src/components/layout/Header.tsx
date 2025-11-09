@@ -2,6 +2,13 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 
+/**
+ * The header component for the website.
+ * It features a sticky navigation bar that changes appearance on scroll.
+ * Includes the brand logo, navigation links, and a call-to-action button.
+ *
+ * @returns {JSX.Element} The rendered header.
+ */
 export function Header() {
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
