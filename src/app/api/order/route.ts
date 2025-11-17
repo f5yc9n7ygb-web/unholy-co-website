@@ -1,4 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from "next/server";
+import { Buffer } from "node:buffer";
+
+const RAZORPAY_ENDPOINT = "https://api.razorpay.com/v1/orders";
 
 /**
  * Handles POST requests to create a new order.
@@ -10,59 +13,63 @@ import { NextRequest, NextResponse } from 'next/server'
  */
 export async function POST(request: NextRequest) {
   try {
-    const data = await request.json()
+    const payload = await request.json();
+    const amount = Number(payload.amount);
+    const currency = (payload.currency || "INR").toUpperCase();
+    const receipt = payload.receipt || `receipt_${Date.now()}`;
+    const notes = payload.notes || {};
 
-    const { amount, currency, receipt, notes } = data
-
-    if (!amount || !currency) {
+    if (!amount || !Number.isInteger(amount) || amount <= 0) {
       return NextResponse.json(
-        { ok: false, error: 'Missing required fields: amount, currency' },
+        { ok: false, error: "Amount (in paise) is required and must be an integer." },
         { status: 400 }
-      )
+      );
     }
 
-    // TODO: Integration with Razorpay for actual order creation
-    // For now, return a mock order
-    const mockOrder = {
-      id: `order_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-      entity: 'order',
-      amount,
-      amount_paid: 0,
-      amount_due: amount,
-      currency,
-      receipt: receipt || `receipt_${Date.now()}`,
-      status: 'created',
-      attempts: 0,
-      notes: notes || {},
-      created_at: Math.floor(Date.now() / 1000)
+    const { keyId, keySecret } = getRazorpayCredentials();
+
+    const response = await fetch(RAZORPAY_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
+      },
+      body: JSON.stringify({
+        amount,
+        currency,
+        receipt,
+        payment_capture: 1,
+        notes,
+      }),
+    });
+
+    const order = await response.json();
+    if (!response.ok) {
+      const description = order?.error?.description || "Unable to create order";
+      throw new Error(description);
     }
 
-    console.log('Order creation request:', {
-      amount,
-      currency,
-      receipt,
-      notes
-    })
-
-    return NextResponse.json({ ok: true, order: mockOrder }, { status: 200 })
-  } catch (error: any) {
-    console.error('Order API error:', error)
+    return NextResponse.json({ ok: true, order }, { status: 200 });
+  } catch (error) {
+    console.error("Order API error:", error);
     return NextResponse.json(
-      { ok: false, error: 'Internal server error' },
+      { ok: false, error: "Unable to create an order right now." },
       { status: 500 }
-    )
+    );
   }
 }
 
-/**
- * Handles GET requests to the order API endpoint.
- * This method is not allowed for this endpoint and will return a 405 error.
- *
- * @returns {Promise<NextResponse>} A JSON response indicating the method is not allowed.
- */
+function getRazorpayCredentials() {
+  const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+  if (!keyId || !keySecret) {
+    throw new Error("Razorpay credentials are not configured.");
+  }
+
+  return { keyId, keySecret };
+}
+
 export async function GET() {
-  return NextResponse.json(
-    { error: 'Method not allowed. Use POST.' },
-    { status: 405 }
-  )
+  return NextResponse.json({ error: "Method not allowed. Use POST." }, { status: 405 });
 }

@@ -1,4 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from "next/server";
+import { parseRequestBody } from "@/lib/server/parse-body";
+import { saveRecordToAirtable, sendMailjetEmail } from "@/lib/server/integrations";
+
+function validateEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+const CONTACT_NOTIFICATION_SUBJECT = "New contact submission — UNHOLY CO.";
 
 /**
  * Handles POST requests for the contact form.
@@ -10,60 +18,82 @@ import { NextRequest, NextResponse } from 'next/server'
  */
 export async function POST(request: NextRequest) {
   try {
-    const contentType = request.headers.get('content-type') || ''
-    let data: Record<string, any> = {}
+    const payload = await parseRequestBody(request);
+    const name = (payload.name || "").trim();
+    const email = (payload.email || "").trim().toLowerCase();
+    const message = (payload.message || "").trim();
+    const phone = (payload.phone || "").trim();
+    const source = (payload.source || "website").trim();
 
-    if (contentType.includes('application/json')) {
-      data = await request.json()
-    } else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
-      const formData = await request.formData()
-      formData.forEach((value, key) => {
-        data[key] = value.toString()
-      })
-    } else {
+    if (!name || !message || !validateEmail(email)) {
       return NextResponse.json(
-        { ok: false, error: 'Unsupported content type' },
+        { ok: false, error: "Name, valid email, and message are required." },
         { status: 400 }
-      )
+      );
     }
 
-    const email = String(data.email || '').trim()
-    if (!email || !email.includes('@')) {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid email' },
-        { status: 400 }
-      )
-    }
+    await saveRecordToAirtable({
+      Type: "Contact",
+      Name: name,
+      Email: email,
+      Phone: phone || null,
+      Message: message,
+      Source: source,
+      SubmittedAt: new Date().toISOString(),
+    });
 
-    // TODO: Integration with Airtable and Mailjet
-    // For now, just accept the submission
-    console.log('Contact form submission:', {
+    await notifyTeam({
+      name,
       email,
-      name: data.name,
-      phone: data.phone,
-      message: data.message,
-      source: data.source
-    })
+      message,
+      phone,
+      source,
+    });
 
-    return NextResponse.json({ ok: true }, { status: 200 })
-  } catch (error: any) {
-    console.error('Contact API error:', error)
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (error) {
+    console.error("Contact API error:", error);
     return NextResponse.json(
-      { ok: false, error: 'Internal server error' },
+      { ok: false, error: "Unable to submit your message right now." },
       { status: 500 }
-    )
+    );
   }
 }
 
-/**
- * Handles GET requests to the contact API endpoint.
- * This method is not allowed for this endpoint and will return a 405 error.
- *
- * @returns {Promise<NextResponse>} A JSON response indicating the method is not allowed.
- */
+async function notifyTeam(payload: {
+  name: string;
+  email: string;
+  message: string;
+  phone?: string;
+  source?: string;
+}) {
+  const recipients = (process.env.CONTACT_FORWARD_EMAIL || "")
+    .split(",")
+    .map((email) => email.trim())
+    .filter(Boolean);
+
+  if (!recipients.length) {
+    console.warn("CONTACT_FORWARD_EMAIL is not configured; skipping notification email.");
+    return;
+  }
+
+  const html = `
+    <p><strong>Name:</strong> ${payload.name}</p>
+    <p><strong>Email:</strong> ${payload.email}</p>
+    ${payload.phone ? `<p><strong>Phone:</strong> ${payload.phone}</p>` : ""}
+    <p><strong>Source:</strong> ${payload.source || "website"}</p>
+    <p><strong>Message:</strong></p>
+    <p>${payload.message.replace(/\n/g, "<br />")}</p>
+  `;
+
+  await sendMailjetEmail({
+    to: recipients,
+    subject: CONTACT_NOTIFICATION_SUBJECT,
+    html,
+    text: `New contact submission from ${payload.name} (${payload.email})`,
+  });
+}
+
 export async function GET() {
-  return NextResponse.json(
-    { error: 'Method not allowed. Use POST.' },
-    { status: 405 }
-  )
+  return NextResponse.json({ error: "Method not allowed. Use POST." }, { status: 405 });
 }

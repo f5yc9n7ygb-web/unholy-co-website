@@ -1,6 +1,7 @@
 # UNHOLY CO. — BloodThirst Website
 
-Welcome to the official repository for the UNHOLY CO. BloodThirst website. This project is a premium gothic-themed website built with a modern, high-performance stack.
+Premium gothic website for UNHOLY CO. built with Next.js App Router, Tailwind, Framer Motion, and Lucide.
+Forms are handled by Next.js API routes that log entries to Airtable, trigger Mailjet emails, and create Razorpay orders.
 
 ## Overview
 
@@ -82,7 +83,25 @@ If you see a blank page with `ERR_HTTP_RESPONSE_CODE_FAILURE` after deployment, 
         NEXT_PUBLIC_WORKER_ORDER_ENDPOINT=https://your-domain.pages.dev/api/order
         NEXT_PUBLIC_RAZORPAY_KEY_ID=your_razorpay_public_key
         ```
-    -   **DO NOT set these in `wrangler.toml`** - they won't work there for the frontend.
+    -   Add the **server-side secrets** (not prefixed with `NEXT_PUBLIC_`) so the APIs can talk to Airtable/Mailjet/Razorpay:
+        ```
+        AIRTABLE_BASE_ID=appXXXXXXXXXXXXXX
+        AIRTABLE_TABLE_NAME=signups
+        AIRTABLE_TOKEN=patXXXXXXXXXXXXXX
+
+        MAILJET_API_KEY=your_mailjet_api_key
+        MAILJET_SECRET=your_mailjet_secret
+        MAILJET_FROM_EMAIL=noreply@theunholy.co
+        MAILJET_FROM_NAME=UNHOLY CO.
+        MAILJET_WELCOME_SUBJECT=Your Damnation Is Served
+        MAILJET_UNSUB_URL=https://theunholy.co/unsubscribe
+
+        CONTACT_FORWARD_EMAIL=team@theunholy.co
+
+        RAZORPAY_KEY_ID=rzp_live_xxxxx
+        RAZORPAY_KEY_SECRET=your_secret
+        ```
+    -   **DO NOT set these in `wrangler.toml`** - use the Pages dashboard or Wrangler secrets
     -   See [CLOUDFLARE_ENV_SETUP.md](./CLOUDFLARE_ENV_SETUP.md) for detailed instructions.
 
 5.  **Deploy**:
@@ -91,7 +110,7 @@ If you see a blank page with `ERR_HTTP_RESPONSE_CODE_FAILURE` after deployment, 
 
 ## Worker
 
-The Cloudflare Worker in `workers/submit.ts` is responsible for handling all form submissions. It validates the payload, writes the data to an Airtable base, and sends a transactional email using Mailjet.
+The production site now uses the built-in Next.js API routes, but `workers/submit.ts` is still included as a reference Cloudflare Worker if you want to deploy the integrations separately.
 
 ## Troubleshooting
 
