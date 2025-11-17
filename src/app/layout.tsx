@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body className="body-glow">
         <Header />
-        <main>{children}</main>
+        <main className="pt-20 md:pt-24 isolate">{children}</main>
         <Footer />
       </body>
     </html>
