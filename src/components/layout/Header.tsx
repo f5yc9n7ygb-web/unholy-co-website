@@ -1,13 +1,19 @@
 "use client"
 import Link from "next/link"
+import type { Route } from "next"
 import { useState, useEffect } from "react"
 
-const NAV_ITEMS = [
-  { label: "BloodThirst", href: "/bloodthirst", eyebrow: "Flagship elixir", description: "Matte-black cans. Obsidian finish. Ritual-grade hydration." },
-  { label: "Drops", href: "/drops", eyebrow: "Limited runs", description: "Small-batch releases for night crawlers and back rooms." },
-  { label: "Story", href: "/story", eyebrow: "Origin myth", description: "How BloodThirst was forged in neon glow and velvet darkness." },
-  { label: "Bloodverse", href: "/bloodverse", eyebrow: "Immersive lore", description: "Audio-visual transmissions from the cult of hydration." },
-  { label: "Contact", href: "/contact", eyebrow: "Summon us", description: "Partnerships, drops, and rituals. We reply fast after midnight." }
+const NAV_ITEMS: Array<{
+  label: string
+  href: Route
+  eyebrow: string
+  description: string
+}> = [
+  { label: "BloodThirst", href: "/bloodthirst" as Route, eyebrow: "Flagship elixir", description: "Matte-black cans. Obsidian finish. Ritual-grade hydration." },
+  { label: "Drops", href: "/drops" as Route, eyebrow: "Limited runs", description: "Small-batch releases for night crawlers and back rooms." },
+  { label: "Story", href: "/story" as Route, eyebrow: "Origin myth", description: "How BloodThirst was forged in neon glow and velvet darkness." },
+  { label: "Bloodverse", href: "/bloodverse" as Route, eyebrow: "Immersive lore", description: "Audio-visual transmissions from the cult of hydration." },
+  { label: "Contact", href: "/contact" as Route, eyebrow: "Summon us", description: "Partnerships, drops, and rituals. We reply fast after midnight." }
 ]
 
 /**
