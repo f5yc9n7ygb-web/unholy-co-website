@@ -4,7 +4,7 @@ import Link from "next/link"
 import Parallax from "@/components/ux/Parallax"
 import Reveal from "@/components/ux/Reveal"
 import { MicroHero } from "@/components/layout/MicroHero"
-import heroCan from "@/../public/can.png"
+import heroCan from "@/public/can.png"
 
 export const metadata = {
   title: "BloodThirst — UNHOLY CO.",

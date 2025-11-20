@@ -19,6 +19,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@/public/*": [
+        "./public/*"
       ]
     },
     "types": [

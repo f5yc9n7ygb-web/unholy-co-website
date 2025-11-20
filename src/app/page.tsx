@@ -4,7 +4,7 @@ import Link from "next/link"
 import Reveal from "@/components/ux/Reveal"
 import Parallax from "@/components/ux/Parallax"
 import { Badges } from "@/components/shared/Badges"
-import heroCan from "@/../public/can.png"
+import heroCan from "@/public/can.png"
 
 export const revalidate = 60
 

@@ -3,7 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import Image from "next/image"
 import { useEffect, useState } from "react"
-import logoMark from "@/../public/uhc-logo.png"
+import logoMark from "@/public/uhc-logo.png"
 
 const DISPLAY_DURATION = 2200
 
