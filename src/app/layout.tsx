@@ -3,6 +3,7 @@ import './globals.css'
 import { ReactNode } from 'react'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
+import { Preloader } from '@/components/ux/Preloader'
 
 export const metadata: Metadata = {
   title: 'UNHOLY CO. — BloodThirst',
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="body-glow">
+        <Preloader />
         <Header />
         <main className="pt-20 md:pt-24 isolate">{children}</main>
         <Footer />

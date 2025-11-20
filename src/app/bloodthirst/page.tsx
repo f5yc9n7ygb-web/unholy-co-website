@@ -1,8 +1,10 @@
 // src/app/bloodthirst/page.tsx
+import Image from "next/image"
 import Link from "next/link"
 import Parallax from "@/components/ux/Parallax"
 import Reveal from "@/components/ux/Reveal"
 import { MicroHero } from "@/components/layout/MicroHero"
+import heroCan from "@/../public/can.png"
 
 export const metadata = {
   title: "BloodThirst — UNHOLY CO.",
@@ -107,11 +109,15 @@ export default function BloodThirstPage() {
             <Parallax amt={90}>
               <div className="glass-panel h-full overflow-hidden">
                 <div className="absolute inset-0 bg-[radial-gradient(800px_480px_at_70%_20%,rgba(176,0,32,0.32),transparent_65%)]" />
-                <img
-                  src="/can.png"
-                  alt="BloodThirst can"
-                  className="relative mx-auto max-h-[70vh] animate-float drop-shadow-[0_25px_50px_rgba(0,0,0,0.5)]"
-                />
+                <div className="relative h-[360px] sm:h-[420px] md:h-[520px] w-full">
+                  <Image
+                    src={heroCan}
+                    alt="BloodThirst can"
+                    fill
+                    className="object-contain animate-float drop-shadow-[0_25px_50px_rgba(0,0,0,0.5)]"
+                    priority
+                  />
+                </div>
               </div>
             </Parallax>
           </Reveal>

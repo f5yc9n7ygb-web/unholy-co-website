@@ -4,6 +4,7 @@ import Link from "next/link"
 import Reveal from "@/components/ux/Reveal"
 import Parallax from "@/components/ux/Parallax"
 import { Badges } from "@/components/shared/Badges"
+import heroCan from "@/../public/can.png"
 
 export const revalidate = 60
 
@@ -130,11 +131,11 @@ export default function HomePage() {
           </div>
 
           <Parallax amt={80}>
-            <div className="relative aspect-[4/5] overflow-hidden rounded-[2.5rem] border border-ash/70 bg-ash/30 red-glow-strong backdrop-blur-xl">
+            <div className="relative h-[360px] sm:h-[420px] md:h-auto md:aspect-[4/5] w-full overflow-hidden rounded-[2.5rem] border border-ash/70 bg-ash/30 red-glow-strong backdrop-blur-xl">
               <div className="absolute inset-0 bg-[radial-gradient(900px_500px_at_60%_20%,rgba(176,0,32,0.28),transparent_60%)]" />
               <div className="absolute inset-y-10 left-10 w-1 bg-blood/40 blur-sm" />
               <Image
-                src="/can.png"
+                src={heroCan}
                 alt="BloodThirst can"
                 fill
                 priority
