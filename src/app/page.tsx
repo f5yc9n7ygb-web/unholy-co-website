@@ -8,6 +8,7 @@ import { CountUp } from "@/components/ux/CountUp"
 import { MagneticButton } from "@/components/ux/MagneticButton"
 import { Marquee } from "@/components/ux/Marquee"
 import heroCan from "@/public/can.png"
+import HeroBackground from "@/components/ux/HeroBackground"
 
 export const revalidate = 60
 
@@ -89,21 +90,8 @@ export default function HomePage() {
     <div className="space-y-0">
       {/* HERO */}
       <section className="section relative overflow-hidden min-h-[90vh] flex items-center">
-        {/* Video background */}
-        <div className="absolute inset-0 z-0 bg-black">
-          <Image
-            src="/sexy-hero-bg.png"
-            alt="Unholy Co Hero Texture"
-            fill
-            priority
-            className="object-cover opacity-80"
-          />
-          {/* Dark overlay to ensure text readability */}
-          <div className="absolute inset-0 bg-black/40" />
-          {/* Gradient overlay for depth */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/40" />
-        </div>
+        {/* Obsidian Liquid WebGL Shader Background */}
+        <HeroBackground />
 
         <div className="absolute inset-0 hero-gradient z-[1]" />
         <div className="absolute -right-32 -top-32 h-72 w-72 rounded-full bg-blood/20 blur-3xl z-[1]" />
