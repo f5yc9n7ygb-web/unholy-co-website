@@ -7,7 +7,7 @@ import { TextReveal } from "@/components/ux/TextReveal"
 import { CountUp } from "@/components/ux/CountUp"
 import { MagneticButton } from "@/components/ux/MagneticButton"
 import { Marquee } from "@/components/ux/Marquee"
-import heroCan from "@/public/can.png"
+import heroCan from "../../public/can.png"
 
 export const revalidate = 60
 
