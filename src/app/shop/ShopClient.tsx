@@ -3,7 +3,7 @@
 import Script from "next/script"
 import Image from "next/image"
 import { useState, useEffect } from "react"
-import heroCan from "../../../public/can.png"
+import heroCan from "@/public/can.png"
 
 /* ── Types ── */
 type Pack = {
