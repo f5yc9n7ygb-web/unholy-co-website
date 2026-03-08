@@ -4,6 +4,7 @@ import Script from "next/script"
 import Image from "next/image"
 import { useState, useEffect } from "react"
 import heroCan from "@/public/can.png"
+import { TiltCard } from "@/components/ux/TiltCard"
 
 /* ── Types ── */
 type Pack = {
@@ -111,7 +112,7 @@ export function ShopClient() {
   const [touched, setTouched] = useState<Set<string>>(new Set())
 
   const key = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
-  const orderEndpoint = process.env.NEXT_PUBLIC_WORKER_ORDER_ENDPOINT
+  const orderEndpoint = "/api/order"
 
   useEffect(() => {
     if (touched.size === 0) return
@@ -147,19 +148,23 @@ export function ShopClient() {
     setLoading(true)
     setPayError(null)
     try {
-      const res = await fetch(orderEndpoint, {
+      const payload = {
+        amount: selected.price * 100,
+        currency: "INR",
+        receipt: `${selected.id}_${Date.now()}`,
+        notes: {
+          product: selected.title,
+          qty: selected.qty,
+          ...form,
+        },
+      };
+      
+      console.log("Sending checkout payload:", payload);
+
+      const res = await fetch("/api/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: selected.price * 100,
-          currency: "INR",
-          receipt: `${selected.id}_${Date.now()}`,
-          notes: {
-            product: selected.title,
-            qty: selected.qty,
-            ...form,
-          },
-        }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error || "Order error")
@@ -242,7 +247,7 @@ export function ShopClient() {
               {PACKS.map((pack) => {
                 const isActive = selected.id === pack.id
                 return (
-                  <button
+                  <TiltCard
                     key={pack.id}
                     onClick={() => setSelected(pack)}
                     className={`relative rounded-2xl border p-5 md:p-6 text-left transition-all duration-300 ${
@@ -287,7 +292,7 @@ export function ShopClient() {
                         <span className="ml-2 text-xs text-bone/40">₹{pack.perCan.toFixed(0)}/can</span>
                       </div>
                     </div>
-                  </button>
+                  </TiltCard>
                 )
               })}
             </div>

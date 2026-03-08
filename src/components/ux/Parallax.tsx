@@ -12,13 +12,21 @@ import { ReactNode, useRef } from "react"
  * @param {number} [props.amt=50] - The amount (in pixels) of vertical movement in the parallax effect.
  * @returns {JSX.Element} The rendered motion div with the parallax effect.
  */
-export default function Parallax({ children, amt = 50 }: { children: ReactNode; amt?: number }) {
+export default function Parallax({ 
+  children, 
+  amt = 50,
+  className = "" 
+}: { 
+  children: ReactNode; 
+  amt?: number;
+  className?: string;
+}) {
   const ref = useRef(null)
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] })
   const y = useTransform(scrollYProgress, [0, 1], [-amt, amt])
 
   return (
-    <motion.div ref={ref} style={{ y }}>
+    <motion.div ref={ref} style={{ y }} className={className}>
       {children}
     </motion.div>
   )

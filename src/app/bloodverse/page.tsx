@@ -2,6 +2,7 @@
 import Link from "next/link"
 import Reveal from "@/components/ux/Reveal"
 import { MicroHero } from "@/components/layout/MicroHero"
+import { InteractiveVault } from "@/components/ux/InteractiveVault"
 
 export const metadata = {
   title: "The Bloodverse — UNHOLY CO.",
@@ -28,43 +29,9 @@ export default function BloodversePage() {
           ]}
         />
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <Reveal>
-            <div className="glass-panel space-y-4">
-              <h3 className="text-blood text-xl italic">The Reaper Knocks</h3>
-              <p className="text-offwhite/80 text-sm">
-                It starts with a knock and ends with you questioning your reflection.
-              </p>
-              <Link href="/bloodverse/chapter-1" className="btn btn-primary">
-                Read Chapter
-              </Link>
-            </div>
-          </Reveal>
-
-          <Reveal delay={0.05}>
-            <div className="glass-panel space-y-4 opacity-60">
-              <h3 className="text-blood text-xl italic">The Feast of Shadows</h3>
-              <p className="text-offwhite/80 text-sm">
-                Coming soon. They drank. The city screamed.
-              </p>
-              <button className="btn btn-ghost" disabled>
-                Locked
-              </button>
-            </div>
-          </Reveal>
-
-          <Reveal delay={0.1}>
-            <div className="glass-panel space-y-4 opacity-60">
-              <h3 className="text-blood text-xl italic">The Choir of Ash</h3>
-              <p className="text-offwhite/80 text-sm">
-                Final chorus meets dawn. Hydration becomes omen.
-              </p>
-              <button className="btn btn-ghost" disabled>
-                Locked
-              </button>
-            </div>
-          </Reveal>
-        </div>
+        <Reveal>
+          <InteractiveVault />
+        </Reveal>
       </div>
     </section>
   )

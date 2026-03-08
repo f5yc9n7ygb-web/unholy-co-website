@@ -45,15 +45,16 @@ export async function POST(request: NextRequest) {
 
     const order = await response.json();
     if (!response.ok) {
+      console.error("Razorpay Error Payload:", order);
       const description = order?.error?.description || "Unable to create order";
       throw new Error(description);
     }
 
     return NextResponse.json({ ok: true, order }, { status: 200 });
-  } catch (error) {
-    console.error("Order API error:", error);
+  } catch (error: any) {
+    console.error("Order API error:", error?.message || error);
     return NextResponse.json(
-      { ok: false, error: "Unable to create an order right now." },
+      { ok: false, error: "Unable to create an order right now.", details: error?.message },
       { status: 500 }
     );
   }

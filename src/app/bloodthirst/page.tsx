@@ -106,10 +106,10 @@ export default function BloodThirstPage() {
           </div>
 
           <Reveal delay={0.1}>
-            <Parallax amt={90}>
-              <div className="glass-panel h-full overflow-hidden">
-                <div className="absolute inset-0 bg-[radial-gradient(800px_480px_at_70%_20%,rgba(176,0,32,0.32),transparent_65%)]" />
-                <div className="relative h-[360px] sm:h-[420px] md:h-[520px] w-full">
+            <Parallax amt={60}>
+              <div className="glass-panel h-[400px] sm:h-[480px] md:h-[580px] w-full overflow-hidden relative">
+                <div className="absolute inset-0 bg-[radial-gradient(800px_480px_at_70%_20%,rgba(176,0,32,0.32),transparent_65%)] z-0" />
+                <Parallax amt={-40} className="relative w-full h-full z-10">
                   <Image
                     src={heroCan}
                     alt="BloodThirst can"
@@ -117,7 +117,7 @@ export default function BloodThirstPage() {
                     className="object-contain animate-float drop-shadow-[0_25px_50px_rgba(0,0,0,0.5)]"
                     priority
                   />
-                </div>
+                </Parallax>
               </div>
             </Parallax>
           </Reveal>
