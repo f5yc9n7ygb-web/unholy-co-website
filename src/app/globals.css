@@ -376,3 +376,125 @@ button.btn:hover {
   background: linear-gradient(90deg, rgba(176,0,32,0.85), rgba(255,255,255,0.75));
   box-shadow: 0 0 24px rgba(176,0,32,0.35);
 }
+
+/* ===== CUSTOM CURSOR ===== */
+@media (pointer: fine) {
+  * { cursor: none !important; }
+}
+
+.custom-cursor-dot {
+  position: fixed;
+  top: -4px;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  background: #B00020;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  will-change: transform;
+  box-shadow: 0 0 12px rgba(176, 0, 32, 0.6);
+  transition: opacity 0.2s;
+}
+
+.custom-cursor-ring {
+  position: fixed;
+  top: -20px;
+  left: -20px;
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid rgba(176, 0, 32, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9998;
+  will-change: transform;
+  transition: width 0.3s ease, height 0.3s ease, top 0.3s ease, left 0.3s ease, border-color 0.3s ease, opacity 0.2s, background-color 0.3s ease;
+}
+
+.custom-cursor-ring[data-hovering] {
+  width: 56px;
+  height: 56px;
+  top: -28px;
+  left: -28px;
+  border-color: rgba(176, 0, 32, 0.8);
+  background-color: rgba(176, 0, 32, 0.08);
+}
+
+/* ===== NAV LINK ANIMATED UNDERLINES ===== */
+.nav-link {
+  position: relative;
+  padding-bottom: 2px;
+}
+
+.nav-link::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 1.5px;
+  background: #B00020;
+  transform: translateX(-50%);
+  transition: width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.nav-link:hover::after {
+  width: 100%;
+}
+
+/* ===== BUTTON SHINE SWEEP ===== */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  transition: left 0.5s ease;
+}
+
+.btn-primary:hover::after {
+  left: 100%;
+}
+
+/* ===== MARQUEE ===== */
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.marquee-container {
+  mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+}
+
+.marquee-track {
+  animation: marquee-scroll linear infinite;
+  width: max-content;
+}
+
+/* ===== SVG NOISE GRAIN OVERLAY ===== */
+.noise-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: soft-light;
+}
+
+/* ===== CLIP-PATH IMAGE REVEAL ===== */
+.clip-reveal {
+  clip-path: inset(100% 0 0 0);
+  transition: clip-path 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.clip-reveal.revealed {
+  clip-path: inset(0 0 0 0);
+}

@@ -1,21 +1,16 @@
-// src/app/page.tsx
 import Image from "next/image"
 import Link from "next/link"
 import Reveal from "@/components/ux/Reveal"
 import Parallax from "@/components/ux/Parallax"
 import { Badges } from "@/components/shared/Badges"
+import { TextReveal } from "@/components/ux/TextReveal"
+import { CountUp } from "@/components/ux/CountUp"
+import { MagneticButton } from "@/components/ux/MagneticButton"
+import { Marquee } from "@/components/ux/Marquee"
 import heroCan from "@/public/can.png"
 
 export const revalidate = 60
 
-/**
- * The main landing page for the UNHOLY CO. BloodThirst website.
- * This component showcases the product, its features, the brand's philosophy,
- * testimonials, and an email subscription form. It is composed of several
- * sections: Hero, Feature Grid, Ritual, Testimonials, and Email Capture.
- *
- * @returns {JSX.Element} The rendered home page.
- */
 export default function HomePage() {
   const stats = [
     { label: "Mineral Blend", value: "12 trace elements" },
@@ -78,15 +73,41 @@ export default function HomePage() {
       name: "NISHA R.",
       role: "Creative Director",
     },
+    {
+      quote: "The packaging is insane. Everyone at the studio thought it was a limited-run art piece, not water.",
+      name: "VIKRAM K.",
+      role: "Photographer, Delhi",
+    },
+    {
+      quote: "Best mixer we've ever stocked. The branding draws people in, the taste seals the deal.",
+      name: "PRIYA M.",
+      role: "Lounge Owner, Goa",
+    },
   ]
 
   return (
     <div className="space-y-0">
       {/* HERO */}
-      <section className="section relative overflow-hidden">
-        <div className="absolute inset-0 hero-gradient" />
-        <div className="absolute -right-32 -top-32 h-72 w-72 rounded-full bg-blood/20 blur-3xl" />
-        <div className="absolute -left-24 bottom-0 h-80 w-80 rounded-full bg-blood/20 blur-3xl" />
+      <section className="section relative overflow-hidden min-h-[90vh] flex items-center">
+        {/* Video background */}
+        <div className="absolute inset-0 z-0 bg-black">
+          <Image
+            src="/sexy-hero-bg.png"
+            alt="Unholy Co Hero Texture"
+            fill
+            priority
+            className="object-cover opacity-80"
+          />
+          {/* Dark overlay to ensure text readability */}
+          <div className="absolute inset-0 bg-black/40" />
+          {/* Gradient overlay for depth */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/40" />
+        </div>
+
+        <div className="absolute inset-0 hero-gradient z-[1]" />
+        <div className="absolute -right-32 -top-32 h-72 w-72 rounded-full bg-blood/20 blur-3xl z-[1]" />
+        <div className="absolute -left-24 bottom-0 h-80 w-80 rounded-full bg-blood/20 blur-3xl z-[1]" />
 
         <div className="container relative z-10 grid items-center gap-12 md:grid-cols-2">
           <div className="space-y-6">
@@ -95,37 +116,50 @@ export default function HomePage() {
                 THE CULT OF HYDRATION
               </span>
             </Reveal>
-            <Reveal><h1 className="h1 leading-tight">Hydrate Your Sins</h1></Reveal>
-            <Reveal delay={0.05}>
+            <TextReveal
+              text="Hydrate Your Sins"
+              as="h1"
+              className="h1 leading-tight"
+              stagger={0.06}
+            />
+            <Reveal delay={0.3}>
               <p className="p text-lg">
                 BloodThirst is premium natural mineral water in a can — gothic, rebellious, and brutally refreshing.
                 Engineered for night rituals, morning recoveries, and everything unholy in between.
               </p>
             </Reveal>
-            <Reveal delay={0.1}>
+            <Reveal delay={0.4}>
               <div className="flex flex-wrap gap-3">
-                <Link href="/bloodthirst" className="btn btn-primary">
-                  Taste BloodThirst
-                </Link>
-                <Link href="/shop" className="btn btn-ghost">
-                  Enter the Shop
-                </Link>
-                <Link href="/story" className="btn btn-ghost">
-                  Our Story
-                </Link>
+                <MagneticButton>
+                  <Link href="/bloodthirst" className="btn btn-primary">
+                    Taste BloodThirst
+                  </Link>
+                </MagneticButton>
+                <MagneticButton>
+                  <Link href="/shop" className="btn btn-ghost">
+                    Enter the Shop
+                  </Link>
+                </MagneticButton>
+                <MagneticButton>
+                  <Link href="/story" className="btn btn-ghost">
+                    Our Story
+                  </Link>
+                </MagneticButton>
               </div>
             </Reveal>
-            <Reveal delay={0.15}>
+            <Reveal delay={0.45}>
               <div className="grid grid-cols-2 gap-4 pt-6 text-sm sm:text-base">
                 {stats.map((stat) => (
                   <div key={stat.label} className="stat-card">
                     <span className="block text-bone/70">{stat.label}</span>
-                    <strong className="text-lg text-offwhite">{stat.value}</strong>
+                    <strong className="text-lg text-offwhite">
+                      <CountUp value={stat.value} />
+                    </strong>
                   </div>
                 ))}
               </div>
             </Reveal>
-            <Reveal delay={0.2}>
+            <Reveal delay={0.5}>
               <Badges />
             </Reveal>
           </div>
@@ -150,18 +184,23 @@ export default function HomePage() {
       <section className="section">
         <div className="container space-y-10">
           <div className="max-w-2xl">
-            <Reveal><h2 className="h2">Why BloodThirst hits harder.</h2></Reveal>
+            <TextReveal
+              text="Why BloodThirst hits harder."
+              as="h2"
+              className="h2"
+              stagger={0.05}
+            />
             <Reveal delay={0.05}>
               <p className="p mt-3">
-                We don’t sip from plastic. We drink from armor. Every can is cold-forged minimalism engineered to keep
+                We don&apos;t sip from plastic. We drink from armor. Every can is cold-forged minimalism engineered to keep
                 purity in and the apocalypse out.
               </p>
             </Reveal>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {features.map((feature) => (
-              <Reveal key={feature.title}>
+            {features.map((feature, i) => (
+              <Reveal key={feature.title} delay={i * 0.08}>
                 <article className="glass-panel h-full">
                   <h3 className="text-lg font-semibold text-offwhite">{feature.title}</h3>
                   <p className="mt-3 text-sm text-offwhite/70 md:text-base">{feature.body}</p>
@@ -176,15 +215,15 @@ export default function HomePage() {
       <section className="section">
         <div className="container grid gap-10 md:grid-cols-[1fr,1.1fr]">
           <div className="space-y-6">
-            <Reveal><h2 className="h2">The BloodThirst Ritual</h2></Reveal>
+            <TextReveal text="The BloodThirst Ritual" as="h2" className="h2" />
             <Reveal delay={0.05}>
               <p className="p">
-                This is more than hydration — it’s a ceremony. Elevate your pre-game, your recovery, or your midnight grind
+                This is more than hydration — it&apos;s a ceremony. Elevate your pre-game, your recovery, or your midnight grind
                 with a ritual that celebrates rebellion and sustainability in equal measure.
               </p>
             </Reveal>
             <Reveal delay={0.1}>
-              <Link href="/bloodverse" className="inline-flex items-center text-sm font-medium text-bone hover:text-blood">
+              <Link href="/bloodverse" className="nav-link inline-flex items-center text-sm font-medium text-bone hover:text-blood">
                 Explore the Bloodverse →
               </Link>
             </Reveal>
@@ -192,7 +231,7 @@ export default function HomePage() {
 
           <div className="grid gap-4">
             {ritualSteps.map((step, index) => (
-              <Reveal key={step.title} delay={0.05 * index}>
+              <Reveal key={step.title} delay={0.08 * index}>
                 <div className="glass-panel flex gap-4 border border-blood/30">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blood/15 text-blood font-semibold">
                     {index + 1}
@@ -208,31 +247,34 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* TESTIMONIALS */}
+      {/* TESTIMONIALS — Infinite marquee */}
       <section className="section">
         <div className="container space-y-10">
           <div className="max-w-xl">
-            <Reveal><h2 className="h2">Whispers from the coven</h2></Reveal>
+            <TextReveal text="Whispers from the coven" as="h2" className="h2" />
             <Reveal delay={0.05}>
               <p className="p mt-3">
-                BloodThirst travels with artists, mixologists, and creators who thrive after dark. Here’s what they’re saying.
+                BloodThirst travels with artists, mixologists, and creators who thrive after dark. Here&apos;s what they&apos;re saying.
               </p>
             </Reveal>
           </div>
+        </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
+        <div className="mt-10">
+          <Marquee speed={40} pauseOnHover>
             {testimonials.map((t) => (
-              <Reveal key={t.name}>
-                <figure className="glass-panel h-full">
-                  <blockquote className="text-sm text-offwhite/80 md:text-base">“{t.quote}”</blockquote>
-                  <figcaption className="mt-6 text-sm uppercase tracking-wide text-bone/70">
-                    <span className="block font-semibold text-offwhite">{t.name}</span>
-                    <span>{t.role}</span>
-                  </figcaption>
-                </figure>
-              </Reveal>
+              <figure
+                key={t.name}
+                className="glass-panel w-[340px] shrink-0 md:w-[400px]"
+              >
+                <blockquote className="text-sm text-offwhite/80 md:text-base">&ldquo;{t.quote}&rdquo;</blockquote>
+                <figcaption className="mt-6 text-sm uppercase tracking-wide text-bone/70">
+                  <span className="block font-semibold text-offwhite">{t.name}</span>
+                  <span>{t.role}</span>
+                </figcaption>
+              </figure>
             ))}
-          </div>
+          </Marquee>
         </div>
       </section>
 
@@ -242,7 +284,7 @@ export default function HomePage() {
           <div className="absolute inset-x-0 -top-10 mx-auto h-40 max-w-3xl rounded-full bg-blood/20 blur-3xl" />
           <Reveal>
             <div className="glass-panel mx-auto max-w-3xl text-center">
-              <h2 className="h2">Join the Unholy circle</h2>
+              <TextReveal text="Join the Unholy circle" as="h2" className="h2" />
               <p className="p mt-3">Drops, perks, and first taste. No spam — just your new favorite ritual.</p>
 
               <form
@@ -258,9 +300,11 @@ export default function HomePage() {
                   placeholder="you@domain"
                   className="flex-1 rounded-xl border border-ash bg-ash/40 px-4 py-3 text-sm text-offwhite outline-none transition focus:border-blood focus:ring-2 focus:ring-blood/40"
                 />
-                <button className="btn btn-primary w-full sm:w-auto" type="submit">
-                  Stay Unholy
-                </button>
+                <MagneticButton strength={0.2}>
+                  <button className="btn btn-primary w-full sm:w-auto" type="submit">
+                    Stay Unholy
+                  </button>
+                </MagneticButton>
               </form>
             </div>
           </Reveal>

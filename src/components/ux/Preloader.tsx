@@ -5,12 +5,26 @@ import Image from "next/image"
 import { useEffect, useState } from "react"
 import logoMark from "@/public/uhc-logo.png"
 
-const DISPLAY_DURATION = 2200
+const DISPLAY_DURATION = 1800
 
 export function Preloader() {
   const prefersReducedMotion = useReducedMotion()
   const [isVisible, setIsVisible] = useState(true)
   const [shouldRender, setShouldRender] = useState(true)
+  const [isFirstVisit, setIsFirstVisit] = useState(true)
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("unholy-visited")) {
+        setIsFirstVisit(false)
+        setIsVisible(false)
+      } else {
+        sessionStorage.setItem("unholy-visited", "1")
+      }
+    } catch {
+      // SSR or storage unavailable
+    }
+  }, [])
 
   useEffect(() => {
     if (!isVisible) {
@@ -20,12 +34,13 @@ export function Preloader() {
   }, [isVisible])
 
   useEffect(() => {
+    if (!isFirstVisit) return
     const duration = prefersReducedMotion ? 400 : DISPLAY_DURATION
     const timer = setTimeout(() => setIsVisible(false), duration)
     return () => clearTimeout(timer)
-  }, [prefersReducedMotion])
+  }, [prefersReducedMotion, isFirstVisit])
 
-  if (!shouldRender) return null
+  if (!shouldRender || !isFirstVisit) return null
 
   return (
     <AnimatePresence mode="wait">

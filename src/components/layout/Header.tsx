@@ -143,7 +143,7 @@ function HeaderLinks({
   return (
     <div className={className}>
       {NAV_ITEMS.map((item) => (
-        <Link key={item.href} href={item.href} onClick={onNavigate}>
+        <Link key={item.href} href={item.href} onClick={onNavigate} className="nav-link">
           {item.label}
         </Link>
       ))}

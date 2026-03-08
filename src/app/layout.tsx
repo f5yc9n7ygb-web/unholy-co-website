@@ -1,9 +1,19 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import { ReactNode } from 'react'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { Preloader } from '@/components/ux/Preloader'
+import { CustomCursor } from '@/components/ux/CustomCursor'
+import { ScrollProgress } from '@/components/ux/ScrollProgress'
+import { NoiseGrain } from '@/components/ux/NoiseGrain'
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+})
 
 export const metadata: Metadata = {
   title: 'UNHOLY CO. — BloodThirst',
@@ -16,22 +26,17 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://theunholy.co')
 }
 
-/**
- * The root layout for the entire application.
- * This component wraps all pages and includes the header, main content, and footer.
- *
- * @param {object} props - The props for the component.
- * @param {ReactNode} props.children - The child components to be rendered within the main content area.
- * @returns {JSX.Element} The rendered HTML structure for the application.
- */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className="body-glow">
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <body className={`${inter.className} body-glow`} suppressHydrationWarning>
         <Preloader />
+        <CustomCursor />
+        <ScrollProgress />
         <Header />
         <main className="pt-20 md:pt-24 isolate">{children}</main>
         <Footer />
+        <NoiseGrain />
       </body>
     </html>
   )
