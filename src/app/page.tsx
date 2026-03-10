@@ -1,14 +1,18 @@
 import Image from "next/image"
 import Link from "next/link"
 import Reveal from "@/components/ux/Reveal"
-import Parallax from "@/components/ux/Parallax"
 import { Badges } from "@/components/shared/Badges"
-import { TextReveal } from "@/components/ux/TextReveal"
+import { SplitTextReveal } from "@/components/ux/SplitTextReveal"
+import { TextScramble } from "@/components/ux/TextScramble"
 import { CountUp } from "@/components/ux/CountUp"
-import { MagneticButton } from "@/components/ux/MagneticButton"
+import { SpringButton } from "@/components/ux/SpringButton"
+import { ScrollSkew } from "@/components/ux/ScrollSkew"
 import { Marquee } from "@/components/ux/Marquee"
 import heroCan from "@/public/can.png"
-import HeroBackground from "@/components/ux/HeroBackground"
+import { HomeHero } from "@/components/home/HomeHero"
+import { HorizontalRitual } from "@/components/home/HorizontalRitual"
+import { ClipReveal } from "@/components/ux/ClipReveal"
+import { FeatureGrid } from "@/components/home/FeatureGrid"
 
 export const revalidate = 60
 
@@ -89,96 +93,17 @@ export default function HomePage() {
   return (
     <div className="space-y-0">
       {/* HERO */}
-      <section className="section relative overflow-hidden min-h-[90vh] flex items-center">
-        {/* Obsidian Liquid WebGL Shader Background */}
-        <HeroBackground />
-
-        <div className="absolute inset-0 hero-gradient z-[1]" />
-        <div className="absolute -right-32 -top-32 h-72 w-72 rounded-full bg-blood/20 blur-3xl z-[1]" />
-        <div className="absolute -left-24 bottom-0 h-80 w-80 rounded-full bg-blood/20 blur-3xl z-[1]" />
-
-        <div className="container relative z-10 grid items-center gap-12 md:grid-cols-2">
-          <div className="space-y-6">
-            <Reveal>
-              <span className="badge border-blood/50 bg-blood/10 text-xs text-bone/80">
-                THE CULT OF HYDRATION
-              </span>
-            </Reveal>
-            <TextReveal
-              text="Hydrate Your Sins"
-              as="h1"
-              className="h1 leading-tight"
-              stagger={0.06}
-            />
-            <Reveal delay={0.3}>
-              <p className="p text-lg">
-                BloodThirst is premium natural mineral water in a can — gothic, rebellious, and brutally refreshing.
-                Engineered for night rituals, morning recoveries, and everything unholy in between.
-              </p>
-            </Reveal>
-            <Reveal delay={0.4}>
-              <div className="flex flex-wrap gap-3">
-                <MagneticButton>
-                  <Link href="/bloodthirst" className="btn btn-primary">
-                    Taste BloodThirst
-                  </Link>
-                </MagneticButton>
-                <MagneticButton>
-                  <Link href="/shop" className="btn btn-ghost">
-                    Enter the Shop
-                  </Link>
-                </MagneticButton>
-                <MagneticButton>
-                  <Link href="/story" className="btn btn-ghost">
-                    Our Story
-                  </Link>
-                </MagneticButton>
-              </div>
-            </Reveal>
-            <Reveal delay={0.45}>
-              <div className="grid grid-cols-2 gap-4 pt-6 text-sm sm:text-base">
-                {stats.map((stat) => (
-                  <div key={stat.label} className="stat-card">
-                    <span className="block text-bone/70">{stat.label}</span>
-                    <strong className="text-lg text-offwhite">
-                      <CountUp value={stat.value} />
-                    </strong>
-                  </div>
-                ))}
-              </div>
-            </Reveal>
-            <Reveal delay={0.5}>
-              <Badges />
-            </Reveal>
-          </div>
-
-          <Parallax amt={80}>
-            <div className="relative h-[360px] sm:h-[420px] md:h-auto md:aspect-[4/5] w-full overflow-hidden rounded-[2.5rem] border border-ash/70 bg-ash/30 red-glow-strong backdrop-blur-xl">
-              <div className="absolute inset-0 bg-[radial-gradient(900px_500px_at_60%_20%,rgba(176,0,32,0.28),transparent_60%)]" />
-              <div className="absolute inset-y-10 left-10 w-1 bg-blood/40 blur-sm" />
-              <Parallax amt={-30} className="w-full h-full relative z-10">
-                <Image
-                  src={heroCan}
-                  alt="BloodThirst can"
-                  fill
-                  priority
-                  className="object-contain p-6 animate-float"
-                />
-              </Parallax>
-            </div>
-          </Parallax>
-        </div>
-      </section>
+      <HomeHero stats={stats} />
 
       {/* FEATURE GRID */}
       <section className="section">
         <div className="container space-y-10">
           <div className="max-w-2xl">
-            <TextReveal
+            <SplitTextReveal
               text="Why BloodThirst hits harder."
               as="h2"
               className="h2"
-              stagger={0.05}
+              stagger={0.035}
             />
             <Reveal delay={0.05}>
               <p className="p mt-3">
@@ -188,118 +113,91 @@ export default function HomePage() {
             </Reveal>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {features.map((feature, i) => (
-              <Reveal key={feature.title} delay={i * 0.08}>
-                <article className="glass-panel h-full">
-                  <h3 className="text-lg font-semibold text-offwhite">{feature.title}</h3>
-                  <p className="mt-3 text-sm text-offwhite/70 md:text-base">{feature.body}</p>
-                </article>
-              </Reveal>
-            ))}
-          </div>
+          <FeatureGrid features={features} />
         </div>
       </section>
 
       {/* RITUAL */}
-      <section className="section">
-        <div className="container grid gap-10 md:grid-cols-[1fr,1.1fr]">
-          <div className="space-y-6">
-            <TextReveal text="The BloodThirst Ritual" as="h2" className="h2" />
-            <Reveal delay={0.05}>
-              <p className="p">
-                This is more than hydration — it&apos;s a ceremony. Elevate your pre-game, your recovery, or your midnight grind
-                with a ritual that celebrates rebellion and sustainability in equal measure.
-              </p>
-            </Reveal>
-            <Reveal delay={0.1}>
-              <Link href="/bloodverse" className="nav-link inline-flex items-center text-sm font-medium text-bone hover:text-blood">
-                Explore the Bloodverse →
-              </Link>
-            </Reveal>
-          </div>
+      <HorizontalRitual ritualSteps={ritualSteps} />
 
-          <div className="grid gap-4">
-            {ritualSteps.map((step, index) => (
-              <Reveal key={step.title} delay={0.08 * index}>
-                <div className="glass-panel flex gap-4 border border-blood/30">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blood/15 text-blood font-semibold">
-                    {index + 1}
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-offwhite md:text-lg">{step.title}</h3>
-                    <p className="mt-2 text-sm text-offwhite/70 md:text-base">{step.body}</p>
-                  </div>
-                </div>
+      {/* TESTIMONIALS */}
+      <ClipReveal direction="up">
+        <section className="section bg-ash/10 relative">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_100%,rgba(176,0,32,0.1),transparent_50%)] pointer-events-none" />
+          <div className="container space-y-10 relative z-10">
+            <div className="max-w-xl">
+              <SplitTextReveal text="Whispers from the coven" as="h2" className="h2" />
+              <Reveal delay={0.05}>
+                <p className="p mt-3">
+                  BloodThirst travels with artists, mixologists, and creators who thrive after dark. Here&apos;s what they&apos;re saying.
+                </p>
               </Reveal>
-            ))}
+            </div>
           </div>
-        </div>
-      </section>
-
-      {/* TESTIMONIALS — Infinite marquee */}
-      <section className="section">
-        <div className="container space-y-10">
-          <div className="max-w-xl">
-            <TextReveal text="Whispers from the coven" as="h2" className="h2" />
-            <Reveal delay={0.05}>
-              <p className="p mt-3">
-                BloodThirst travels with artists, mixologists, and creators who thrive after dark. Here&apos;s what they&apos;re saying.
-              </p>
-            </Reveal>
+  
+          <div className="mt-14 relative z-10">
+            <ScrollSkew maxSkew={2.5} smooth={0.06}>
+              <Marquee speed={40} pauseOnHover>
+                {testimonials.map((t) => (
+                  <figure
+                    key={t.name}
+                    className="glass-panel w-[340px] shrink-0 md:w-[400px] border border-ash/40 hover:border-blood/30 transition-colors"
+                  >
+                    <blockquote className="text-sm text-offwhite/80 md:text-base leading-relaxed">&ldquo;{t.quote}&rdquo;</blockquote>
+                    <figcaption className="mt-6 text-sm uppercase tracking-wide text-bone/70">
+                      <TextScramble
+                        text={t.name}
+                        as="span"
+                        className="block font-semibold text-offwhite"
+                        triggerOnView
+                        triggerOnHover={false}
+                        speed={30}
+                        revealDelay={50}
+                      />
+                      <span className="opacity-70">{t.role}</span>
+                    </figcaption>
+                  </figure>
+                ))}
+              </Marquee>
+            </ScrollSkew>
           </div>
-        </div>
+        </section>
+      </ClipReveal>
 
-        <div className="mt-10">
-          <Marquee speed={40} pauseOnHover>
-            {testimonials.map((t) => (
-              <figure
-                key={t.name}
-                className="glass-panel w-[340px] shrink-0 md:w-[400px]"
-              >
-                <blockquote className="text-sm text-offwhite/80 md:text-base">&ldquo;{t.quote}&rdquo;</blockquote>
-                <figcaption className="mt-6 text-sm uppercase tracking-wide text-bone/70">
-                  <span className="block font-semibold text-offwhite">{t.name}</span>
-                  <span>{t.role}</span>
-                </figcaption>
-              </figure>
-            ))}
-          </Marquee>
-        </div>
-      </section>
-
-      {/* EMAIL CAPTURE */}
-      <section className="section" id="subscribe">
-        <div className="container relative">
-          <div className="absolute inset-x-0 -top-10 mx-auto h-40 max-w-3xl rounded-full bg-blood/20 blur-3xl" />
+      {/* FINAL CTA */}
+      <ClipReveal direction="up" delay={0.1}>
+        <section className="section relative overflow-hidden">
+          {/* Intense red glow behind form */}
+          <div className="absolute inset-x-0 -top-10 mx-auto h-60 max-w-3xl rounded-full bg-blood/15 blur-[100px] pointer-events-none" />
+          
           <Reveal>
-            <div className="glass-panel mx-auto max-w-3xl text-center">
-              <TextReveal text="Join the Unholy circle" as="h2" className="h2" />
-              <p className="p mt-3">Drops, perks, and first taste. No spam — just your new favorite ritual.</p>
-
+            <div className="glass-panel mx-auto max-w-3xl text-center border border-blood/20 p-12 relative z-10">
+              <SplitTextReveal text="Join the Unholy circle" as="h2" className="h2" />
+              <p className="p mt-4 text-lg text-offwhite/80 max-w-lg mx-auto">
+                Drops, perks, and first taste. No spam — just your new favorite ritual.
+              </p>
+  
               <form
-                className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2"
+                className="mx-auto mt-10 flex max-w-md flex-col gap-3 sm:flex-row"
                 action={process.env.NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT || "#"}
                 method="post"
               >
-                <input type="hidden" name="source" value="homepage" />
                 <input
-                  required
-                  name="email"
                   type="email"
-                  placeholder="you@domain"
-                  className="flex-1 rounded-xl border border-ash bg-ash/40 px-4 py-3 text-sm text-offwhite outline-none transition focus:border-blood focus:ring-2 focus:ring-blood/40"
+                  required
+                  placeholder="Enter your email"
+                  className="flex-1 rounded-2xl border border-ash bg-ash/20 px-5 py-4 text-sm text-offwhite outline-none backdrop-blur-md transition hover:bg-ash/40 focus:border-blood focus:ring-2 focus:ring-blood/40"
                 />
-                <MagneticButton strength={0.2}>
-                  <button className="btn btn-primary w-full sm:w-auto" type="submit">
+                <SpringButton>
+                  <button className="btn btn-primary w-full sm:w-auto px-8" type="submit">
                     Stay Unholy
                   </button>
-                </MagneticButton>
+                </SpringButton>
               </form>
             </div>
           </Reveal>
-        </div>
-      </section>
+        </section>
+      </ClipReveal>
     </div>
   )
 }

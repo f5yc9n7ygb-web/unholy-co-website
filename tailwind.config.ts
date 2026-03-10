@@ -25,6 +25,15 @@ const config: Config = {
         // Optional if you’re planning brand typography (Playfair Display, Cinzel, etc.)
         sans: ["Inter", "system-ui", "sans-serif"],
       },
+      keyframes: {
+        stepIn: {
+          "0%": { opacity: "0", transform: "translateY(15px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        "step-in": "stepIn 0.5s ease-out forwards",
+      },
     },
   },
   plugins: [],

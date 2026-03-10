@@ -7,6 +7,41 @@
   --text: #F6F6F6;
 }
 
+/* ===== VIEW TRANSITIONS (native browser API) ===== */
+/* Old page fades out */
+::view-transition-old(root) {
+  animation: page-fade-out 0.25s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+/* New page fades in with subtle slide */
+::view-transition-new(root) {
+  animation: page-fade-in 0.35s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+@keyframes page-fade-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
 html, body {
   background: var(--bg);
   color: var(--text);
@@ -497,4 +532,182 @@ button.btn:hover {
 
 .clip-reveal.revealed {
   clip-path: inset(0 0 0 0);
+}
+
+/* ===== CHECKOUT STEP ENTRANCE ===== */
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-step-in {
+  animation: step-in 0.4s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+
+/* ===== CLICK RIPPLE ===== */
+@keyframes click-ripple-expand {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 0.5;
+  }
+  100% {
+    width: 300px;
+    height: 300px;
+    opacity: 0;
+  }
+}
+
+.click-ripple {
+  position: fixed;
+  border-radius: 50%;
+  border: 2px solid rgba(176, 0, 32, 0.6);
+  pointer-events: none;
+  z-index: 9990;
+  transform: translate(-50%, -50%);
+  animation: click-ripple-expand 0.6s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+  box-shadow: 0 0 20px rgba(176, 0, 32, 0.3);
+}
+
+/* ===== HEARTBEAT GLOW ===== */
+@keyframes heartbeat {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(1);
+  }
+  /* Double-beat like a real heart */
+  14% {
+    opacity: 0.45;
+    transform: scale(1.03);
+  }
+  28% {
+    opacity: 0.3;
+    transform: scale(1.01);
+  }
+  42% {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+  56% {
+    opacity: 0.25;
+    transform: scale(1);
+  }
+}
+
+@keyframes heartbeat-outer {
+  0%, 100% {
+    opacity: 0.15;
+  }
+  35% {
+    opacity: 0.3;
+  }
+  70% {
+    opacity: 0.15;
+  }
+}
+
+.heartbeat-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.heartbeat-glow-core {
+  position: absolute;
+  top: -20%;
+  left: 50%;
+  width: 120%;
+  height: 60%;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    rgba(176, 0, 32, 0.25) 0%,
+    rgba(176, 0, 32, 0.08) 40%,
+    transparent 70%
+  );
+  animation: heartbeat 3.2s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+.heartbeat-glow-outer {
+  position: absolute;
+  bottom: -30%;
+  left: 50%;
+  width: 150%;
+  height: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    ellipse at 50% 100%,
+    rgba(176, 0, 32, 0.12) 0%,
+    transparent 60%
+  );
+  animation: heartbeat-outer 3.2s ease-in-out infinite;
+  animation-delay: 0.4s;
+  will-change: opacity;
+}
+
+/* ===== SPLIT TEXT REVEAL ===== */
+.split-text-container {
+  overflow: hidden;
+}
+
+.split-char-wrap {
+  overflow: hidden;
+  vertical-align: top;
+  line-height: inherit;
+}
+
+.split-char {
+  display: inline-block;
+  will-change: transform, opacity;
+}
+
+/* ===== VAULT NODE ENTRANCE ===== */
+@keyframes vault-node-pop {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.vault-node-enter {
+  animation: vault-node-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Tooltip fade-in */
+@keyframes vault-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(0) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(10px) scale(1);
+  }
+}
+
+.vault-tooltip {
+  animation: vault-tooltip-in 0.2s ease-out both;
+}
+
+/* Rune button hover glow */
+.vault-rune-btn {
+  transition: transform 0.2s ease, border-color 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* ===== TEXT SCRAMBLE ===== */
+.scrambling {
+  letter-spacing: 0.02em;
 }

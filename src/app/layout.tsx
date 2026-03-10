@@ -8,6 +8,9 @@ import { Preloader } from '@/components/ux/Preloader'
 import { CustomCursor } from '@/components/ux/CustomCursor'
 import { ScrollProgress } from '@/components/ux/ScrollProgress'
 import { NoiseGrain } from '@/components/ux/NoiseGrain'
+import { ClickRipple } from '@/components/ux/ClickRipple'
+import { HeartbeatGlow } from '@/components/ux/HeartbeatGlow'
+import SmoothScroll from '@/components/ux/SmoothScroll'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -30,8 +33,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className={`${inter.className} body-glow`} suppressHydrationWarning>
+        <SmoothScroll />
         <Preloader />
         <CustomCursor />
+        <ClickRipple />
+        <HeartbeatGlow />
         <ScrollProgress />
         <Header />
         <main className="pt-20 md:pt-24 isolate">{children}</main>

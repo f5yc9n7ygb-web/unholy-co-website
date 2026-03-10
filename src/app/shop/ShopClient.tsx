@@ -43,16 +43,16 @@ const PACKS: Pack[] = [
     id: "pack6",
     title: "Starter Ritual",
     qty: 6,
-    price: 449,
-    perCan: 74.83,
+    price: 1200,
+    perCan: 200,
     blurb: "6 cans of cold-forged hydration. Perfect first taste.",
   },
   {
     id: "pack12",
     title: "Weekend Coven",
     qty: 12,
-    price: 849,
-    perCan: 70.75,
+    price: 2220,
+    perCan: 185,
     blurb: "12 cans for the weekend warriors and night crawlers.",
     tag: "MOST POPULAR",
   },
@@ -60,8 +60,8 @@ const PACKS: Pack[] = [
     id: "pack24",
     title: "True Believer",
     qty: 24,
-    price: 1599,
-    perCan: 66.63,
+    price: 4056,
+    perCan: 169,
     blurb: "24 cans. Full commitment. Maximum savings.",
     tag: "BEST VALUE",
   },
@@ -158,8 +158,6 @@ export function ShopClient() {
           ...form,
         },
       };
-      
-      console.log("Sending checkout payload:", payload);
 
       const res = await fetch("/api/order", {
         method: "POST",
@@ -257,9 +255,11 @@ export function ShopClient() {
                     }`}
                   >
                     {pack.tag && (
-                      <span className="absolute -top-3 left-5 rounded-full bg-blood px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-[0_4px_12px_rgba(176,0,32,0.4)]">
-                        {pack.tag}
-                      </span>
+                      <div className="mb-4">
+                        <span className="inline-block rounded-full bg-blood px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-[0_4px_12px_rgba(176,0,32,0.4)]">
+                          {pack.tag}
+                        </span>
+                      </div>
                     )}
 
                     <div className="flex items-start justify-between">

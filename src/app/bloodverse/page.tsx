@@ -2,7 +2,7 @@
 import Link from "next/link"
 import Reveal from "@/components/ux/Reveal"
 import { MicroHero } from "@/components/layout/MicroHero"
-import { InteractiveVault } from "@/components/ux/InteractiveVault"
+import { LazyInteractiveVault } from "@/components/ux/LazyInteractiveVault"
 
 export const metadata = {
   title: "The Bloodverse — UNHOLY CO.",
@@ -29,9 +29,9 @@ export default function BloodversePage() {
           ]}
         />
 
-        <Reveal>
-          <InteractiveVault />
-        </Reveal>
+        {/* No Reveal wrapper — the vault has its own entrance animations
+             and Reveal's opacity:0 conflicts with the lazy-loaded component */}
+        <LazyInteractiveVault />
       </div>
     </section>
   )

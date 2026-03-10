@@ -8,6 +8,7 @@ const nextConfig = {
   },
   experimental: {
     typedRoutes: true,
+    viewTransition: true,
   },
   webpack: (config) => {
     config.resolve = config.resolve || {}
