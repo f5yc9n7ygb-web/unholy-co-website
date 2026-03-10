@@ -6,8 +6,16 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 
-[vars]
-NEXT_PUBLIC_WORKER_ENDPOINT = "https://unholy-co-website.pages.dev/api/contact"
-NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT = "https://unholy-co-website.pages.dev/api/subscribe"
-NEXT_PUBLIC_WORKER_ORDER_ENDPOINT = "https://unholy-co-website.pages.dev/api/order"
-NEXT_PUBLIC_RAZORPAY_KEY_ID = "rzp_test_SOqfjrD1v5l1Bz"
+# ─── Environment Variables ────────────────────────────────────────────────────
+# DO NOT hardcode secrets or environment-specific URLs here!
+# Set these via Cloudflare Dashboard → Settings → Environment Variables:
+#
+#   NEXT_PUBLIC_WORKER_ENDPOINT        = https://<your-domain>/api/contact
+#   NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT = https://<your-domain>/api/subscribe
+#   NEXT_PUBLIC_WORKER_ORDER_ENDPOINT  = https://<your-domain>/api/order
+#   NEXT_PUBLIC_RAZORPAY_KEY_ID        = rzp_live_xxxxx  (or rzp_test_xxxxx)
+#   RAZORPAY_KEY_ID                    = (same as above, server-side)
+#   RAZORPAY_KEY_SECRET                = (NEVER commit this — use Secrets)
+#
+# For local development, copy .env.example → .env.local and fill in test values.
+# ──────────────────────────────────────────────────────────────────────────────
