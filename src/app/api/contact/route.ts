@@ -58,7 +58,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Contact API error:", error);
     return NextResponse.json(
-      { ok: false, error: "Unable to submit your message right now." },
+      {
+        ok: false,
+        error: "Unable to submit your message right now.",
+        details: error instanceof Error ? error.message : "Unknown contact error",
+      },
       { status: 500 }
     );
   }

@@ -38,7 +38,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Subscribe API error:", error);
     return NextResponse.json(
-      { ok: false, error: "Unable to add you to the list right now." },
+      {
+        ok: false,
+        error: "Unable to add you to the list right now.",
+        details: error instanceof Error ? error.message : "Unknown subscribe error",
+      },
       { status: 500 }
     );
   }
