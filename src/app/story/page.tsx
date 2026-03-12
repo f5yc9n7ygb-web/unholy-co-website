@@ -1,5 +1,6 @@
 import { MicroHero } from "@/components/layout/MicroHero"
 import Reveal from "@/components/ux/Reveal"
+import Link from "next/link"
 
 export const metadata = {
   title: "Story — UNHOLY CO.",
@@ -119,8 +120,8 @@ export default function StoryPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <a href="#subscribe" className="btn btn-primary">Join the circle</a>
-              <a href="/drops" className="btn btn-ghost">Preview drops</a>
+              <Link href="/#subscribe" className="btn btn-primary">Join the circle</Link>
+              <Link href="/drops" className="btn btn-ghost">Preview drops</Link>
             </div>
           </div>
         </Reveal>

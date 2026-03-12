@@ -3,29 +3,11 @@
 import Script from "next/script"
 import Image from "next/image"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import heroCan from "@/public/can.png"
 import { TiltCard } from "@/components/ux/TiltCard"
-
-/* ── Types ── */
-type Pack = {
-  id: string
-  title: string
-  qty: number
-  price: number
-  perCan: number
-  blurb: string
-  tag?: string
-}
-
-type ShippingForm = {
-  name: string
-  email: string
-  phone: string
-  address: string
-  city: string
-  pincode: string
-  state: string
-}
+import { PACKS, type Pack } from "@/lib/shop/catalog"
+import type { ShippingForm } from "@/lib/shop/types"
 
 type FormErrors = Partial<Record<keyof ShippingForm, string>>
 
@@ -36,36 +18,6 @@ declare global {
     Razorpay: any
   }
 }
-
-/* ── Data ── */
-const PACKS: Pack[] = [
-  {
-    id: "pack6",
-    title: "Starter Ritual",
-    qty: 6,
-    price: 1200,
-    perCan: 200,
-    blurb: "6 cans of cold-forged hydration. Perfect first taste.",
-  },
-  {
-    id: "pack12",
-    title: "Weekend Coven",
-    qty: 12,
-    price: 2220,
-    perCan: 185,
-    blurb: "12 cans for the weekend warriors and night crawlers.",
-    tag: "MOST POPULAR",
-  },
-  {
-    id: "pack24",
-    title: "True Believer",
-    qty: 24,
-    price: 4056,
-    perCan: 169,
-    blurb: "24 cans. Full commitment. Maximum savings.",
-    tag: "BEST VALUE",
-  },
-]
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
@@ -101,6 +53,7 @@ const STEP_LABELS: Record<Step, string> = {
 
 /* ── Main Component ── */
 export function ShopClient() {
+  const router = useRouter()
   const [step, setStep] = useState<Step>("select")
   const [selected, setSelected] = useState<Pack>(PACKS[1])
   const [loading, setLoading] = useState(false)
@@ -141,28 +94,20 @@ export function ShopClient() {
   }
 
   const onPay = async () => {
-    if (!key || !orderEndpoint) {
+    if (!key || !orderEndpoint || !window.Razorpay) {
       setPayError("Payment gateway is not configured.")
       return
     }
     setLoading(true)
     setPayError(null)
     try {
-      const payload = {
-        amount: selected.price * 100,
-        currency: "INR",
-        receipt: `${selected.id}_${Date.now()}`,
-        notes: {
-          product: selected.title,
-          qty: selected.qty,
-          ...form,
-        },
-      };
-
       const res = await fetch("/api/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          packId: selected.id,
+          shipping: form,
+        }),
       })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error || "Order error")
@@ -173,8 +118,30 @@ export function ShopClient() {
         name: "UNHOLY CO.",
         description: `${selected.title} — ${selected.qty} cans`,
         image: "/favicon.svg",
-        handler: (response: any) => {
-          window.location.href = `/thanks?order=${data.order.id}&pay=${response.razorpay_payment_id}&pack=${selected.id}&qty=${selected.qty}`
+        handler: async (response: any) => {
+          try {
+            const verifyResponse = await fetch("/api/order/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: data.order.id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            })
+
+            const verification = await verifyResponse.json()
+            if (!verifyResponse.ok || !verification.ok) {
+              throw new Error(verification.error || "Payment verification failed.")
+            }
+
+            router.push(
+              `/thanks?order=${verification.orderId}&pay=${verification.paymentId}&pack=${verification.packId}&qty=${verification.qty}&verified=1`
+            )
+          } catch (error: any) {
+            setPayError(error?.message || "Payment verification failed.")
+            setLoading(false)
+          }
         },
         prefill: { name: form.name, email: form.email, contact: form.phone },
         notes: { address: `${form.address}, ${form.city} ${form.pincode}, ${form.state}` },

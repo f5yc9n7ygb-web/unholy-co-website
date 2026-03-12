@@ -65,7 +65,7 @@ export function Header() {
             <HeaderLinks />
           </nav>
           <div className="flex items-center gap-3">
-            <a href="#subscribe" className="btn btn-primary hidden sm:inline-flex">Stay Unholy</a>
+            <Link href="/#subscribe" className="btn btn-primary hidden sm:inline-flex">Stay Unholy</Link>
             <button
               className="relative z-50 md:hidden rounded-xl border border-ash/60 bg-black/30 px-3 py-2 text-sm text-bone"
               aria-label="Toggle navigation"
@@ -111,13 +111,13 @@ export function Header() {
                     ))}
                   </div>
                   <div className="my-6 h-px bg-ash/30" />
-                  <a
-                    href="#subscribe"
+                  <Link
+                    href="/#subscribe"
                     className="btn btn-primary w-full py-3 text-base"
                     onClick={() => setMenuOpen(false)}
                   >
                     Stay Unholy
-                  </a>
+                  </Link>
                 </div>
                 <div className="mt-6 w-full max-w-none rounded-2xl border border-ash/40 bg-black/75 backdrop-blur-sm p-4 text-sm text-offwhite/70">
                   Need help fast? <a className="text-blood underline" href="mailto:rituals@theunholy.co">rituals@theunholy.co</a>

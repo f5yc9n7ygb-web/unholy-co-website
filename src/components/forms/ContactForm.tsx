@@ -32,11 +32,6 @@ export function ContactForm({ action }: ContactFormProps) {
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    if (!action) {
-      setStatus({ state: "error", message: "Contact endpoint is not configured." })
-      return
-    }
-
     if (!form.name || !form.email || !form.message) {
       setStatus({ state: "error", message: "Name, email, and message are required." })
       return
@@ -51,7 +46,7 @@ export function ContactForm({ action }: ContactFormProps) {
       if (form.phone) formData.append("phone", form.phone)
       formData.append("message", form.message)
 
-      const res = await fetch(action, {
+      const res = await fetch(action || "/api/contact", {
         method: "POST",
         body: formData,
       })

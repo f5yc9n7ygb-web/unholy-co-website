@@ -2,6 +2,7 @@ import drops from "@/content/drops.json"
 import { MicroHero } from "@/components/layout/MicroHero"
 import { Countdown } from "@/components/shared/Countdown"
 import Reveal from "@/components/ux/Reveal"
+import { SubscribeForm } from "@/components/forms/SubscribeForm"
 
 export const metadata = {
   title: "Drops — UNHOLY CO.",
@@ -44,19 +45,16 @@ export default function DropsPage() {
                 </div>
 
                 {drop.notify ? (
-                  <form className="flex flex-col gap-3 sm:flex-row sm:items-center" action={process.env.NEXT_PUBLIC_WORKER_ENDPOINT || "#"} method="post">
-                    <input type="hidden" name="source" value={`drop_${drop.id}`} />
-                    <input
-                      required
-                      name="email"
-                      type="email"
-                      placeholder="you@domain"
-                      className="flex-1 rounded-xl border border-ash bg-ash/40 px-3 py-2 text-sm text-offwhite outline-none transition focus:border-blood focus:ring-2 focus:ring-blood/40"
-                    />
-                    <button className="btn btn-primary w-full sm:w-auto" type="submit">
-                      Notify me
-                    </button>
-                  </form>
+                  <SubscribeForm
+                    source={`drop_${drop.id}`}
+                    buttonLabel="Notify me"
+                    placeholder="you@domain"
+                    formClassName="flex flex-col gap-3 sm:flex-row sm:items-center"
+                    inputClassName="flex-1 rounded-xl border border-ash bg-ash/40 px-3 py-2 text-sm text-offwhite outline-none transition focus:border-blood focus:ring-2 focus:ring-blood/40"
+                    buttonClassName="btn btn-primary w-full sm:w-auto"
+                    statusClassName="text-xs text-offwhite/60"
+                    successMessage="You’re on the list for this drop."
+                  />
                 ) : (
                   <p className="text-xs uppercase tracking-[0.3em] text-blood/80">Drop closed</p>
                 )}

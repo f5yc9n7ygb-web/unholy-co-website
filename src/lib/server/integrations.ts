@@ -27,6 +27,10 @@ function getRequiredEnv(name: string) {
   return value;
 }
 
+function hasMailjetConfig() {
+  return Boolean(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET);
+}
+
 export async function saveRecordToAirtable(
   fields: AirtableFields,
   options: AirtableOptions = {}
@@ -57,6 +61,10 @@ export async function saveRecordToAirtable(
 }
 
 export async function sendMailjetEmail(options: MailjetOptions): Promise<void> {
+  if (!hasMailjetConfig()) {
+    throw new Error("Mailjet is not configured");
+  }
+
   const apiKey = getRequiredEnv("MAILJET_API_KEY");
   const apiSecret = getRequiredEnv("MAILJET_SECRET");
   const fromEmail = process.env.MAILJET_FROM_EMAIL || "noreply@theunholy.co";
@@ -93,6 +101,11 @@ export async function sendMailjetEmail(options: MailjetOptions): Promise<void> {
 }
 
 export async function sendWelcomeEmail(email: string): Promise<void> {
+  if (!hasMailjetConfig()) {
+    console.warn("Mailjet is not configured; skipping welcome email for", email);
+    return;
+  }
+
   const unsubscribeUrl = process.env.MAILJET_UNSUB_URL || "https://theunholy.co/unsubscribe";
   const subject = process.env.MAILJET_WELCOME_SUBJECT || "Your Damnation Is Served";
 

@@ -2,7 +2,7 @@
 
 import { useRef } from "react"
 import { motion, useScroll, useTransform } from "framer-motion"
-import Link from "next/link"
+import { TransitionLink } from "@/components/ux/TransitionLink"
 import Image from "next/image"
 import Reveal from "@/components/ux/Reveal"
 import { TextReveal } from "@/components/ux/TextReveal"
@@ -22,13 +22,15 @@ export function HomeHero({ stats }: { stats: Array<{label: string, value: string
   })
 
   // Scrubbed glass panel rotation and scale based on scroll
-  const rotateY = useTransform(scrollYProgress, [0, 1], [0, -18])
-  const rotateX = useTransform(scrollYProgress, [0, 1], [0, 10])
-  const rotateZ = useTransform(scrollYProgress, [0, 0.5, 1], [0, 5, -2])
-  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [0.95, 1.05, 0.9])
-  
+  // All transforms arc back to resting state at scrollYProgress=1 so the
+  // can never gets stuck in a mid-animation pose once the hero scrolls out.
+  const rotateY = useTransform(scrollYProgress, [0, 0.5, 1], [0, -18, 0])
+  const rotateX = useTransform(scrollYProgress, [0, 0.5, 1], [0, 10, 0])
+  const rotateZ = useTransform(scrollYProgress, [0, 0.5, 1], [0, 5, 0])
+  const scale   = useTransform(scrollYProgress, [0, 0.5, 1], [0.95, 1.05, 0.95])
+
   // Extra parallax for the can itself, giving it deep 3D separation from the glass
-  const canY = useTransform(scrollYProgress, [0, 1], [0, -150])
+  const canY     = useTransform(scrollYProgress, [0, 0.5, 1], [0, -75, 0])
   const canScale = useTransform(scrollYProgress, [0, 0.5, 1], [1, 1.15, 1])
 
   return (
@@ -63,19 +65,19 @@ export function HomeHero({ stats }: { stats: Array<{label: string, value: string
             <Reveal delay={0.4}>
               <div className="flex flex-wrap gap-3">
                 <MagneticButton>
-                  <Link href="/bloodthirst" className="btn btn-primary">
+                  <TransitionLink href="/bloodthirst" className="btn btn-primary">
                     Taste BloodThirst
-                  </Link>
+                  </TransitionLink>
                 </MagneticButton>
                 <MagneticButton>
-                  <Link href="/shop" className="btn btn-ghost">
+                  <TransitionLink href="/shop" className="btn btn-ghost">
                     Enter the Shop
-                  </Link>
+                  </TransitionLink>
                 </MagneticButton>
                 <MagneticButton>
-                  <Link href="/story" className="btn btn-ghost">
+                  <TransitionLink href="/story" className="btn btn-ghost">
                     Our Story
-                  </Link>
+                  </TransitionLink>
                 </MagneticButton>
               </div>
             </Reveal>

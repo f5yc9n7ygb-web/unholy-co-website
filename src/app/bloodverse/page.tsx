@@ -25,7 +25,7 @@ export default function BloodversePage() {
           description="Hydration is the ritual. The can is the altar. Scan the sigil under every tab to unlock the chapter that bleeds through that batch."
           actions={[
             { label: "Start Chapter I", href: "/bloodverse/chapter-1" },
-            { label: "Join the circle", href: "#subscribe", variant: "ghost" },
+            { label: "Join the circle", href: "/#subscribe", variant: "ghost" },
           ]}
         />
 

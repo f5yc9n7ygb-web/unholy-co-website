@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Buffer } from "node:buffer";
+import { getPackById } from "@/lib/shop/catalog";
+import type { ShippingForm } from "@/lib/shop/types";
 
 const RAZORPAY_ENDPOINT = "https://api.razorpay.com/v1/orders";
+const RECEIPT_SUFFIX_LENGTH = 10;
 
 /**
  * Handles POST requests to create a new order.
@@ -14,17 +17,40 @@ const RAZORPAY_ENDPOINT = "https://api.razorpay.com/v1/orders";
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
-    const amount = Number(payload.amount);
-    const currency = (payload.currency || "INR").toUpperCase();
-    const receipt = payload.receipt || `receipt_${Date.now()}`;
-    const notes = payload.notes || {};
+    const packId = String(payload.packId || "").trim();
+    const shipping = payload.shipping as ShippingForm | undefined;
+    const pack = getPackById(packId);
 
-    if (!amount || !Number.isInteger(amount) || amount <= 0) {
+    if (!pack) {
       return NextResponse.json(
-        { ok: false, error: "Amount (in paise) is required and must be an integer." },
+        { ok: false, error: "Invalid pack selected." },
         { status: 400 }
       );
     }
+
+    const validationError = validateShipping(shipping);
+    if (validationError) {
+      return NextResponse.json(
+        { ok: false, error: validationError },
+        { status: 400 }
+      );
+    }
+
+    const amount = pack.price * 100;
+    const currency = "INR";
+    const receipt = buildReceipt(pack.id);
+    const notes = {
+      packId: pack.id,
+      product: pack.title,
+      qty: String(pack.qty),
+      customerName: shipping!.name,
+      customerEmail: shipping!.email,
+      customerPhone: shipping!.phone,
+      shippingAddress: shipping!.address,
+      shippingCity: shipping!.city,
+      shippingPincode: shipping!.pincode,
+      shippingState: shipping!.state,
+    };
 
     const { keyId, keySecret } = getRazorpayCredentials();
 
@@ -69,6 +95,22 @@ function getRazorpayCredentials() {
   }
 
   return { keyId, keySecret };
+}
+
+function buildReceipt(packId: string) {
+  return `${packId}_${Date.now().toString().slice(-RECEIPT_SUFFIX_LENGTH)}`;
+}
+
+function validateShipping(shipping?: ShippingForm) {
+  if (!shipping) return "Shipping details are required.";
+  if (!shipping.name?.trim()) return "Name is required.";
+  if (!shipping.email?.trim()) return "Email is required.";
+  if (!shipping.phone?.trim()) return "Phone is required.";
+  if (!shipping.address?.trim()) return "Address is required.";
+  if (!shipping.city?.trim()) return "City is required.";
+  if (!shipping.pincode?.trim()) return "Pincode is required.";
+  if (!shipping.state?.trim()) return "State is required.";
+  return null;
 }
 
 export async function GET() {

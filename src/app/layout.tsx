@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Cinzel } from 'next/font/google'
 import './globals.css'
 import { ReactNode } from 'react'
 import { Header } from '@/components/layout/Header'
@@ -19,6 +19,13 @@ const inter = Inter({
   variable: '--font-inter',
 })
 
+const cinzel = Cinzel({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-cinzel',
+  weight: ['400', '600', '700', '900'],
+})
+
 export const metadata: Metadata = {
   title: 'UNHOLY CO. — BloodThirst',
   description: 'Gothic premium canned water. Stay Unholy.',
@@ -32,7 +39,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${cinzel.variable}`} suppressHydrationWarning>
       <body className={`${inter.className} body-glow`} suppressHydrationWarning>
         <TransitionProvider>
           <SmoothScroll />

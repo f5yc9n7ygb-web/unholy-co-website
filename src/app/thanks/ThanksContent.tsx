@@ -9,6 +9,7 @@ export function ThanksContent() {
   const orderId = params.get("order")
   const paymentId = params.get("pay")
   const qty = params.get("qty")
+  const isVerified = params.get("verified") === "1"
 
   return (
     <div className="section">
@@ -44,8 +45,12 @@ export function ThanksContent() {
           transition={{ delay: 0.2 }}
           className="text-center space-y-3"
         >
-          <h1 className="h1">Ritual Complete.</h1>
-          <p className="p">Your order has been placed. We&apos;ll email confirmation and tracking details shortly.</p>
+          <h1 className="h1">{isVerified ? "Ritual Complete." : "Order Pending Verification."}</h1>
+          <p className="p">
+            {isVerified
+              ? "Your order has been placed. We'll email confirmation and tracking details shortly."
+              : "We couldn't verify this payment session yet. Contact support if you were charged."}
+          </p>
         </motion.div>
 
         {/* Order details */}
@@ -77,6 +82,18 @@ export function ThanksContent() {
                 </div>
               )}
             </div>
+          </motion.div>
+        )}
+
+        {!isVerified && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="rounded-2xl border border-blood/30 bg-blood/10 p-5 text-sm text-bone/80"
+          >
+            This page is now gated behind server-side payment verification. If you completed payment and landed here unexpectedly,
+            reach out through support with your payment ID.
           </motion.div>
         )}
 

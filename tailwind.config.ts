@@ -22,8 +22,8 @@ const config: Config = {
         padding: "1rem",
       },
       fontFamily: {
-        // Optional if you’re planning brand typography (Playfair Display, Cinzel, etc.)
         sans: ["Inter", "system-ui", "sans-serif"],
+        cinzel: ["var(--font-cinzel)", "Georgia", "serif"],
       },
       keyframes: {
         stepIn: {

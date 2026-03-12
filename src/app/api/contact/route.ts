@@ -42,13 +42,17 @@ export async function POST(request: NextRequest) {
       SubmittedAt: new Date().toISOString(),
     });
 
-    await notifyTeam({
-      name,
-      email,
-      message,
-      phone,
-      source,
-    });
+    try {
+      await notifyTeam({
+        name,
+        email,
+        message,
+        phone,
+        source,
+      });
+    } catch (notificationError) {
+      console.error("Contact notification error:", notificationError);
+    }
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {

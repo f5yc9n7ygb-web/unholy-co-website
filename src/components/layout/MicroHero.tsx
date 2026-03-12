@@ -51,7 +51,10 @@ export function MicroHero({ eyebrow, title, description, actions }: MicroHeroPro
                 action.variant === "ghost"
                   ? "btn btn-ghost"
                   : "btn btn-primary"
-              const isInternal = action.href.startsWith("/")
+              const isInternal =
+                !action.href.startsWith("http") &&
+                !action.href.startsWith("mailto:") &&
+                !action.href.startsWith("tel:")
               return (
                 isInternal ? (
                   <Link key={action.href} href={action.href as Route} className={className}>

@@ -23,9 +23,12 @@ functions/.wrangler/
 .DS_Store
 .idea/
 .vscode/
+.claude/
 
 # Local zips or exports
 *.zip
 !unholy-co-website-latest.zip
 unholy-co-deploy.zip
 open-next.config.ts
+plan.md
+tsconfig.tsbuildinfo

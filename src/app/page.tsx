@@ -5,7 +5,6 @@ import { Badges } from "@/components/shared/Badges"
 import { SplitTextReveal } from "@/components/ux/SplitTextReveal"
 import { TextScramble } from "@/components/ux/TextScramble"
 import { CountUp } from "@/components/ux/CountUp"
-import { SpringButton } from "@/components/ux/SpringButton"
 import { ScrollSkew } from "@/components/ux/ScrollSkew"
 import { Marquee } from "@/components/ux/Marquee"
 import heroCan from "@/public/can.png"
@@ -13,6 +12,7 @@ import { HomeHero } from "@/components/home/HomeHero"
 import { HorizontalRitual } from "@/components/home/HorizontalRitual"
 import { ClipReveal } from "@/components/ux/ClipReveal"
 import { FeatureGrid } from "@/components/home/FeatureGrid"
+import { SubscribeForm } from "@/components/forms/SubscribeForm"
 
 export const revalidate = 60
 
@@ -166,7 +166,7 @@ export default function HomePage() {
 
       {/* FINAL CTA */}
       <ClipReveal direction="up" delay={0.1}>
-        <section className="section relative overflow-hidden">
+        <section id="subscribe" className="section relative overflow-hidden scroll-mt-28">
           {/* Intense red glow behind form */}
           <div className="absolute inset-x-0 -top-10 mx-auto h-60 max-w-3xl rounded-full bg-blood/15 blur-[100px] pointer-events-none" />
           
@@ -177,23 +177,16 @@ export default function HomePage() {
                 Drops, perks, and first taste. No spam — just your new favorite ritual.
               </p>
   
-              <form
-                className="mx-auto mt-10 flex max-w-md flex-col gap-3 sm:flex-row"
-                action={process.env.NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT || "#"}
-                method="post"
-              >
-                <input
-                  type="email"
-                  required
-                  placeholder="Enter your email"
-                  className="flex-1 rounded-2xl border border-ash bg-ash/20 px-5 py-4 text-sm text-offwhite outline-none backdrop-blur-md transition hover:bg-ash/40 focus:border-blood focus:ring-2 focus:ring-blood/40"
+              <div className="mx-auto mt-10 max-w-md">
+                <SubscribeForm
+                  source="homepage"
+                  buttonLabel="Stay Unholy"
+                  formClassName="flex flex-col gap-3 sm:flex-row"
+                  inputClassName="flex-1 rounded-2xl border border-ash bg-ash/20 px-5 py-4 text-sm text-offwhite outline-none backdrop-blur-md transition hover:bg-ash/40 focus:border-blood focus:ring-2 focus:ring-blood/40"
+                  buttonClassName="btn btn-primary w-full px-8 sm:w-auto"
+                  statusClassName="text-sm text-offwhite/70"
                 />
-                <SpringButton>
-                  <button className="btn btn-primary w-full sm:w-auto px-8" type="submit">
-                    Stay Unholy
-                  </button>
-                </SpringButton>
-              </form>
+              </div>
             </div>
           </Reveal>
         </section>
