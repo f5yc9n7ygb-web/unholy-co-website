@@ -2,6 +2,7 @@
 import Link from "next/link"
 import type { Route } from "next"
 import { useState, useEffect } from "react"
+import { TransitionLink } from "@/components/ux/TransitionLink"
 
 const NAV_ITEMS: Array<{
   label: string
@@ -97,7 +98,7 @@ export function Header() {
                   </div>
                   <div className="divide-y divide-ash/30">
                     {NAV_ITEMS.map((item) => (
-                      <Link
+                      <TransitionLink
                         key={item.href}
                         href={item.href}
                         onClick={() => setMenuOpen(false)}
@@ -106,7 +107,7 @@ export function Header() {
                         <span className="text-xs uppercase tracking-[0.4em] text-blood/80">{item.eyebrow}</span>
                         <span className="text-2xl font-semibold text-offwhite">{item.label}</span>
                         <span className="text-sm text-offwhite/70">{item.description}</span>
-                      </Link>
+                      </TransitionLink>
                     ))}
                   </div>
                   <div className="my-6 h-px bg-ash/30" />
@@ -143,9 +144,9 @@ function HeaderLinks({
   return (
     <div className={className}>
       {NAV_ITEMS.map((item) => (
-        <Link key={item.href} href={item.href} onClick={onNavigate} className="nav-link">
+        <TransitionLink key={item.href} href={item.href} onClick={onNavigate} className="nav-link">
           {item.label}
-        </Link>
+        </TransitionLink>
       ))}
     </div>
   )

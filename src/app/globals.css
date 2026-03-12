@@ -7,38 +7,26 @@
   --text: #F6F6F6;
 }
 
-/* ===== VIEW TRANSITIONS (native browser API) ===== */
-/* Old page fades out */
-::view-transition-old(root) {
-  animation: page-fade-out 0.25s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+/* ===== PAGE TRANSITIONS ===== */
+
+/* Content fade-in: subtle ease after GSAP panels clear */
+.page-transition-content {
+  animation: content-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.06s both;
 }
 
-/* New page fades in with subtle slide */
-::view-transition-new(root) {
-  animation: page-fade-in 0.35s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
-}
-
-@keyframes page-fade-out {
-  from {
-    opacity: 1;
-    filter: blur(0);
-  }
-  to {
+@keyframes content-enter {
+  0% {
     opacity: 0;
-    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
   }
 }
 
-@keyframes page-fade-in {
-  from {
-    opacity: 0;
-    filter: blur(4px);
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0);
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .page-transition-content {
+    animation: none;
   }
 }
 

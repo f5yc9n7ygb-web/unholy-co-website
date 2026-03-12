@@ -11,6 +11,7 @@ import { NoiseGrain } from '@/components/ux/NoiseGrain'
 import { ClickRipple } from '@/components/ux/ClickRipple'
 import { HeartbeatGlow } from '@/components/ux/HeartbeatGlow'
 import SmoothScroll from '@/components/ux/SmoothScroll'
+import { TransitionProvider } from '@/context/TransitionContext'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -33,16 +34,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className={`${inter.className} body-glow`} suppressHydrationWarning>
-        <SmoothScroll />
-        <Preloader />
-        <CustomCursor />
-        <ClickRipple />
-        <HeartbeatGlow />
-        <ScrollProgress />
-        <Header />
-        <main className="pt-20 md:pt-24 isolate">{children}</main>
-        <Footer />
-        <NoiseGrain />
+        <TransitionProvider>
+          <SmoothScroll />
+          <Preloader />
+          <CustomCursor />
+          <ClickRipple />
+          <HeartbeatGlow />
+          <ScrollProgress />
+          <Header />
+          <main className="pt-20 md:pt-24 isolate">{children}</main>
+          <Footer />
+          <NoiseGrain />
+        </TransitionProvider>
       </body>
     </html>
   )
