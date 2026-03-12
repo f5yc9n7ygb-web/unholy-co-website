@@ -39,25 +39,21 @@ export async function saveRecordToAirtable(
   const token = getRequiredEnv("AIRTABLE_TOKEN");
   const tableName = options.tableName || defaultTableName;
 
-  const response = await fetch(`${AIRTABLE_ENDPOINT}/${baseId}/${encodeURIComponent(tableName)}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      records: [
-        {
-          fields,
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Airtable error (${response.status}): ${message}`);
+  const primaryAttempt = await writeRecord(baseId, token, tableName, fields);
+  if (primaryAttempt.ok) {
+    return;
   }
+
+  const sanitizedFields = removeOptionalAirtableFields(fields);
+  if (sanitizedFields && sanitizedFields !== fields) {
+    const retryAttempt = await writeRecord(baseId, token, tableName, sanitizedFields);
+    if (retryAttempt.ok) {
+      console.warn("Airtable write succeeded after stripping optional fields.");
+      return;
+    }
+  }
+
+  throw new Error(`Airtable error (${primaryAttempt.status}): ${primaryAttempt.message}`);
 }
 
 export async function sendMailjetEmail(options: MailjetOptions): Promise<void> {
@@ -114,4 +110,44 @@ export async function sendWelcomeEmail(email: string): Promise<void> {
     subject,
     html: buildWelcomeEmailHtml({ unsubscribeUrl }),
   });
+}
+
+async function writeRecord(baseId: string, token: string, tableName: string, fields: AirtableFields) {
+  const response = await fetch(`${AIRTABLE_ENDPOINT}/${baseId}/${encodeURIComponent(tableName)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      records: [
+        {
+          fields,
+        },
+      ],
+    }),
+  });
+
+  if (response.ok) {
+    return { ok: true as const };
+  }
+
+  const message = await response.text();
+  return {
+    ok: false as const,
+    status: response.status,
+    message,
+  };
+}
+
+function removeOptionalAirtableFields(fields: AirtableFields) {
+  const optionalKeys = ["Type", "Source", "SubmittedAt"];
+  let changed = false;
+  const sanitizedEntries = Object.entries(fields).filter(([key]) => {
+    const shouldDrop = optionalKeys.includes(key);
+    if (shouldDrop) changed = true;
+    return !shouldDrop;
+  });
+
+  return changed ? Object.fromEntries(sanitizedEntries) : null;
 }
