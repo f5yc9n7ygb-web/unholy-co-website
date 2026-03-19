@@ -101,7 +101,7 @@ export function BloodverseHero() {
             Start Chapter I
           </TransitionLink>
           <TransitionLink
-            href="/#subscribe"
+            href="/drops"
             className="text-xs uppercase tracking-[0.3em] text-bone/30 transition-colors hover:text-blood/60"
           >
             Join the circle
