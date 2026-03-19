@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useState } from "react"
 import Link from "next/link"
+import type { Route } from "next"
 
 /* ═══════════════════════════════════════════
    PROGRESS BAR — fixed at top, tracks scroll
@@ -241,7 +242,7 @@ export function Separator() {
    CHAPTER END — closing section with CTA
    ═══════════════════════════════════════════ */
 interface ChapterEndProps {
-  nextChapter?: { number: number; title: string; href: string }
+  nextChapter?: { number: number; title: string; href: Route }
   message?: string
   finalMessage?: string
 }
