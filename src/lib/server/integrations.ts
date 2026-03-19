@@ -100,7 +100,7 @@ export async function sendMailjetEmail(options: MailjetOptions): Promise<void> {
 
 export async function sendOrderConfirmationEmail(options: OrderConfirmationOptions): Promise<void> {
   if (!hasMailjetConfig()) {
-    console.warn("Mailjet is not configured; skipping order confirmation email for", options.customerEmail);
+    console.warn("Mailjet is not configured; skipping order confirmation email.");
     return;
   }
 
@@ -114,7 +114,7 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
 
 export async function sendWelcomeEmail(email: string): Promise<void> {
   if (!hasMailjetConfig()) {
-    console.warn("Mailjet is not configured; skipping welcome email for", email);
+    console.warn("Mailjet is not configured; skipping welcome email.");
     return;
   }
 
@@ -133,7 +133,7 @@ export async function sendSubscriptionConfirmationEmail(options: {
   confirmUrl: string;
 }): Promise<void> {
   if (!hasMailjetConfig()) {
-    console.warn("Mailjet is not configured; skipping subscription confirmation email for", options.email);
+    console.warn("Mailjet is not configured; skipping subscription confirmation email.");
     return;
   }
 
