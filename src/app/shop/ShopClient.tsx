@@ -42,7 +42,7 @@ function validateForm(form: ShippingForm): FormErrors {
 const STEPS: Step[] = ["select", "shipping", "review"]
 
 /* ─── Main Component ─── */
-export function ShopClient() {
+export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   const { navigate } = usePageTransition()
   const [step, setStep] = useState<Step>("select")
   const [selected, setSelected] = useState<Pack>(PACKS[1])
@@ -54,7 +54,7 @@ export function ShopClient() {
   const [errors, setErrors] = useState<FormErrors>({})
   const [touched, setTouched] = useState<Set<string>>(new Set())
 
-  const key = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+  const key = razorpayKey
 
   useEffect(() => {
     if (touched.size === 0) return

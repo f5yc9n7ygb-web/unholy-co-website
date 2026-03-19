@@ -7,10 +7,10 @@ export const metadata = {
 
 /**
  * The server-side component for the shop page.
- * This component primarily renders the `ShopClient` component, which handles the interactive parts of the shop.
- *
- * @returns {JSX.Element} The rendered `ShopClient` component.
+ * Reads the Razorpay key at request time (from runtime secrets) and passes
+ * it as a prop to the client — avoids dependency on NEXT_PUBLIC build-time baking.
  */
 export default function ShopPage() {
-  return <ShopClient />
+  const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || ""
+  return <ShopClient razorpayKey={razorpayKey} />
 }
