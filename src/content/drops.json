@@ -1,9 +1,9 @@
 [
   {
-    "id": "founders-1000",
-    "title": "Founders 1000",
-    "date": "2026-04-10T18:30:00.000Z",
-    "blurb": "First thousand collectible cans. Metallic wordmark with red under glow.",
+    "id": "first-blood",
+    "title": "First Blood",
+    "date": "2026-04-02T06:30:00.000Z",
+    "blurb": "The founding drop. Collectible cans with a metallic wordmark and red underglow. Once they're gone, they're gone.",
     "status": "upcoming",
     "notify": true
   }

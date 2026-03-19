@@ -9,24 +9,24 @@ import { CountUp } from "@/components/ux/CountUp"
 
 const milestones = [
   {
-    year: "2021",
-    title: "The Vow",
-    body: "After witnessing mountains of disposable plastic at festivals, we swore to build a water brand that felt like a rebellion, not a compromise.",
+    year: "Apr '25",
+    title: "The Oath",
+    body: "One festival. One mountain of plastic cups littered across a field at 3am. We swore to build a water brand that people would actually want to hold — not just drink. The obsession started that night.",
   },
   {
-    year: "2022",
-    title: "Forging BloodThirst",
-    body: "We sourced Himalayan mineral water and engineered aluminum tallboys with a gothic finish that could live in clubs, galleries, and underground venues.",
+    year: "Jun '25",
+    title: "The Formula",
+    body: "Months hunting for a source worthy of the concept. We found it in the Himalayas — pure mineral water with the kind of mineral profile that earns its place in a green room, a gallery, or a glass.",
   },
   {
-    year: "2023",
-    title: "The First Drop",
-    body: "Our launch batch sold out in 48 hours. BloodThirst showed up on DJ riders, in speakeasy fridges, and at dawn recovery circles.",
+    year: "Oct '25",
+    title: "The Sigil",
+    body: "The gothic wordmark. The blood-red palette. The aluminum tallboy engineered to look like an artifact from the future. Every element obsessed over until it could offend the ordinary.",
   },
   {
-    year: "2024",
-    title: "The Bloodverse",
-    body: "We released narrative chapters hidden inside each can to celebrate the mythology — because hydration should also tell a story.",
+    year: "Apr '26",
+    title: "First Blood",
+    body: "The founding drop. The first cans exist. Everything we swore to build is now a cold, real thing you can hold in your hand. The ritual begins.",
   },
 ]
 
@@ -49,10 +49,10 @@ const pillars = [
 ]
 
 const stats = [
-  { value: "48", unit: "hrs", label: "First batch sold out" },
-  { value: "4", unit: "years", label: "Building the brand" },
+  { value: "100", unit: "%", label: "Aluminum — infinitely recyclable" },
+  { value: "0", unit: "plastic", label: "Zero bottles — ever" },
   { value: "3", unit: "pillars", label: "Core principles" },
-  { value: "0", unit: "bottles", label: "Zero plastic — ever" },
+  { value: "1", unit: "source", label: "Himalayan mineral water" },
 ]
 
 /* ─── Main Component ─── */
@@ -83,7 +83,7 @@ export function StoryClient() {
             style={{ scale: ghostScale, opacity: ghostOpacity }}
           >
             <span className="font-cinzel text-[28vw] font-black leading-none text-bone/[0.03]">
-              MMXXI
+              MMXXV
             </span>
           </motion.div>
 
@@ -147,7 +147,7 @@ export function StoryClient() {
             className="mb-12 md:mb-16"
           >
             <p className="mb-2 text-[10px] uppercase tracking-[0.4em] text-bone/40">
-              Four years
+              Born in 2025
             </p>
             <h2 className="font-cinzel text-3xl font-bold text-offwhite md:text-4xl lg:text-5xl">
               The journey.

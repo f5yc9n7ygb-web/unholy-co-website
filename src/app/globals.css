@@ -658,3 +658,70 @@ button.btn:hover {
 .scrambling {
   letter-spacing: 0.02em;
 }
+
+/* ===== BLOODVERSE CHAPTER HERO ANIMATIONS ===== */
+@keyframes ch-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes ch-rise-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ch-scene-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ch-hero-fade {
+  opacity: 0;
+  animation: ch-fade-in 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+
+.ch-hero-rise {
+  opacity: 0;
+  animation: ch-rise-in 1s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+
+/* Scene reveal on scroll via animation-timeline (with fallback) */
+.ch-scene-reveal {
+  animation: ch-scene-up 0.7s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation-timeline: view();
+  animation-range: entry 0% entry 30%;
+}
+
+/* Fallback for browsers without scroll-driven animations */
+@supports not (animation-timeline: view()) {
+  .ch-scene-reveal {
+    animation: ch-scene-up 0.6s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-hero-fade, .ch-hero-rise, .ch-scene-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ===== BLOODVERSE CHAPTER BACKGROUNDS ===== */
+.chapter-bg-1 {
+  background:
+    radial-gradient(800px 500px at 50% 20%, rgba(176,0,32,0.06), transparent 60%),
+    radial-gradient(600px 400px at 80% 70%, rgba(176,0,32,0.04), transparent 50%);
+}
+
+.chapter-bg-2 {
+  background:
+    radial-gradient(900px 500px at 30% 30%, rgba(176,0,32,0.08), transparent 55%),
+    radial-gradient(700px 500px at 70% 70%, rgba(120,0,20,0.06), transparent 50%);
+}
+
+.chapter-bg-3 {
+  background:
+    radial-gradient(1000px 600px at 50% 10%, rgba(176,0,32,0.10), transparent 50%),
+    radial-gradient(800px 400px at 50% 90%, rgba(200,80,40,0.05), transparent 60%);
+}

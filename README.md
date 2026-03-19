@@ -86,8 +86,11 @@ If you see a blank page with `ERR_HTTP_RESPONSE_CODE_FAILURE` after deployment, 
     -   Add the **server-side secrets** (not prefixed with `NEXT_PUBLIC_`) so the APIs can talk to Airtable/Mailjet/Razorpay:
         ```
         AIRTABLE_BASE_ID=appXXXXXXXXXXXXXX
+        AIRTABLE_ORDERS_BASE_ID=appXXXXXXXXXXXXXX
         AIRTABLE_TABLE_NAME=signups
         AIRTABLE_TOKEN=patXXXXXXXXXXXXXX
+
+        SECURITY_SIGNING_SECRET=long_random_secret_value
 
         MAILJET_API_KEY=your_mailjet_api_key
         MAILJET_SECRET=your_mailjet_secret
@@ -101,6 +104,7 @@ If you see a blank page with `ERR_HTTP_RESPONSE_CODE_FAILURE` after deployment, 
         RAZORPAY_KEY_ID=rzp_live_xxxxx
         RAZORPAY_KEY_SECRET=your_secret
         ```
+    -   Newsletter signups now use double opt-in. Keep `PUBLIC_SITE_URL` correct so confirmation links point at the right domain.
     -   **DO NOT set these in `wrangler.toml`** - use the Pages dashboard or Wrangler secrets
     -   See [CLOUDFLARE_ENV_SETUP.md](./CLOUDFLARE_ENV_SETUP.md) for detailed instructions.
 

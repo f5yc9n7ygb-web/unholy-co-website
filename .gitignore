@@ -27,8 +27,7 @@ functions/.wrangler/
 
 # Local zips or exports
 *.zip
-!unholy-co-website-latest.zip
-unholy-co-deploy.zip
+lighthouse-report.json
 open-next.config.ts
 plan.md
-tsconfig.tsbuildinfo
+*.tsbuildinfo
