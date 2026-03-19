@@ -1,6 +1,7 @@
 "use client"
 
 import { FormEvent, useState } from "react"
+import { resolveSafeAction } from "@/lib/client/safe-action"
 
 type SubscribeFormProps = {
   source?: string
@@ -32,6 +33,7 @@ export function SubscribeForm({
   successMessage = "You’re in. Watch your inbox for the next ritual.",
 }: SubscribeFormProps) {
   const [email, setEmail] = useState("")
+  const [company, setCompany] = useState("")
   const [status, setStatus] = useState<Status>({ state: "idle" })
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -46,22 +48,27 @@ export function SubscribeForm({
     setStatus({ state: "sending" })
 
     try {
-      const formData = new FormData()
-      formData.append("email", trimmedEmail)
-      formData.append("source", source)
-
-      const response = await fetch(action, {
+      const response = await fetch(resolveSafeAction(action, "/api/subscribe"), {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: trimmedEmail,
+          source,
+          company,
+        }),
       })
 
       const payload = await response.json().catch(() => null)
       if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.error || "Unable to join the list right now.")
+        throw new Error("Unable to join the list right now.")
       }
 
       setEmail("")
-      setStatus({ state: "success", message: successMessage })
+      setCompany("")
+      setStatus({
+        state: "success",
+        message: "Check your inbox and confirm your email to finish subscribing.",
+      })
     } catch (error: any) {
       setStatus({
         state: "error",
@@ -73,6 +80,15 @@ export function SubscribeForm({
   return (
     <div className="space-y-3">
       <form className={formClassName} onSubmit={onSubmit}>
+        <input
+          name="company"
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+          className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden opacity-0"
+          value={company}
+          onChange={(event) => setCompany(event.target.value)}
+        />
         <input
           type="email"
           name="email"

@@ -1,8 +1,10 @@
 import { buildWelcomeEmailHtml } from "@/lib/email/welcome-template";
+import { buildOrderConfirmationHtml, buildOrderConfirmationText, type OrderConfirmationOptions } from "@/lib/email/order-confirmation-template";
 import { Buffer } from "node:buffer";
 
 type AirtableOptions = {
   tableName?: string;
+  baseId?: string;
 };
 
 type AirtableFields = Record<string, string | number | boolean | null | undefined>;
@@ -19,7 +21,7 @@ const MAILJET_ENDPOINT = "https://api.mailjet.com/v3.1/send";
 
 const defaultTableName = process.env.AIRTABLE_TABLE_NAME || "signups";
 
-function getRequiredEnv(name: string) {
+export function getRequiredEnv(name: string) {
   const value = process.env[name];
   if (!value) {
     throw new Error(`${name} is not configured`);
@@ -35,7 +37,7 @@ export async function saveRecordToAirtable(
   fields: AirtableFields,
   options: AirtableOptions = {}
 ): Promise<void> {
-  const baseId = getRequiredEnv("AIRTABLE_BASE_ID");
+  const baseId = options.baseId || getRequiredEnv("AIRTABLE_BASE_ID");
   const token = getRequiredEnv("AIRTABLE_TOKEN");
   const tableName = options.tableName || defaultTableName;
 
@@ -96,6 +98,20 @@ export async function sendMailjetEmail(options: MailjetOptions): Promise<void> {
   }
 }
 
+export async function sendOrderConfirmationEmail(options: OrderConfirmationOptions): Promise<void> {
+  if (!hasMailjetConfig()) {
+    console.warn("Mailjet is not configured; skipping order confirmation email for", options.customerEmail);
+    return;
+  }
+
+  await sendMailjetEmail({
+    to: options.customerEmail,
+    subject: `Order confirmed — BloodThirst is on its way.`,
+    html: buildOrderConfirmationHtml(options),
+    text: buildOrderConfirmationText(options),
+  });
+}
+
 export async function sendWelcomeEmail(email: string): Promise<void> {
   if (!hasMailjetConfig()) {
     console.warn("Mailjet is not configured; skipping welcome email for", email);
@@ -109,6 +125,27 @@ export async function sendWelcomeEmail(email: string): Promise<void> {
     to: email,
     subject,
     html: buildWelcomeEmailHtml({ unsubscribeUrl }),
+  });
+}
+
+export async function sendSubscriptionConfirmationEmail(options: {
+  email: string;
+  confirmUrl: string;
+}): Promise<void> {
+  if (!hasMailjetConfig()) {
+    console.warn("Mailjet is not configured; skipping subscription confirmation email for", options.email);
+    return;
+  }
+
+  await sendMailjetEmail({
+    to: options.email,
+    subject: "Confirm your UNHOLY CO. subscription",
+    html: `
+      <p>Confirm your email to join the UNHOLY CO. list.</p>
+      <p><a href="${options.confirmUrl}">Confirm subscription</a></p>
+      <p>If you did not request this, you can ignore this email.</p>
+    `,
+    text: `Confirm your UNHOLY CO. subscription: ${options.confirmUrl}`,
   });
 }
 

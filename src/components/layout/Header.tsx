@@ -58,7 +58,7 @@ export function Header() {
     <>
       <header className={`fixed top-0 left-0 right-0 z-[120] transition backdrop-blur ${scrolled ? "bg-black/70" : "bg-black/40"}`}>
         <div className="container flex items-center justify-between py-4">
-          <Link href="/" className="relative z-50 text-xl font-semibold tracking-tight">
+          <Link href="/" className="relative z-50 font-cinzel text-xl font-semibold uppercase tracking-[0.08em]">
             <span className="text-bone">UNHOLY</span> <span className="text-blood">CO</span>
           </Link>
           <nav className="hidden md:flex gap-6 text-sm">
@@ -105,7 +105,7 @@ export function Header() {
                         className="flex w-full flex-col gap-2 py-4"
                       >
                         <span className="text-xs uppercase tracking-[0.4em] text-blood/80">{item.eyebrow}</span>
-                        <span className="text-2xl font-semibold text-offwhite">{item.label}</span>
+                        <span className="font-cinzel text-2xl font-semibold tracking-[0.06em] text-offwhite">{item.label}</span>
                         <span className="text-sm text-offwhite/70">{item.description}</span>
                       </TransitionLink>
                     ))}

@@ -401,48 +401,6 @@ button.btn:hover {
   box-shadow: 0 0 24px rgba(176,0,32,0.35);
 }
 
-/* ===== CUSTOM CURSOR ===== */
-@media (pointer: fine) {
-  * { cursor: none !important; }
-}
-
-.custom-cursor-dot {
-  position: fixed;
-  top: -4px;
-  left: -4px;
-  width: 8px;
-  height: 8px;
-  background: #B00020;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 9999;
-  will-change: transform;
-  box-shadow: 0 0 12px rgba(176, 0, 32, 0.6);
-  transition: opacity 0.2s;
-}
-
-.custom-cursor-ring {
-  position: fixed;
-  top: -20px;
-  left: -20px;
-  width: 40px;
-  height: 40px;
-  border: 1.5px solid rgba(176, 0, 32, 0.5);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 9998;
-  will-change: transform;
-  transition: width 0.3s ease, height 0.3s ease, top 0.3s ease, left 0.3s ease, border-color 0.3s ease, opacity 0.2s, background-color 0.3s ease;
-}
-
-.custom-cursor-ring[data-hovering] {
-  width: 56px;
-  height: 56px;
-  top: -28px;
-  left: -28px;
-  border-color: rgba(176, 0, 32, 0.8);
-  background-color: rgba(176, 0, 32, 0.08);
-}
 
 /* ===== NAV LINK ANIMATED UNDERLINES ===== */
 .nav-link {

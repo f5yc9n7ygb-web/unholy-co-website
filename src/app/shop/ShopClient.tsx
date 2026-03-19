@@ -3,20 +3,16 @@
 import Script from "next/script"
 import Image from "next/image"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import heroCan from "@/public/can.png"
-import { TiltCard } from "@/components/ux/TiltCard"
+import { motion } from "framer-motion"
 import { PACKS, type Pack } from "@/lib/shop/catalog"
 import type { ShippingForm } from "@/lib/shop/types"
+import { usePageTransition } from "@/context/TransitionContext"
 
 type FormErrors = Partial<Record<keyof ShippingForm, string>>
-
 type Step = "select" | "shipping" | "review"
 
 declare global {
-  interface Window {
-    Razorpay: any
-  }
+  interface Window { Razorpay: any }
 }
 
 const INDIAN_STATES = [
@@ -28,7 +24,6 @@ const INDIAN_STATES = [
   "Delhi", "Chandigarh", "Puducherry",
 ]
 
-/* ── Helpers ── */
 function validateForm(form: ShippingForm): FormErrors {
   const errors: FormErrors = {}
   if (!form.name.trim()) errors.name = "Name is required"
@@ -45,15 +40,10 @@ function validateForm(form: ShippingForm): FormErrors {
 }
 
 const STEPS: Step[] = ["select", "shipping", "review"]
-const STEP_LABELS: Record<Step, string> = {
-  select: "Choose Pack",
-  shipping: "Shipping",
-  review: "Review & Pay",
-}
 
-/* ── Main Component ── */
+/* ─── Main Component ─── */
 export function ShopClient() {
-  const router = useRouter()
+  const { navigate } = usePageTransition()
   const [step, setStep] = useState<Step>("select")
   const [selected, setSelected] = useState<Pack>(PACKS[1])
   const [loading, setLoading] = useState(false)
@@ -65,7 +55,6 @@ export function ShopClient() {
   const [touched, setTouched] = useState<Set<string>>(new Set())
 
   const key = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
-  const orderEndpoint = "/api/order"
 
   useEffect(() => {
     if (touched.size === 0) return
@@ -80,8 +69,11 @@ export function ShopClient() {
 
   const go = (target: Step) => {
     setStep(target)
-    window.scrollTo({ top: 0, behavior: "smooth" })
   }
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [step])
 
   const goToReview = () => {
     const allErrors = validateForm(form)
@@ -94,7 +86,7 @@ export function ShopClient() {
   }
 
   const onPay = async () => {
-    if (!key || !orderEndpoint || !window.Razorpay) {
+    if (!key || !window.Razorpay) {
       setPayError("Payment gateway is not configured.")
       return
     }
@@ -104,13 +96,10 @@ export function ShopClient() {
       const res = await fetch("/api/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          packId: selected.id,
-          shipping: form,
-        }),
+        body: JSON.stringify({ packId: selected.id, shipping: form }),
       })
       const data = await res.json()
-      if (!data.ok) throw new Error(data.error || "Order error")
+      if (!res.ok || !data?.ok) throw new Error("Unable to start checkout right now.")
 
       const rz = new window.Razorpay({
         key,
@@ -129,22 +118,22 @@ export function ShopClient() {
                 razorpay_signature: response.razorpay_signature,
               }),
             })
-
             const verification = await verifyResponse.json()
             if (!verifyResponse.ok || !verification.ok) {
-              throw new Error(verification.error || "Payment verification failed.")
+              throw new Error(
+                verifyResponse.status === 409
+                  ? "This payment has already been confirmed."
+                  : "Payment verification failed."
+              )
             }
-
-            router.push(
-              `/thanks?order=${verification.orderId}&pay=${verification.paymentId}&pack=${verification.packId}&qty=${verification.qty}&verified=1`
+            navigate(
+              `/thanks?receipt=${encodeURIComponent(verification.receiptToken)}`
             )
           } catch (error: any) {
             setPayError(error?.message || "Payment verification failed.")
             setLoading(false)
           }
         },
-        prefill: { name: form.name, email: form.email, contact: form.phone },
-        notes: { address: `${form.address}, ${form.city} ${form.pincode}, ${form.state}` },
         theme: { color: "#B00020" },
         modal: { ondismiss: () => setLoading(false) },
       })
@@ -168,315 +157,639 @@ export function ShopClient() {
   return (
     <>
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
-      <div className="section">
-        <div className="container max-w-5xl space-y-8">
 
-        {/* ── Step Indicator ── */}
-        <div className="flex items-center justify-center gap-2">
-          {STEPS.map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              <button
-                onClick={() => i < stepIndex && go(s)}
-                disabled={i > stepIndex}
-                className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium uppercase tracking-wider transition-all ${
-                  s === step
-                    ? "bg-blood text-white shadow-[0_0_20px_rgba(176,0,32,0.4)]"
-                    : i < stepIndex
-                      ? "bg-ash/40 text-bone/80 hover:bg-ash/60"
-                      : "bg-ash/20 text-bone/30"
-                }`}
-              >
-                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                  s === step ? "bg-white/20" : i < stepIndex ? "bg-blood/30 text-blood" : "bg-ash/30"
-                }`}>
-                  {i < stepIndex ? "✓" : i + 1}
-                </span>
-                <span className="hidden sm:inline">{STEP_LABELS[s]}</span>
-              </button>
-              {i < STEPS.length - 1 && (
-                <div className={`h-px w-8 transition-colors ${i < stepIndex ? "bg-blood/50" : "bg-ash/30"}`} />
-              )}
-            </div>
-          ))}
+      {/* Atmospheric background — fixed blood glow orbs */}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], opacity: [0.6, 0.8, 0.6] }}
+          transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute left-[-15%] top-[5%] h-[700px] w-[700px] rounded-full bg-blood/10 blur-[180px]"
+        />
+        <motion.div
+          animate={{ scale: [1, 1.12, 1], opacity: [0.4, 0.6, 0.4] }}
+          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 3 }}
+          className="absolute right-[-10%] bottom-[10%] h-[500px] w-[500px] rounded-full bg-blood/8 blur-[140px]"
+        />
+      </div>
+
+      {/* Page */}
+      <div className="relative z-10 min-h-screen pb-32 pt-28 md:pt-36">
+
+        {/* Step Indicator */}
+        <div className="container max-w-5xl mb-12 md:mb-16">
+          <StepIndicator step={step} stepIndex={stepIndex} go={go} />
         </div>
 
-        {/* ═══ STEP 1: SELECT PACK ═══ */}
-        {step === "select" && (
-          <div className="animate-step-in space-y-8">
-            <div className="text-center space-y-2">
-              <h1 className="h1">Choose Your Ritual</h1>
-              <p className="p">Select your pack. Free shipping on all orders.</p>
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-3">
-              {PACKS.map((pack) => {
-                const isActive = selected.id === pack.id
-                return (
-                  <TiltCard
-                    key={pack.id}
-                    onClick={() => setSelected(pack)}
-                    className={`relative rounded-2xl border p-5 md:p-6 text-left transition-all duration-300 ${
-                      isActive
-                        ? "border-blood/60 bg-ash/30 shadow-[0_0_40px_rgba(176,0,32,0.2)]"
-                        : "border-ash/40 bg-ash/15 hover:border-ash/70 hover:bg-ash/20"
-                    }`}
-                  >
-                    {pack.tag && (
-                      <div className="mb-4">
-                        <span className="inline-block rounded-full bg-blood px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-[0_4px_12px_rgba(176,0,32,0.4)]">
-                          {pack.tag}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="text-xs uppercase tracking-wider text-bone/50">{pack.qty} cans</span>
-                        <h3 className="mt-1 text-lg font-semibold text-offwhite">{pack.title}</h3>
-                      </div>
-                      <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all ${
-                        isActive ? "border-blood bg-blood" : "border-ash/60"
-                      }`}>
-                        {isActive && (
-                          <svg
-                            className="h-3 w-3 text-white"
-                            viewBox="0 0 12 12"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                          >
-                            <path d="M2 6l3 3 5-5" />
-                          </svg>
-                        )}
-                      </div>
-                    </div>
-
-                    <p className="mt-2 text-sm text-offwhite/60">{pack.blurb}</p>
-
-                    <div className="mt-5 flex items-end justify-between">
-                      <div>
-                        <span className="text-3xl font-bold text-offwhite">₹{pack.price}</span>
-                        <span className="ml-2 text-xs text-bone/40">₹{pack.perCan.toFixed(0)}/can</span>
-                      </div>
-                    </div>
-                  </TiltCard>
-                )
-              })}
-            </div>
-
-            {/* Bottom summary strip */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-ash/40 bg-ash/15 backdrop-blur-md px-5 py-4">
-              <div className="flex items-center gap-4">
-                <div className="relative h-14 w-10 shrink-0">
-                  <Image src={heroCan} alt="BloodThirst" fill className="object-contain" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-offwhite">{selected.title}</p>
-                  <p className="text-xs text-bone/50">{selected.qty} cans &middot; Free shipping</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="text-xl font-bold text-offwhite">₹{selected.price}</p>
-                  <p className="text-[10px] uppercase tracking-wider text-bone/40">incl. taxes</p>
-                </div>
-                <button onClick={() => go("shipping")} className="btn btn-primary">
-                  Continue
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══ STEP 2: SHIPPING ═══ */}
-        {step === "shipping" && (
-          <div className="animate-step-in space-y-8">
-            <div className="text-center space-y-2">
-              <h2 className="h2">Shipping Details</h2>
-              <p className="p">Where should we send your ritual supply?</p>
-            </div>
-
-            <div className="grid gap-8 lg:grid-cols-[1.2fr,0.8fr]">
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Full Name" field="name" value={form.name} error={errors.name} placeholder="John Doe" onChange={updateField} onBlur={blurField} />
-                  <Field label="Email" field="email" value={form.email} error={errors.email} placeholder="you@domain.com" type="email" onChange={updateField} onBlur={blurField} />
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Phone" field="phone" value={form.phone} error={errors.phone} placeholder="9876543210" type="tel" onChange={updateField} onBlur={blurField} />
-                  <Field label="Pincode" field="pincode" value={form.pincode} error={errors.pincode} placeholder="110001" onChange={updateField} onBlur={blurField} />
-                </div>
-                <Field label="Address" field="address" value={form.address} error={errors.address} placeholder="House no., Street, Locality" onChange={updateField} onBlur={blurField} />
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="City" field="city" value={form.city} error={errors.city} placeholder="Mumbai" onChange={updateField} onBlur={blurField} />
-                  <div>
-                    <label className="mb-1.5 block text-xs uppercase tracking-wider text-bone/60">State</label>
-                    <select
-                      value={form.state}
-                      onChange={(e) => updateField("state", e.target.value)}
-                      onBlur={() => blurField("state")}
-                      className={`w-full rounded-xl border bg-ash/40 px-3 py-2.5 text-sm text-offwhite outline-none transition focus:border-blood focus:ring-2 focus:ring-blood/30 ${errors.state ? "border-blood/60" : "border-ash"}`}
-                    >
-                      <option value="">Select state</option>
-                      {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    {errors.state && <p className="mt-1 text-xs text-blood/80">{errors.state}</p>}
-                  </div>
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <button onClick={() => go("select")} className="btn btn-ghost">Back</button>
-                  <button onClick={goToReview} className="btn btn-primary flex-1">Review Order</button>
-                </div>
-              </div>
-
-              {/* Mini summary sidebar */}
-              <div className="rounded-2xl border border-ash/40 bg-ash/15 p-5 h-fit lg:sticky lg:top-28">
-                <h3 className="text-xs uppercase tracking-wider text-bone/50">Order Summary</h3>
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="relative h-16 w-12 shrink-0">
-                    <Image src={heroCan} alt="BloodThirst" fill className="object-contain" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-offwhite">{selected.title}</p>
-                    <p className="text-xs text-bone/50">{selected.qty} cans</p>
-                  </div>
-                </div>
-                <div className="mt-6 space-y-2 border-t border-ash/30 pt-4 text-sm">
-                  <div className="flex justify-between text-bone/60">
-                    <span>Subtotal</span><span className="text-offwhite">₹{selected.price}</span>
-                  </div>
-                  <div className="flex justify-between text-bone/60">
-                    <span>Shipping</span><span className="text-xs font-medium text-green-400">FREE</span>
-                  </div>
-                  <div className="flex justify-between border-t border-ash/30 pt-3 text-base font-bold text-offwhite">
-                    <span>Total</span><span>₹{selected.price}</span>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-2 rounded-lg bg-ash/20 px-3 py-2 text-[11px] text-bone/50">
-                  <LockIcon />
-                  Secured by Razorpay &middot; 256-bit encryption
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══ STEP 3: REVIEW & PAY ═══ */}
-        {step === "review" && (
-          <div className="animate-step-in space-y-8">
-            <div className="text-center space-y-2">
-              <h2 className="h2">Review Your Ritual</h2>
-              <p className="p">Everything look good? Complete the offering below.</p>
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="space-y-4">
-                {/* Product card */}
-                <div className="rounded-2xl border border-ash/40 bg-ash/15 p-5">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs uppercase tracking-wider text-bone/50">Product</h3>
-                    <button onClick={() => go("select")} className="text-xs text-blood hover:underline">Change</button>
-                  </div>
-                  <div className="mt-3 flex items-center gap-4">
-                    <div className="relative h-20 w-14 shrink-0 rounded-lg bg-ash/20 p-1">
-                      <Image src={heroCan} alt="BloodThirst" fill className="object-contain" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-offwhite">{selected.title}</p>
-                      <p className="text-sm text-bone/50">{selected.qty} cans &middot; ₹{selected.perCan.toFixed(0)}/can</p>
-                      <p className="mt-1 text-xl font-bold text-offwhite">₹{selected.price}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Shipping card */}
-                <div className="rounded-2xl border border-ash/40 bg-ash/15 p-5">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs uppercase tracking-wider text-bone/50">Ships To</h3>
-                    <button onClick={() => go("shipping")} className="text-xs text-blood hover:underline">Edit</button>
-                  </div>
-                  <div className="mt-3 space-y-1 text-sm text-offwhite/80">
-                    <p className="font-semibold text-offwhite">{form.name}</p>
-                    <p>{form.address}</p>
-                    <p>{form.city}, {form.state} {form.pincode}</p>
-                    <p className="text-bone/50">{form.email} &middot; {form.phone}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment card */}
-              <div className="rounded-2xl border border-blood/20 bg-ash/15 p-6 shadow-[0_0_60px_rgba(176,0,32,0.1)]">
-                <h3 className="text-xs uppercase tracking-wider text-bone/50">Payment Summary</h3>
-                <div className="mt-5 space-y-3 text-sm">
-                  <div className="flex justify-between text-bone/60">
-                    <span>{selected.title} ({selected.qty})</span>
-                    <span className="text-offwhite">₹{selected.price}</span>
-                  </div>
-                  <div className="flex justify-between text-bone/60">
-                    <span>Shipping</span>
-                    <span className="text-xs font-medium text-green-400">FREE</span>
-                  </div>
-                  <div className="flex justify-between text-bone/60">
-                    <span>Taxes</span>
-                    <span className="text-offwhite text-xs">Included</span>
-                  </div>
-                </div>
-
-                <div className="my-5 h-px bg-ash/30" />
-
-                <div className="flex justify-between text-lg font-bold text-offwhite">
-                  <span>Total</span><span>₹{selected.price}</span>
-                </div>
-
-                {payError && (
-                  <div className="mt-3 rounded-lg bg-blood/10 border border-blood/30 px-3 py-2 text-xs text-blood">
-                    {payError}
-                  </div>
-                )}
-
-                <button onClick={onPay} disabled={loading} className="btn btn-primary mt-6 w-full py-4 text-base">
-                  {loading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Processing...
-                    </span>
-                  ) : (
-                    `Pay ₹${selected.price}`
-                  )}
-                </button>
-
-                <div className="mt-4 flex items-center justify-center gap-2 text-[11px] text-bone/40">
-                  <LockIcon />
-                  Powered by Razorpay &middot; 256-bit SSL
-                </div>
-                <div className="mt-3 flex justify-center gap-3 text-[10px] text-bone/30">
-                  <span>UPI</span><span>&middot;</span>
-                  <span>Cards</span><span>&middot;</span>
-                  <span>Net Banking</span><span>&middot;</span>
-                  <span>Wallets</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-center">
-              <button onClick={() => go("shipping")} className="btn btn-ghost text-sm">&larr; Back to shipping</button>
-            </div>
-          </div>
-        )}
+        {/* Step Content */}
+        <div key={step} className="animate-step-in">
+            {step === "select" && (
+              <SelectStep
+                packs={PACKS}
+                selected={selected}
+                onSelect={setSelected}
+                onContinue={() => go("shipping")}
+              />
+            )}
+            {step === "shipping" && (
+              <ShippingStep
+                selected={selected}
+                form={form}
+                errors={errors}
+                onChange={updateField}
+                onBlur={blurField}
+                onBack={() => go("select")}
+                onNext={goToReview}
+              />
+            )}
+            {step === "review" && (
+              <ReviewStep
+                selected={selected}
+                form={form}
+                loading={loading}
+                payError={payError}
+                onBack={() => go("shipping")}
+                onChangeProduct={() => go("select")}
+                onChangeShipping={() => go("shipping")}
+                onPay={onPay}
+              />
+            )}
+        </div>
       </div>
-    </div>
     </>
   )
 }
 
-/* ── Reusable Field ── */
-function Field({
-  label, field, value, error, placeholder, type = "text",
-  onChange, onBlur,
-}: {
+/* ─── Step Indicator ─── */
+function StepIndicator({ step, stepIndex, go }: {
+  step: Step
+  stepIndex: number
+  go: (s: Step) => void
+}) {
+  const LABELS: Record<Step, string> = {
+    select: "Choose Ritual",
+    shipping: "Shipping",
+    review: "Review & Pay",
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-0">
+      {STEPS.map((s, i) => {
+        const isActive = s === step
+        const isComplete = i < stepIndex
+        return (
+          <div key={s} className="flex items-center">
+            <button
+              onClick={() => isComplete ? go(s) : undefined}
+              disabled={!isComplete && !isActive}
+              className="flex flex-col items-center gap-2 transition-all"
+              style={{ cursor: isComplete ? "pointer" : "default" }}
+            >
+              <div className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition-all duration-500 ${
+                isActive
+                  ? "border-blood bg-blood text-white shadow-[0_0_28px_rgba(176,0,32,0.7)]"
+                  : isComplete
+                    ? "border-blood/40 bg-blood/15 text-blood"
+                    : "border-ash/30 bg-ash/10 text-bone/20"
+              }`}>
+                {isComplete ? (
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                    <path d="M2 6l3 3 5-5" />
+                  </svg>
+                ) : (
+                  <span className="font-cinzel text-xs font-bold">{i + 1}</span>
+                )}
+              </div>
+              <span className={`text-[9px] uppercase tracking-[0.2em] transition-colors duration-300 ${
+                isActive ? "text-offwhite" : isComplete ? "text-blood/60" : "text-bone/20"
+              }`}>
+                {LABELS[s]}
+              </span>
+            </button>
+            {i < STEPS.length - 1 && (
+              <div className="mx-4 mb-6 flex items-center">
+                <div className={`h-px w-10 md:w-16 transition-all duration-700 ${
+                  i < stepIndex ? "bg-blood/50" : "bg-ash/25"
+                }`} />
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ─── Step 1: Select Pack ─── */
+function SelectStep({ packs, selected, onSelect, onContinue }: {
+  packs: Pack[]
+  selected: Pack
+  onSelect: (p: Pack) => void
+  onContinue: () => void
+}) {
+  return (
+    <div className="container max-w-6xl">
+      {/* Header */}
+      <div className="mb-14 grid gap-8 md:grid-cols-[1fr,auto] md:items-end">
+        <div>
+          <p className="mb-4 text-[10px] uppercase tracking-[0.5em] text-blood/70">
+            BLOODTHIRST — Sacred Packs
+          </p>
+          <h1 className="font-cinzel text-4xl font-black uppercase leading-[0.9] tracking-[-0.01em] text-offwhite md:text-6xl lg:text-7xl">
+            Choose Your<br />
+            <span className="text-blood">Ritual</span>
+          </h1>
+          <p className="mt-5 max-w-sm text-sm text-bone/50 md:text-base">
+            Himalayan mineral water. Zero sugar. Zero plastic. One very black can. Free shipping across India.
+          </p>
+        </div>
+
+        {/* Floating can visualization */}
+        <div className="relative hidden md:flex h-44 w-36 items-end justify-center">
+          <div className="absolute bottom-0 left-1/2 h-10 w-32 -translate-x-1/2 rounded-full bg-blood/30 blur-2xl" />
+          <motion.div
+            animate={{ y: [0, -8, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <Image
+              src="/can.png"
+              alt="BloodThirst"
+              width={120}
+              height={210}
+              className="relative z-10 drop-shadow-[0_0_60px_rgba(176,0,32,0.4)]"
+            />
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Pack Grid */}
+      <div className="grid gap-5 md:grid-cols-3">
+        {packs.map((pack, i) => {
+          const isActive = selected.id === pack.id
+          const num = `0${i + 1}`
+          const isFeatured = !!pack.tag
+
+          return (
+            <motion.button
+              key={pack.id}
+              onClick={() => onSelect(pack)}
+              whileHover={{ y: isActive ? 0 : -4 }}
+              className={`group relative flex min-h-[420px] flex-col overflow-hidden rounded-2xl border p-7 text-left transition-all duration-500 ${
+                isActive
+                  ? "border-blood/65 bg-black/50 shadow-[0_0_70px_rgba(176,0,32,0.22),inset_0_0_80px_rgba(176,0,32,0.06)]"
+                  : "border-white/[0.07] bg-black/30 hover:border-white/[0.15] hover:bg-black/40"
+              }`}
+            >
+              {/* Top accent line for featured packs */}
+              {isFeatured && (
+                <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-blood to-transparent" />
+              )}
+
+              {/* Big decorative number */}
+              <span
+                className={`absolute bottom-4 right-5 select-none font-cinzel font-black leading-none transition-all duration-500 ${
+                  isActive ? "text-blood/[0.07] text-[8rem]" : "text-white/[0.04] text-[8rem]"
+                }`}
+                aria-hidden="true"
+              >
+                {num}
+              </span>
+
+              {/* Ambient glow for active card */}
+              {isActive && (
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(176,0,32,0.12),transparent_60%)]" />
+              )}
+
+              <div className="relative z-10 flex h-full flex-col">
+                {/* Badge */}
+                <div className="mb-6">
+                  {pack.tag ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-blood/40 bg-blood/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-blood">
+                      <span className="h-1 w-1 rounded-full bg-blood animate-pulse-slow" />
+                      {pack.tag}
+                    </span>
+                  ) : (
+                    <span className="inline-block rounded-full border border-white/[0.08] px-3 py-1 text-[10px] uppercase tracking-wider text-bone/25">
+                      Pack {num}
+                    </span>
+                  )}
+                </div>
+
+                {/* Pack title */}
+                <h3 className={`font-cinzel text-2xl font-bold uppercase leading-tight tracking-wide transition-colors duration-300 ${
+                  isActive ? "text-offwhite" : "text-offwhite/75 group-hover:text-offwhite"
+                }`}>
+                  {pack.title}
+                </h3>
+
+                {/* Qty */}
+                <p className="mt-2 text-[11px] uppercase tracking-[0.35em] text-bone/35">
+                  {pack.qty} × BloodThirst 500ml
+                </p>
+
+                {/* Divider */}
+                <div className={`my-5 h-px transition-colors duration-500 ${isActive ? "bg-blood/20" : "bg-white/[0.05]"}`} />
+
+                {/* Blurb */}
+                <p className="text-sm leading-relaxed text-bone/45">
+                  {pack.blurb}
+                </p>
+
+                {/* Spacer */}
+                <div className="flex-1" />
+
+                {/* Price */}
+                <div className="mt-6">
+                  <div className="flex items-end gap-2">
+                    <span className={`font-cinzel text-4xl font-black transition-colors duration-300 ${
+                      isActive ? "text-offwhite" : "text-offwhite/80"
+                    }`}>
+                      ₹{pack.price.toLocaleString("en-IN")}
+                    </span>
+                    <span className="mb-1.5 text-xs text-bone/35">
+                      ₹{pack.perCan}/can
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[10px] uppercase tracking-wider text-bone/30">Incl. taxes · Free shipping</p>
+                </div>
+
+                {/* Select indicator */}
+                <div className={`mt-5 flex items-center gap-2.5 text-[11px] uppercase tracking-[0.2em] transition-all duration-300 ${
+                  isActive ? "text-blood" : "text-bone/25 group-hover:text-bone/50"
+                }`}>
+                  <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all duration-300 ${
+                    isActive ? "border-blood bg-blood shadow-[0_0_12px_rgba(176,0,32,0.6)]" : "border-bone/25"
+                  }`}>
+                    {isActive && (
+                      <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                        <path d="M2 6l3 3 5-5" />
+                      </svg>
+                    )}
+                  </div>
+                  {isActive ? "Selected" : "Select Pack"}
+                </div>
+              </div>
+            </motion.button>
+          )
+        })}
+      </div>
+
+      {/* Bottom Action Bar */}
+      <div
+        className="mt-6 flex flex-col gap-5 overflow-hidden rounded-2xl border border-white/[0.07] bg-black/50 px-6 py-5 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between"
+        style={{
+          boxShadow: "0 0 50px rgba(176,0,32,0.08), inset 0 1px 0 rgba(255,255,255,0.04)",
+        }}
+      >
+        <div className="flex items-center gap-4">
+          <div className="relative h-14 w-10 shrink-0">
+            <motion.div
+              animate={{ y: [0, -4, 0] }}
+              transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <Image
+                src="/can.png"
+                alt="BloodThirst"
+                width={40}
+                height={70}
+                className="drop-shadow-[0_4px_16px_rgba(176,0,32,0.35)]"
+              />
+            </motion.div>
+          </div>
+          <div>
+            <p className="font-cinzel font-semibold text-offwhite">{selected.title}</p>
+            <p className="mt-0.5 text-[11px] uppercase tracking-wider text-bone/35">
+              {selected.qty} cans · Free delivery · All India
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-5 shrink-0">
+          <div className="text-right">
+            <p className="font-cinzel text-2xl font-bold text-offwhite">
+              ₹{selected.price.toLocaleString("en-IN")}
+            </p>
+            <p className="text-[10px] uppercase tracking-wider text-bone/35">Incl. all taxes</p>
+          </div>
+          <motion.button
+            onClick={onContinue}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            className="btn btn-primary px-8 py-3.5 text-sm"
+          >
+            Proceed →
+          </motion.button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Step 2: Shipping ─── */
+function ShippingStep({ selected, form, errors, onChange, onBlur, onBack, onNext }: {
+  selected: Pack
+  form: ShippingForm
+  errors: FormErrors
+  onChange: (f: keyof ShippingForm, v: string) => void
+  onBlur: (f: keyof ShippingForm) => void
+  onBack: () => void
+  onNext: () => void
+}) {
+  return (
+    <div className="container max-w-5xl">
+      {/* Header */}
+      <div className="mb-12 text-center">
+        <p className="mb-4 text-[10px] uppercase tracking-[0.5em] text-blood/70">
+          STEP 02 — SHIPPING
+        </p>
+        <h2 className="font-cinzel text-3xl font-black uppercase leading-tight text-offwhite md:text-5xl">
+          Delivery Details
+        </h2>
+        <p className="mt-3 text-sm text-bone/45">
+          Where should we send your ritual supply?
+        </p>
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-[1.35fr,0.65fr]">
+        {/* Form */}
+        <div className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <LuxField label="Full Name" field="name" value={form.name} error={errors.name}
+              placeholder="John Doe" onChange={onChange} onBlur={onBlur} />
+            <LuxField label="Email Address" field="email" value={form.email} error={errors.email}
+              placeholder="you@domain.com" type="email" onChange={onChange} onBlur={onBlur} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <LuxField label="Phone Number" field="phone" value={form.phone} error={errors.phone}
+              placeholder="9876543210" type="tel" onChange={onChange} onBlur={onBlur} />
+            <LuxField label="Pincode" field="pincode" value={form.pincode} error={errors.pincode}
+              placeholder="110001" onChange={onChange} onBlur={onBlur} />
+          </div>
+          <LuxField label="Street Address" field="address" value={form.address} error={errors.address}
+            placeholder="House no., Street, Locality" onChange={onChange} onBlur={onBlur} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <LuxField label="City" field="city" value={form.city} error={errors.city}
+              placeholder="Mumbai" onChange={onChange} onBlur={onBlur} />
+            <div>
+              <label className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-bone/45">State</label>
+              <select
+                value={form.state}
+                onChange={(e) => onChange("state", e.target.value)}
+                onBlur={() => onBlur("state")}
+                className={`w-full rounded-xl border bg-black/50 px-4 py-3 text-sm text-offwhite outline-none transition-all duration-200 focus:border-blood/60 focus:ring-1 focus:ring-blood/20 ${
+                  errors.state ? "border-blood/60" : "border-white/[0.08]"
+                }`}
+              >
+                <option value="">Select state</option>
+                {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {errors.state && (
+                <p className="mt-1.5 text-xs text-blood/80">{errors.state}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-3">
+            <button onClick={onBack} className="btn btn-ghost px-5 text-sm">← Back</button>
+            <motion.button
+              onClick={onNext}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="btn btn-primary flex-1 py-3.5 text-sm"
+            >
+              Review Order →
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Sidebar summary */}
+        <div className="h-fit lg:sticky lg:top-28">
+          <div
+            className="overflow-hidden rounded-2xl border border-white/[0.07] bg-black/50 backdrop-blur-xl"
+            style={{ boxShadow: "0 0 60px rgba(176,0,32,0.07), inset 0 1px 0 rgba(255,255,255,0.04)" }}
+          >
+            {/* Can hero */}
+            <div className="relative flex h-32 items-center justify-center overflow-hidden bg-gradient-to-b from-blood/10 to-transparent">
+              <div className="absolute bottom-0 left-1/2 h-10 w-32 -translate-x-1/2 rounded-full bg-blood/20 blur-2xl" />
+              <Image
+                src="/can.png"
+                alt="BloodThirst"
+                width={70}
+                height={122}
+                className="relative z-10 drop-shadow-[0_8px_24px_rgba(176,0,32,0.4)]"
+              />
+            </div>
+
+            <div className="p-5">
+              <div className="pb-4 border-b border-white/[0.06]">
+                <p className="font-cinzel font-semibold text-offwhite">{selected.title}</p>
+                <p className="mt-1 text-xs text-bone/40">{selected.qty} × BloodThirst 500ml</p>
+                {selected.tag && (
+                  <span className="mt-2 inline-block text-[10px] uppercase tracking-wider text-blood/80">{selected.tag}</span>
+                )}
+              </div>
+
+              <div className="py-4 space-y-2.5 text-sm border-b border-white/[0.06]">
+                <div className="flex justify-between text-bone/55">
+                  <span>Subtotal</span>
+                  <span className="text-offwhite">₹{selected.price.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between text-bone/55">
+                  <span>Shipping</span>
+                  <span className="text-xs font-medium text-green-400">FREE</span>
+                </div>
+                <div className="flex justify-between text-bone/55">
+                  <span>Taxes</span>
+                  <span className="text-xs text-offwhite/60">Included</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between pt-4 font-bold text-offwhite">
+                <span className="font-cinzel">Total</span>
+                <span className="font-cinzel text-lg">₹{selected.price.toLocaleString("en-IN")}</span>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2 rounded-xl bg-white/[0.03] px-3 py-2.5 text-[11px] text-bone/35">
+                <LockIcon />
+                Secured by Razorpay · 256-bit SSL
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Step 3: Review & Pay ─── */
+function ReviewStep({ selected, form, loading, payError, onBack, onChangeProduct, onChangeShipping, onPay }: {
+  selected: Pack
+  form: ShippingForm
+  loading: boolean
+  payError: string | null
+  onBack: () => void
+  onChangeProduct: () => void
+  onChangeShipping: () => void
+  onPay: () => void
+}) {
+  return (
+    <div className="container max-w-5xl">
+      {/* Header */}
+      <div className="mb-12 text-center">
+        <p className="mb-4 text-[10px] uppercase tracking-[0.5em] text-blood/70">
+          STEP 03 — REVIEW
+        </p>
+        <h2 className="font-cinzel text-3xl font-black uppercase leading-tight text-offwhite md:text-5xl">
+          Review &<br className="sm:hidden" />
+          <span className="text-blood"> Complete</span>
+        </h2>
+        <p className="mt-3 text-sm text-bone/45">
+          Everything look good? Complete your ritual below.
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr,1fr]">
+        {/* Left: Product + Shipping */}
+        <div className="space-y-4">
+          {/* Product card */}
+          <div
+            className="overflow-hidden rounded-2xl border border-white/[0.07] bg-black/50 backdrop-blur-xl"
+            style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
+          >
+            <div className="flex items-center justify-between px-5 pt-5">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-bone/40">Product</p>
+              <button onClick={onChangeProduct} className="text-xs text-blood transition-colors hover:text-blood/70">
+                Change
+              </button>
+            </div>
+            <div className="flex items-center gap-5 p-5">
+              <div className="relative h-24 w-16 shrink-0 overflow-hidden rounded-xl bg-black/50 p-2">
+                <div className="absolute inset-0 bg-gradient-to-b from-blood/15 to-transparent" />
+                <Image src="/can.png" alt="BloodThirst" fill className="object-contain drop-shadow-[0_4px_16px_rgba(176,0,32,0.3)]" />
+              </div>
+              <div>
+                <p className="font-cinzel text-lg font-bold text-offwhite">{selected.title}</p>
+                <p className="mt-0.5 text-sm text-bone/45">{selected.qty} × BloodThirst 500ml</p>
+                <p className="text-xs text-bone/35">₹{selected.perCan.toFixed(0)} per can</p>
+                <p className="mt-2 font-cinzel text-2xl font-black text-offwhite">
+                  ₹{selected.price.toLocaleString("en-IN")}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Shipping card */}
+          <div
+            className="rounded-2xl border border-white/[0.07] bg-black/50 p-5 backdrop-blur-xl"
+            style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-bone/40">Ships To</p>
+              <button onClick={onChangeShipping} className="text-xs text-blood transition-colors hover:text-blood/70">
+                Edit
+              </button>
+            </div>
+            <div className="space-y-1 text-sm text-offwhite/75">
+              <p className="font-semibold text-offwhite">{form.name}</p>
+              <p>{form.address}</p>
+              <p>{form.city}, {form.state} {form.pincode}</p>
+              <p className="text-bone/45">{form.email} · {form.phone}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Payment */}
+        <div
+          className="relative overflow-hidden rounded-2xl border border-blood/20 bg-black/60 p-7 backdrop-blur-xl"
+          style={{
+            boxShadow: "0 0 80px rgba(176,0,32,0.14), inset 0 1px 0 rgba(255,255,255,0.05)",
+          }}
+        >
+          {/* Top accent */}
+          <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-blood/60 to-transparent" />
+          {/* Radial blood glow */}
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(176,0,32,0.1),transparent_55%)]" />
+
+          <div className="relative z-10">
+            <p className="mb-6 text-[10px] uppercase tracking-[0.28em] text-bone/40">Payment Summary</p>
+
+            <div className="space-y-3.5 text-sm">
+              <div className="flex justify-between text-bone/55">
+                <span>{selected.title} ({selected.qty} cans)</span>
+                <span className="text-offwhite">₹{selected.price.toLocaleString("en-IN")}</span>
+              </div>
+              <div className="flex justify-between text-bone/55">
+                <span>Shipping</span>
+                <span className="text-xs font-medium text-green-400">FREE</span>
+              </div>
+              <div className="flex justify-between text-bone/55">
+                <span>Taxes</span>
+                <span className="text-xs text-offwhite/60">Included</span>
+              </div>
+            </div>
+
+            <div className="my-6 h-px bg-white/[0.06]" />
+
+            <div className="flex items-center justify-between">
+              <span className="font-cinzel text-lg font-bold text-offwhite">Total</span>
+              <span className="font-cinzel text-2xl font-black text-blood">
+                ₹{selected.price.toLocaleString("en-IN")}
+              </span>
+            </div>
+
+            {payError && (
+              <div className="mt-4 rounded-xl border border-blood/30 bg-blood/10 px-4 py-3 text-xs text-blood">
+                {payError}
+              </div>
+            )}
+
+            {/* Pay CTA */}
+            <motion.button
+              onClick={onPay}
+              disabled={loading}
+              whileHover={!loading ? { scale: 1.02, filter: "brightness(1.1)" } : undefined}
+              whileTap={!loading ? { scale: 0.98 } : undefined}
+              className="relative mt-6 w-full overflow-hidden rounded-xl bg-blood py-5 text-base font-bold text-white transition-all duration-300 disabled:opacity-60"
+              style={{
+                boxShadow: "0 0 50px rgba(176,0,32,0.5), 0 8px 32px rgba(176,0,32,0.35)",
+              }}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-3">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span className="font-cinzel tracking-wider">Processing Ritual...</span>
+                </span>
+              ) : (
+                <span className="font-cinzel tracking-wider">
+                  Complete Ritual · ₹{selected.price.toLocaleString("en-IN")}
+                </span>
+              )}
+            </motion.button>
+
+            <div className="mt-5 flex items-center justify-center gap-2 text-[11px] text-bone/35">
+              <LockIcon />
+              Powered by Razorpay · 256-bit SSL
+            </div>
+            <div className="mt-2 flex justify-center gap-3 text-[10px] uppercase tracking-wider text-bone/20">
+              <span>UPI</span><span>·</span>
+              <span>Cards</span><span>·</span>
+              <span>Net Banking</span><span>·</span>
+              <span>Wallets</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-8 flex justify-center">
+        <button onClick={onBack} className="btn btn-ghost text-sm">← Back to shipping</button>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Luxury Form Field ─── */
+function LuxField({ label, field, value, error, placeholder, type = "text", onChange, onBlur }: {
   label: string
   field: keyof ShippingForm
   value: string
@@ -488,26 +801,28 @@ function Field({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs uppercase tracking-wider text-bone/60">{label}</label>
+      <label className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-bone/45">
+        {label}
+      </label>
       <input
         type={type}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(field, e.target.value)}
         onBlur={() => onBlur(field)}
-        className={`w-full rounded-xl border bg-ash/40 px-3 py-2.5 text-sm text-offwhite outline-none transition focus:border-blood focus:ring-2 focus:ring-blood/30 ${error ? "border-blood/60" : "border-ash"}`}
+        className={`w-full rounded-xl border bg-black/50 px-4 py-3 text-sm text-offwhite placeholder:text-bone/20 outline-none transition-all duration-200 focus:border-blood/60 focus:ring-1 focus:ring-blood/20 ${
+          error ? "border-blood/60" : "border-white/[0.08]"
+        }`}
       />
-      {error && (
-        <p className="mt-1 text-xs text-blood/80">{error}</p>
-      )}
+      {error && <p className="mt-1.5 text-xs text-blood/80">{error}</p>}
     </div>
   )
 }
 
-/* ── Lock Icon ── */
+/* ─── Lock Icon ─── */
 function LockIcon() {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0 text-bone/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <svg className="h-3.5 w-3.5 shrink-0 text-bone/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
     </svg>
   )

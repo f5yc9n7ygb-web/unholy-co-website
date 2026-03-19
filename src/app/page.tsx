@@ -1,196 +1,43 @@
-import Image from "next/image"
-import Link from "next/link"
-import Reveal from "@/components/ux/Reveal"
-import { Badges } from "@/components/shared/Badges"
-import { SplitTextReveal } from "@/components/ux/SplitTextReveal"
-import { TextScramble } from "@/components/ux/TextScramble"
-import { CountUp } from "@/components/ux/CountUp"
-import { ScrollSkew } from "@/components/ux/ScrollSkew"
+import HomeHero from "@/components/home/HomeHero"
+import HomeShowcase from "@/components/home/Showcase"
+import HomeManifesto from "@/components/home/Manifesto"
+import HomeRitual from "@/components/home/HorizontalRitual"
+import HomeCTA from "@/components/home/CTA"
 import { Marquee } from "@/components/ux/Marquee"
-import heroCan from "@/public/can.png"
-import { HomeHero } from "@/components/home/HomeHero"
-import { HorizontalRitual } from "@/components/home/HorizontalRitual"
-import { ClipReveal } from "@/components/ux/ClipReveal"
-import { FeatureGrid } from "@/components/home/FeatureGrid"
-import { SubscribeForm } from "@/components/forms/SubscribeForm"
 
 export const revalidate = 60
 
+const marqueeItems = [
+  "BLOODTHIRST",
+  "UNHOLY CO",
+  "EST. MMXXV",
+  "NOT YOUR SALVATION",
+  "MINERAL WATER",
+]
+
 export default function HomePage() {
-  const stats = [
-    { label: "Mineral Blend", value: "12 trace elements" },
-    { label: "Source Elevation", value: "5,200 ft" },
-    { label: "Recycled Metal", value: "80% avg." },
-    { label: "Serving Temp", value: "2°C ritual" },
-  ]
-
-  const features = [
-    {
-      title: "Mineral-Rich Source",
-      body: "Drawn from volcanic terrain and filtered through obsidian rock for a naturally crisp, mineral-forward taste.",
-    },
-    {
-      title: "Cold-Forged Aluminum",
-      body: "360° light-proof armor keeps every can cold and untouched by plastic toxins — guilt-free, planet-first.",
-    },
-    {
-      title: "Zero Sugar, Maximum Bite",
-      body: "Pure hydration without fillers. BloodThirst is brutally refreshing with nothing to dull your edge.",
-    },
-    {
-      title: "Forged for Nightlife",
-      body: "Sleek matte finish glows under neon, looking at home in dive bars, underground clubs, and rooftop rituals alike.",
-    },
-  ]
-
-  const ritualSteps = [
-    {
-      title: "Summon",
-      body: "Grip the cold aluminum. Feel the pulse of the coven as condensation beads across the matte black shell.",
-    },
-    {
-      title: "Break the Seal",
-      body: "The hiss is your siren. That rush of pressure is minerals meeting oxygen — a signal you're alive.",
-    },
-    {
-      title: "Consume the Sin",
-      body: "Let the metallic snap wake your senses. Crisp, mineral-rich water that tastes like rebellion.",
-    },
-    {
-      title: "Leave No Trace",
-      body: "Crush the can. Recycle the armor. Repeat. Your ritual fuels the next drop.",
-    },
-  ]
-
-  const testimonials = [
-    {
-      quote: "Finally a water brand that feels like it belongs to the underground. BloodThirst is the pre-show ritual now.",
-      name: "ONYX",
-      role: "Industrial DJ, Mumbai",
-    },
-    {
-      quote: "Cold, crisp, and cinematic. The can alone pulls people in — the taste keeps them asking for more.",
-      name: "IRA SHADOW",
-      role: "Bar Manager, Bangalore",
-    },
-    {
-      quote: "I quit single-use plastic this year and BloodThirst made it effortless. Obsessively good design and flavor.",
-      name: "NISHA R.",
-      role: "Creative Director",
-    },
-    {
-      quote: "The packaging is insane. Everyone at the studio thought it was a limited-run art piece, not water.",
-      name: "VIKRAM K.",
-      role: "Photographer, Delhi",
-    },
-    {
-      quote: "Best mixer we've ever stocked. The branding draws people in, the taste seals the deal.",
-      name: "PRIYA M.",
-      role: "Lounge Owner, Goa",
-    },
-  ]
-
   return (
-    <div className="space-y-0">
-      {/* HERO */}
-      <HomeHero stats={stats} />
+    <>
+      <HomeHero />
 
-      {/* FEATURE GRID */}
-      <section className="section">
-        <div className="container space-y-10">
-          <div className="max-w-2xl">
-            <SplitTextReveal
-              text="Why BloodThirst hits harder."
-              as="h2"
-              className="h2"
-              stagger={0.035}
-            />
-            <Reveal delay={0.05}>
-              <p className="p mt-3">
-                We don&apos;t sip from plastic. We drink from armor. Every can is cold-forged minimalism engineered to keep
-                purity in and the apocalypse out.
-              </p>
-            </Reveal>
-          </div>
+      {/* Scrolling brand marquee divider */}
+      <div className="py-5 border-y border-white/[0.04] overflow-hidden">
+        <Marquee speed={25} pauseOnHover={false}>
+          {marqueeItems.map((text) => (
+            <span key={text} className="flex items-center gap-8 mx-8 shrink-0">
+              <span className="text-bone/15 text-[10px] md:text-xs tracking-[0.35em] uppercase font-cinzel whitespace-nowrap">
+                {text}
+              </span>
+              <span className="text-blood/25 text-[10px]">&diams;</span>
+            </span>
+          ))}
+        </Marquee>
+      </div>
 
-          <FeatureGrid features={features} />
-        </div>
-      </section>
-
-      {/* RITUAL */}
-      <HorizontalRitual ritualSteps={ritualSteps} />
-
-      {/* TESTIMONIALS */}
-      <ClipReveal direction="up">
-        <section className="section bg-ash/10 relative">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_100%,rgba(176,0,32,0.1),transparent_50%)] pointer-events-none" />
-          <div className="container space-y-10 relative z-10">
-            <div className="max-w-xl">
-              <SplitTextReveal text="Whispers from the coven" as="h2" className="h2" />
-              <Reveal delay={0.05}>
-                <p className="p mt-3">
-                  BloodThirst travels with artists, mixologists, and creators who thrive after dark. Here&apos;s what they&apos;re saying.
-                </p>
-              </Reveal>
-            </div>
-          </div>
-  
-          <div className="mt-14 relative z-10">
-            <ScrollSkew maxSkew={2.5} smooth={0.06}>
-              <Marquee speed={40} pauseOnHover>
-                {testimonials.map((t) => (
-                  <figure
-                    key={t.name}
-                    className="glass-panel w-[340px] shrink-0 md:w-[400px] border border-ash/40 hover:border-blood/30 transition-colors"
-                  >
-                    <blockquote className="text-sm text-offwhite/80 md:text-base leading-relaxed">&ldquo;{t.quote}&rdquo;</blockquote>
-                    <figcaption className="mt-6 text-sm uppercase tracking-wide text-bone/70">
-                      <TextScramble
-                        text={t.name}
-                        as="span"
-                        className="block font-semibold text-offwhite"
-                        triggerOnView
-                        triggerOnHover={false}
-                        speed={30}
-                        revealDelay={50}
-                      />
-                      <span className="opacity-70">{t.role}</span>
-                    </figcaption>
-                  </figure>
-                ))}
-              </Marquee>
-            </ScrollSkew>
-          </div>
-        </section>
-      </ClipReveal>
-
-      {/* FINAL CTA */}
-      <ClipReveal direction="up" delay={0.1}>
-        <section id="subscribe" className="section relative overflow-hidden scroll-mt-28">
-          {/* Intense red glow behind form */}
-          <div className="absolute inset-x-0 -top-10 mx-auto h-60 max-w-3xl rounded-full bg-blood/15 blur-[100px] pointer-events-none" />
-          
-          <Reveal>
-            <div className="glass-panel mx-auto max-w-3xl text-center border border-blood/20 p-12 relative z-10">
-              <SplitTextReveal text="Join the Unholy circle" as="h2" className="h2" />
-              <p className="p mt-4 text-lg text-offwhite/80 max-w-lg mx-auto">
-                Drops, perks, and first taste. No spam — just your new favorite ritual.
-              </p>
-  
-              <div className="mx-auto mt-10 max-w-md">
-                <SubscribeForm
-                  source="homepage"
-                  buttonLabel="Stay Unholy"
-                  formClassName="flex flex-col gap-3 sm:flex-row"
-                  inputClassName="flex-1 rounded-2xl border border-ash bg-ash/20 px-5 py-4 text-sm text-offwhite outline-none backdrop-blur-md transition hover:bg-ash/40 focus:border-blood focus:ring-2 focus:ring-blood/40"
-                  buttonClassName="btn btn-primary w-full px-8 sm:w-auto"
-                  statusClassName="text-sm text-offwhite/70"
-                />
-              </div>
-            </div>
-          </Reveal>
-        </section>
-      </ClipReveal>
-    </div>
+      <HomeShowcase />
+      <HomeManifesto />
+      <HomeRitual />
+      <HomeCTA />
+    </>
   )
 }

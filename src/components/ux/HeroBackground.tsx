@@ -1,54 +1,12 @@
-"use client"
-
-import { useEffect, useRef, useState } from "react"
-import * as THREE from "three"
-// @ts-ignore - Vanta doesn't have official types for all effects
-import FOG from "vanta/dist/vanta.fog.min"
-
 export default function HeroBackground() {
-  const [vantaEffect, setVantaEffect] = useState<any>(null)
-  const vantaRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!vantaEffect && vantaRef.current) {
-      setVantaEffect(
-        FOG({
-          el: vantaRef.current,
-          THREE,
-          mouseControls: true,
-          touchControls: true,
-          gyroControls: false,
-          minHeight: 200.0,
-          minWidth: 200.0,
-          highlightColor: 0x8b0000, // Deep crimson / blood red
-          midtoneColor: 0x470000, // Darker red
-          lowlightColor: 0x110000, // Near black
-          baseColor: 0x050505, // Obsidian black base
-          blurFactor: 0.6, // Keep it smooth and liquid-like
-          speed: 1.5, // Viscous, slow movement
-          zoom: 1.2,
-        })
-      )
-    }
-
-    return () => {
-      if (vantaEffect) {
-        vantaEffect.destroy()
-      }
-    }
-  }, [vantaEffect])
-
   return (
-    <div className="absolute inset-0 z-0 bg-[#050505]">
-      {/* The container for Vanta's WebGL canvas */}
-      <div ref={vantaRef} className="absolute inset-0 w-full h-full opacity-90" />
-      
-      {/* Dark overlay to ensure text readability */}
-      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
-      
-      {/* Gradient overlay for depth */}
-      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent pointer-events-none" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/40 pointer-events-none" />
+    <div className="absolute inset-0 z-0 overflow-hidden bg-[#050505]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(176,0,32,0.24),transparent_34%),radial-gradient(circle_at_80%_18%,rgba(120,0,18,0.18),transparent_30%),radial-gradient(circle_at_50%_72%,rgba(176,0,32,0.14),transparent_42%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.015)_0%,transparent_30%,transparent_70%,rgba(255,255,255,0.015)_100%)] opacity-70" />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.2)_0%,rgba(0,0,0,0.56)_100%)]" />
+      <div className="absolute left-[8%] top-[18%] h-56 w-56 rounded-full border border-blood/15 bg-blood/10 blur-3xl" />
+      <div className="absolute bottom-[8%] right-[10%] h-72 w-72 rounded-full border border-blood/10 bg-blood/10 blur-3xl" />
+      <div className="absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] [background-size:110px_110px]" />
     </div>
   )
 }

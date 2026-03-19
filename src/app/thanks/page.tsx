@@ -1,5 +1,4 @@
-import Link from "next/link"
-import { Suspense } from "react"
+import { readReceiptToken } from "@/lib/server/order-session"
 import { ThanksContent } from "./ThanksContent"
 
 export const metadata = {
@@ -7,21 +6,17 @@ export const metadata = {
   description: "Your order has been received. Check your email for confirmation and ritual tracking details."
 }
 
-export default function ThanksPage() {
-  return (
-    <Suspense fallback={<ThanksLoading />}>
-      <ThanksContent />
-    </Suspense>
-  )
+type ThanksPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
 }
 
-function ThanksLoading() {
+export default async function ThanksPage({ searchParams }: ThanksPageProps) {
+  const resolvedSearchParams = (await searchParams) || {}
+  const receiptParam = resolvedSearchParams.receipt
+  const receiptToken = Array.isArray(receiptParam) ? receiptParam[0] : receiptParam
+  const receipt = readReceiptToken(receiptToken)
+
   return (
-    <div className="section">
-      <div className="container max-w-3xl text-center space-y-4">
-        <div className="h-12 w-12 mx-auto rounded-full bg-ash/30 animate-pulse" />
-        <p className="text-bone/50">Loading order details...</p>
-      </div>
-    </div>
+    <ThanksContent receipt={receipt} />
   )
 }

@@ -10,7 +10,10 @@ export interface Env {
   MAILJET_API_KEY: string
   MAILJET_SECRET: string
   MAILJET_TEMPLATE_ID: string
+  PUBLIC_SITE_URL?: string
 }
+
+const MAX_BODY_BYTES = 16 * 1024
 
 export default {
   /**
@@ -26,18 +29,45 @@ export default {
     if (request.method !== 'POST') {
       return new Response('Method not allowed', { status: 405 })
     }
+    const origin = request.headers.get('origin')
+    const allowedOrigins = [env.PUBLIC_SITE_URL, new URL(request.url).origin]
+      .filter(Boolean)
+      .map((value) => String(value).replace(/\/$/, ''))
+    if (!origin || !allowedOrigins.includes(origin.replace(/\/$/, ''))) {
+      return Response.json({ ok: false, error: 'Request origin is not allowed.' }, { status: 403 })
+    }
+    const contentLength = Number(request.headers.get('content-length') || 0)
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      return Response.json({ ok: false, error: 'Submission is too large.' }, { status: 413 })
+    }
     const contentType = request.headers.get('content-type') || ''
     let data: any = {}
     if (contentType.includes('application/json')) {
-      data = await request.json()
+      const text = await request.text()
+      if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) {
+        return Response.json({ ok: false, error: 'Submission is too large.' }, { status: 413 })
+      }
+      data = JSON.parse(text)
     } else if (contentType.includes('application/x-www-form-urlencoded')) {
-      const form = await request.formData()
+      const text = await request.text()
+      if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) {
+        return Response.json({ ok: false, error: 'Submission is too large.' }, { status: 413 })
+      }
+      const form = new URLSearchParams(text)
       form.forEach((v, k) => data[k] = v)
     } else {
       return new Response('Unsupported content type', { status: 400 })
     }
 
+    if (data.company || data.website) {
+      return Response.json({ ok: true })
+    }
+
     const email = String(data.email || '').trim()
+    const source = String(data.source || 'site').trim().slice(0, 40)
+    const name = String(data.name || '').trim().slice(0, 80)
+    const phone = String(data.phone || '').trim().slice(0, 24)
+    const message = String(data.message || '').trim().slice(0, 2000)
     if (!email || !email.includes('@')) {
       return Response.json({ ok: false, error: 'Invalid email' }, { status: 400 })
     }
@@ -51,15 +81,14 @@ export default {
       },
       body: JSON.stringify({ records: [{ fields: {
         Email: email,
-        Name: data.name || '',
-        Phone: data.phone || '',
-        Message: data.message || '',
-        Source: data.source || 'site'
+        Name: name,
+        Phone: phone,
+        Message: message,
+        Source: source
       }}]})
     })
     if (!atRes.ok) {
-      const t = await atRes.text()
-      return Response.json({ ok: false, error: 'Airtable error', detail: t }, { status: 500 })
+      return Response.json({ ok: false, error: 'Unable to process this request.' }, { status: 500 })
     }
 
     // 2) Send Mailjet email (optional)
@@ -70,7 +99,7 @@ export default {
         TemplateID: Number(env.MAILJET_TEMPLATE_ID),
         TemplateLanguage: true,
         Subject: "Welcome to the circle",
-        Variables: { name: data.name || "friend" }
+        Variables: { name: name || "friend" }
       }]
     }
     const mj = await fetch("https://api.mailjet.com/v3.1/send", {

@@ -10,7 +10,6 @@ export function buildWelcomeEmailHtml({ unsubscribeUrl }: TemplateOptions): stri
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Your Damnation Is Served</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap');
     body { margin:0; padding:0; background:#000; color:#ddd; font-family:Arial,sans-serif; }
     .full-width { width:100%; background:#000; border-collapse:collapse; }
     .wrapper { max-width:600px; margin:20px auto; background:#1a1a1a; border-radius:10px; overflow:hidden; }
@@ -59,7 +58,7 @@ export function buildWelcomeEmailHtml({ unsubscribeUrl }: TemplateOptions): stri
               <td class="header-cell">
                 <h1 style="
                   margin:0;
-                  font-family:'Cinzel', serif;
+                  font-family:Georgia, serif;
                   font-size:48px;
                   line-height:1.1;
                   color:#ff1a1a;
@@ -87,21 +86,16 @@ export function buildWelcomeEmailHtml({ unsubscribeUrl }: TemplateOptions): stri
             </tr>
 
             <tr>
-              <td class="easter">
-                <a href="https://theunholy.co/bloodthirst-teaser" style="text-decoration:none;">
-                  <img src="https://theunholy.co/images/crimson.png" alt="Crimson Drop">
-                </a>
-                <div class="easter-text">
-                  Dare to click the drop… unlock the sin.
-                </div>
+              <td class="easter" style="color:#888; font-size:13px;">
+                Dare to click deeper into the Bloodverse when the next ritual lands.
               </td>
             </tr>
 
             <tr>
               <td class="social-cell">
-                <a href="https://instagram.com/theunholyco" style="text-decoration:none;"><img src="https://img.icons8.com/?size=100&id=32292&format=png&color=EA3323" alt="Instagram"></a>
-                <a href="https://facebook.com/@theunholyco" style="text-decoration:none;"><img src="https://www.iconsdb.com/icons/preview/red/facebook-xxl.png" alt="Facebook"></a>
-                <a href="https://x.com/theunholyco" style="text-decoration:none;"><img src="https://www.iconsdb.com/icons/preview/red/twitter-x-xxl.png" alt="X"></a>
+                <a href="https://instagram.com/theunholyco" style="color:#888; text-decoration:none; margin:0 8px;">Instagram</a>
+                <a href="https://facebook.com/@theunholyco" style="color:#888; text-decoration:none; margin:0 8px;">Facebook</a>
+                <a href="https://x.com/theunholyco" style="color:#888; text-decoration:none; margin:0 8px;">X</a>
               </td>
             </tr>
 

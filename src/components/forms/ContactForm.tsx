@@ -1,6 +1,7 @@
  "use client"
 
 import { FormEvent, useState } from "react"
+import { resolveSafeAction } from "@/lib/client/safe-action"
 
 type ContactFormProps = {
   action?: string
@@ -27,6 +28,7 @@ export function ContactForm({ action }: ContactFormProps) {
     email: "",
     phone: "",
     message: "",
+    company: "",
   })
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -39,24 +41,26 @@ export function ContactForm({ action }: ContactFormProps) {
 
     setStatus({ state: "sending" })
     try {
-      const formData = new FormData()
-      formData.append("source", "contact")
-      formData.append("name", form.name)
-      formData.append("email", form.email)
-      if (form.phone) formData.append("phone", form.phone)
-      formData.append("message", form.message)
-
-      const res = await fetch(action || "/api/contact", {
+      const res = await fetch(resolveSafeAction(action, "/api/contact"), {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "contact",
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          message: form.message,
+          company: form.company,
+        }),
       })
 
-      if (!res.ok) {
-        throw new Error("Failed to send.")
+      const payload = await res.json().catch(() => null)
+      if (!res.ok || !payload?.ok) {
+        throw new Error("Unable to send your message right now.")
       }
 
       setStatus({ state: "success" })
-      setForm({ name: "", email: "", phone: "", message: "" })
+      setForm({ name: "", email: "", phone: "", message: "", company: "" })
     } catch (error: any) {
       setStatus({ state: "error", message: error?.message ?? "Something went wrong." })
     }
@@ -64,6 +68,15 @@ export function ContactForm({ action }: ContactFormProps) {
 
   return (
     <form className="glass-panel space-y-4" onSubmit={onSubmit}>
+      <input
+        name="company"
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+        className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden opacity-0"
+        value={form.company}
+        onChange={(event) => setForm((prev) => ({ ...prev, company: event.target.value }))}
+      />
       <div>
         <label htmlFor="name" className="text-xs uppercase tracking-wide text-bone/60">
           Name

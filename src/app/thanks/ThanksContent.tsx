@@ -1,139 +1,156 @@
 "use client"
 
-import Link from "next/link"
-import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
+import { TransitionLink } from "@/components/ux/TransitionLink"
 
-export function ThanksContent() {
-  const params = useSearchParams()
-  const orderId = params.get("order")
-  const paymentId = params.get("pay")
-  const qty = params.get("qty")
-  const isVerified = params.get("verified") === "1"
+type ReceiptSummary = {
+  packId: string
+  qty: number
+} | null
+
+const steps = [
+  { num: "01", title: "Confirmation", desc: "Email with your order details within minutes." },
+  { num: "02", title: "Dispatch", desc: "Packed and handed to courier within 24–48 hours." },
+  { num: "03", title: "Delivered", desc: "Tracking link sent via email and SMS." },
+]
+
+// No opacity in initial states — page-transition-content CSS handles the fade.
+// Framer Motion only drives the subtle transforms.
+const fadeUp = (delay = 0) => ({
+  initial: { y: 16 },
+  animate: { y: 0 },
+  transition: { duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] as const },
+})
+
+export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
+  const isVerified = Boolean(receipt)
+  const qtyLabel = receipt ? `${receipt.qty} cans` : null
 
   return (
-    <div className="section">
-      <div className="container max-w-2xl space-y-8">
-        {/* Success icon */}
-        <div className="flex justify-center">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.1 }}
-            className="flex h-20 w-20 items-center justify-center rounded-full bg-blood/15 shadow-[0_0_40px_rgba(176,0,32,0.3)]"
-          >
-            <motion.svg
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="h-10 w-10 text-blood"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <motion.path d="M5 13l4 4L19 7" />
-            </motion.svg>
-          </motion.div>
-        </div>
+    <div className="relative min-h-[90vh] overflow-hidden">
+      {/* Ghost background text */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center select-none overflow-hidden"
+      >
+        <span className={`font-cinzel font-black leading-none ${isVerified ? "text-[22vw] text-bone/[0.045]" : "text-[28vw] text-blood/[0.12]"}`}>
+          {isVerified ? "YOURS" : "WAIT"}
+        </span>
+      </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-center space-y-3"
-        >
-          <h1 className="h1">{isVerified ? "Ritual Complete." : "Order Pending Verification."}</h1>
-          <p className="p">
+      <div className="relative z-10 mx-auto max-w-2xl px-4 py-32 md:py-40">
+
+        {/* ── Icon ── */}
+        <motion.div {...fadeUp(0)} className="mb-10 flex justify-center">
+          {isVerified ? (
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-blood/30 bg-blood/10 shadow-[0_0_48px_rgba(176,0,32,0.25)]">
+              <svg className="h-7 w-7 text-blood" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-bone/10 bg-bone/5">
+              <svg className="h-7 w-7 text-bone/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4M12 16h.01" />
+              </svg>
+            </div>
+          )}
+        </motion.div>
+
+        {/* ── Headline ── */}
+        <motion.div {...fadeUp(0.08)} className="text-center">
+          <p className="mb-4 text-[10px] uppercase tracking-[0.5em] text-blood/60">
+            {isVerified ? "Order confirmed" : "Pending verification"}
+          </p>
+          <h1 className="font-cinzel text-4xl font-bold text-offwhite md:text-5xl lg:text-6xl">
+            {isVerified ? "The ritual is complete." : "Awaiting confirmation."}
+          </h1>
+          <p className="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-bone/45 md:text-base">
             {isVerified
-              ? "Your order has been placed. We'll email confirmation and tracking details shortly."
-              : "We couldn't verify this payment session yet. Contact support if you were charged."}
+              ? "Your BloodThirst is on its way. Confirmation and tracking details will land in your inbox shortly."
+              : "We couldn't verify this payment session. If you were charged, contact us and we’ll investigate."}
           </p>
         </motion.div>
 
-        {/* Order details */}
-        {(orderId || paymentId) && (
+        {/* ── Unverified warning ── */}
+        {!isVerified && (
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35 }}
-            className="rounded-2xl border border-ash/40 bg-ash/15 p-5 space-y-3"
+            {...fadeUp(0.15)}
+            className="mt-8 rounded-xl border border-blood/20 bg-blood/[0.06] px-5 py-4 text-sm text-bone/60"
           >
-            <h3 className="text-xs uppercase tracking-wider text-bone/50">Order Details</h3>
-            <div className="space-y-2 text-sm">
-              {orderId && (
-                <div className="flex justify-between">
-                  <span className="text-bone/60">Order ID</span>
-                  <span className="font-mono text-xs text-offwhite">{orderId}</span>
-                </div>
-              )}
-              {paymentId && (
-                <div className="flex justify-between">
-                  <span className="text-bone/60">Payment ID</span>
-                  <span className="font-mono text-xs text-offwhite">{paymentId}</span>
-                </div>
-              )}
-              {qty && (
-                <div className="flex justify-between">
-                  <span className="text-bone/60">Quantity</span>
-                  <span className="text-offwhite">{qty} cans</span>
-                </div>
-              )}
+            If you completed payment and landed here, reach out via{" "}
+            <TransitionLink href="/contact" className="text-blood/70 underline underline-offset-2 hover:text-blood">
+              contact
+            </TransitionLink>{" "}
+            and we&apos;ll sort it immediately.
+          </motion.div>
+        )}
+
+        {/* ── Order details ── */}
+        {qtyLabel && (
+          <motion.div {...fadeUp(0.16)} className="mt-12">
+            <p className="mb-1 text-[10px] uppercase tracking-[0.4em] text-bone/30">Order details</p>
+            <div className="mt-4">
+              <div className="h-px bg-blood/[0.12]" />
+              {[
+                { label: "Quantity", value: qtyLabel, mono: false },
+              ]
+                .filter(Boolean)
+                .map((row) => (
+                  <div key={(row as { label: string }).label}>
+                    <div className="flex items-center justify-between py-4">
+                      <span className="text-xs uppercase tracking-widest text-bone/35">
+                        {(row as { label: string }).label}
+                      </span>
+                      <span className={`text-sm text-bone/70 ${(row as { mono: boolean }).mono ? "font-mono text-xs" : ""}`}>
+                        {(row as { value: string }).value}
+                      </span>
+                    </div>
+                    <div className="h-px bg-blood/[0.08]" />
+                  </div>
+                ))}
             </div>
           </motion.div>
         )}
 
-        {!isVerified && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="rounded-2xl border border-blood/30 bg-blood/10 p-5 text-sm text-bone/80"
-          >
-            This page is now gated behind server-side payment verification. If you completed payment and landed here unexpectedly,
-            reach out through support with your payment ID.
+        {/* ── What happens next ── */}
+        {isVerified && (
+          <motion.div {...fadeUp(0.22)} className="mt-12">
+            <p className="mb-1 text-[10px] uppercase tracking-[0.4em] text-bone/30">What happens next</p>
+            <div className="mt-4">
+              <div className="h-px bg-blood/[0.12]" />
+              {steps.map((step, i) => (
+                <motion.div key={step.num} {...fadeUp(0.28 + i * 0.07)}>
+                  <div className="grid grid-cols-[48px_1fr] gap-4 py-5">
+                    <span className="font-cinzel text-sm font-bold text-blood/40">{step.num}</span>
+                    <div>
+                      <p className="text-sm font-medium text-offwhite/80">{step.title}</p>
+                      <p className="mt-0.5 text-xs text-bone/40">{step.desc}</p>
+                    </div>
+                  </div>
+                  <div className="h-px bg-blood/[0.08]" />
+                </motion.div>
+              ))}
+            </div>
           </motion.div>
         )}
 
-        {/* What happens next */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45 }}
-          className="rounded-2xl border border-ash/40 bg-ash/15 p-5 space-y-4"
-        >
-          <h3 className="text-xs uppercase tracking-wider text-bone/50">What happens next</h3>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { step: "1", title: "Confirmation", desc: "Email with order details within minutes" },
-              { step: "2", title: "Dispatch", desc: "Packed and shipped within 24-48 hours" },
-              { step: "3", title: "Delivered", desc: "Tracking link sent via email and SMS" },
-            ].map((item) => (
-              <div key={item.step} className="flex gap-3 sm:flex-col sm:text-center">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blood/15 text-xs font-bold text-blood sm:mx-auto">
-                  {item.step}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-offwhite">{item.title}</p>
-                  <p className="text-xs text-bone/50">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* ── CTAs ── */}
+        <motion.div {...fadeUp(0.35)} className="mt-14 flex flex-wrap justify-center gap-4">
+          <TransitionLink href="/" className="btn btn-ghost px-6 py-3 text-sm">
+            Return Home
+          </TransitionLink>
+          <TransitionLink href="/contact" className="btn btn-ghost px-6 py-3 text-sm">
+            Contact Support
+          </TransitionLink>
+          {isVerified && (
+            <TransitionLink href="/drops" className="btn btn-primary px-6 py-3 text-sm">
+              Track the next drop
+            </TransitionLink>
+          )}
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.55 }}
-          className="flex flex-wrap justify-center gap-3"
-        >
-          <Link href="/" className="btn btn-ghost">Return Home</Link>
-          <Link href="/contact" className="btn btn-ghost">Contact Support</Link>
-          <Link href="/drops" className="btn btn-primary">Track the next drop</Link>
-        </motion.div>
       </div>
     </div>
   )
