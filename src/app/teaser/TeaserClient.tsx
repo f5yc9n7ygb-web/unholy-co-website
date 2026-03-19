@@ -7,7 +7,7 @@ import { Marquee } from "@/components/ux/Marquee"
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 // Update LAUNCH_DATE to your actual launch date before going live
-const LAUNCH_DATE = new Date("2026-06-01T00:00:00.000Z")
+const LAUNCH_DATE = new Date("2026-04-02T06:30:00.000Z") // Apr 2, 12:00 PM IST
 
 // Update these to your real social handles
 const SOCIALS = {
