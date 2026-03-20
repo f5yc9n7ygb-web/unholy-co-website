@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer"
 import { NextRequest } from "next/server"
+import type { KVNamespace } from "@/lib/server/kv"
 
 type RateLimitOptions = {
   bucket: string
@@ -23,13 +24,25 @@ globalThis.__unholyRateLimitStore = rateLimitStore
 export const FORM_BODY_LIMIT_BYTES = 16 * 1024
 export const ORDER_BODY_LIMIT_BYTES = 24 * 1024
 
+/**
+ * Returns the most-trustworthy client IP address.
+ *
+ * On Cloudflare, `cf-connecting-ip` is set by the edge and cannot be spoofed
+ * by the client, so we check it first.  `x-forwarded-for` is a fallback for
+ * non-Cloudflare environments (local dev, other proxies).
+ */
 export function getClientIp(request: NextRequest) {
+  const cfIp = request.headers.get("cf-connecting-ip")?.trim()
+  if (cfIp) {
+    return cfIp
+  }
+
   const forwardedFor = request.headers.get("x-forwarded-for")
   if (forwardedFor) {
     return forwardedFor.split(",")[0]?.trim() || "unknown"
   }
 
-  return request.headers.get("cf-connecting-ip")?.trim() || "unknown"
+  return "unknown"
 }
 
 export function validateRequestOrigin(request: NextRequest) {
@@ -69,10 +82,59 @@ export function validateContentLength(request: NextRequest, maxBytes: number) {
   return { ok: true as const }
 }
 
-export function checkRateLimit(request: NextRequest, options: RateLimitOptions) {
+/**
+ * Rate-limiter that uses Cloudflare KV when available and falls back to an
+ * in-memory Map for local development.
+ *
+ * @param kv  - pass the KVNamespace from `getKVNamespace()`, or `null`.
+ */
+export async function checkRateLimit(
+  request: NextRequest,
+  options: RateLimitOptions,
+  kv?: KVNamespace | null,
+) {
   const now = Date.now()
   const ip = getClientIp(request)
   const key = `${options.bucket}:${ip}`
+
+  // ── KV-backed path ──────────────────────────────────────────────────────────
+  if (kv) {
+    const raw = await kv.get(`rl:${key}`)
+    const existing: RateLimitRecord | null = raw ? JSON.parse(raw) : null
+
+    if (!existing || existing.resetAt <= now) {
+      const record: RateLimitRecord = { count: 1, resetAt: now + options.windowMs }
+      await kv.put(`rl:${key}`, JSON.stringify(record), {
+        expirationTtl: Math.ceil(options.windowMs / 1000) + 60,
+      })
+      return {
+        ok: true as const,
+        remaining: options.limit - 1,
+        retryAfterSeconds: Math.ceil(options.windowMs / 1000),
+      }
+    }
+
+    if (existing.count >= options.limit) {
+      return {
+        ok: false as const,
+        remaining: 0,
+        retryAfterSeconds: Math.max(1, Math.ceil((existing.resetAt - now) / 1000)),
+      }
+    }
+
+    existing.count += 1
+    await kv.put(`rl:${key}`, JSON.stringify(existing), {
+      expirationTtl: Math.ceil((existing.resetAt - now) / 1000) + 60,
+    })
+
+    return {
+      ok: true as const,
+      remaining: options.limit - existing.count,
+      retryAfterSeconds: Math.max(1, Math.ceil((existing.resetAt - now) / 1000)),
+    }
+  }
+
+  // ── In-memory fallback (local dev) ──────────────────────────────────────────
   const existing = rateLimitStore.get(key)
 
   if (!existing || existing.resetAt <= now) {

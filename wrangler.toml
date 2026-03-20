@@ -6,6 +6,13 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 
+# ─── KV Namespace (rate-limiting + idempotency) ──────────────────────────────
+# Create with: npx wrangler kv namespace create UNHOLY_KV
+# Then paste the returned id below.
+[[kv_namespaces]]
+binding = "UNHOLY_KV"
+id = "5b34c6b0f67c473296fdd3d10d8ce241"
+
 # ─── Environment Variables ────────────────────────────────────────────────────
 # DO NOT hardcode secrets or environment-specific URLs here!
 # Set these via Cloudflare Dashboard → Settings → Environment Variables:

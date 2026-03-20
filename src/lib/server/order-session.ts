@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer"
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto"
 import type { ShippingForm } from "@/lib/shop/types"
+import type { KVNamespace } from "@/lib/server/kv"
 
 type SignedEnvelope<T extends string, P> = {
   type: T
@@ -83,7 +84,29 @@ export function readSubscriptionToken(token?: string | null) {
   )
 }
 
-export function claimProcessedPayment(paymentId: string) {
+/**
+ * Idempotency guard for processed payments.
+ *
+ * Uses Cloudflare KV when available so the guard survives across edge
+ * isolates.  Falls back to the in-memory Map for local development.
+ *
+ * @returns `true` if the payment was claimed (first time), `false` if replay.
+ */
+export async function claimProcessedPayment(paymentId: string, kv?: KVNamespace | null) {
+  const kvKey = `pay:${paymentId}`
+
+  if (kv) {
+    const existing = await kv.get(kvKey)
+    if (existing) {
+      return false
+    }
+    await kv.put(kvKey, "1", {
+      expirationTtl: Math.ceil(PAYMENT_REPLAY_TTL_MS / 1000),
+    })
+    return true
+  }
+
+  // In-memory fallback
   const now = Date.now()
   purgeProcessedPayments(now)
 
@@ -95,10 +118,34 @@ export function claimProcessedPayment(paymentId: string) {
   return true
 }
 
-export function claimSingleUseKey(scope: string, key: string, ttlMs = SUBSCRIPTION_TTL_MS) {
+/**
+ * Idempotency guard for single-use keys (e.g. subscription double-submit).
+ *
+ * Uses Cloudflare KV when available, falls back to in-memory Map.
+ */
+export async function claimSingleUseKey(
+  scope: string,
+  key: string,
+  kv?: KVNamespace | null,
+  ttlMs = SUBSCRIPTION_TTL_MS,
+) {
+  const compositeKey = `${scope}:${key}`
+  const kvKey = `su:${compositeKey}`
+
+  if (kv) {
+    const existing = await kv.get(kvKey)
+    if (existing) {
+      return false
+    }
+    await kv.put(kvKey, "1", {
+      expirationTtl: Math.ceil(ttlMs / 1000),
+    })
+    return true
+  }
+
+  // In-memory fallback
   const now = Date.now()
   purgeSingleUseKeys(now)
-  const compositeKey = `${scope}:${key}`
 
   if (singleUseStore.has(compositeKey)) {
     return false
@@ -131,8 +178,8 @@ function verifyEnvelope<T extends string, P>(token: string | null | undefined, e
   }
 
   const expectedSignature = signValue(encoded)
-  const expectedBuffer = Buffer.from(expectedSignature)
-  const actualBuffer = Buffer.from(signature)
+  const expectedBuffer = Uint8Array.from(Buffer.from(expectedSignature))
+  const actualBuffer = Uint8Array.from(Buffer.from(signature))
   if (expectedBuffer.length !== actualBuffer.length || !timingSafeEqual(expectedBuffer, actualBuffer)) {
     return null
   }
@@ -157,10 +204,20 @@ function signValue(value: string) {
   return createHmac("sha256", getSigningSecret()).update(value).digest("base64url")
 }
 
+/**
+ * Returns the dedicated signing secret.
+ *
+ * IMPORTANT: We no longer fall back to `RAZORPAY_KEY_SECRET` because mixing a
+ * payment provider key with general-purpose HMAC signing is a security
+ * anti-pattern (rotating one would silently break the other).
+ */
 function getSigningSecret() {
-  const secret = process.env.SECURITY_SIGNING_SECRET || process.env.RAZORPAY_KEY_SECRET
+  const secret = process.env.SECURITY_SIGNING_SECRET
   if (!secret) {
-    throw new Error("SECURITY_SIGNING_SECRET is not configured.")
+    throw new Error(
+      "SECURITY_SIGNING_SECRET is not configured. " +
+        "Generate one with: openssl rand -base64 32"
+    )
   }
 
   return secret

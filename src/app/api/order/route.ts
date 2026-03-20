@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
 import type { ShippingForm } from "@/lib/shop/types"
 import { getRequiredEnv } from "@/lib/server/integrations"
+import { getKVNamespace } from "@/lib/server/kv"
 import {
   ORDER_SESSION_COOKIE,
   createOrderContextId,
@@ -41,11 +42,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Submission is too large." }, { status: 413 })
     }
 
-    const rateLimit = checkRateLimit(request, {
+    const kv = await getKVNamespace()
+    const rateLimit = await checkRateLimit(request, {
       bucket: "order-create",
       limit: 6,
       windowMs: 10 * 60 * 1000,
-    })
+    }, kv)
     if (!rateLimit.ok) {
       return NextResponse.json(
         { ok: false, error: "Too many attempts. Please try again later." },

@@ -37,10 +37,10 @@ function DesktopRitual() {
     offset: ["start start", "end end"],
   })
 
-  const x = useTransform(scrollYProgress, [0.05, 0.95], ["0%", "-66%"])
+  const x = useTransform(scrollYProgress, [0.05, 0.95], ["0%", "-72%"])
 
   return (
-    <section ref={containerRef} className="relative hidden h-[400vh] md:block">
+    <section ref={containerRef} className="relative hidden h-[400vh] overflow-x-hidden md:block">
       <div className="sticky top-0 flex h-screen items-center overflow-hidden">
         <motion.div style={{ x }} className="flex gap-6 pl-[10vw]">
           {steps.map((step) => (

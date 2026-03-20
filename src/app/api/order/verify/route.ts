@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer"
 import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
 import { getRequiredEnv, sendOrderConfirmationEmail, saveRecordToAirtable } from "@/lib/server/integrations"
+import { getKVNamespace } from "@/lib/server/kv"
 import {
   ORDER_SESSION_COOKIE,
   claimProcessedPayment,
@@ -33,11 +34,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Submission is too large." }, { status: 413 })
     }
 
-    const rateLimit = checkRateLimit(request, {
+    const kv = await getKVNamespace()
+    const rateLimit = await checkRateLimit(request, {
       bucket: "order-verify",
       limit: 10,
       windowMs: 10 * 60 * 1000,
-    })
+    }, kv)
     if (!rateLimit.ok) {
       return NextResponse.json(
         { ok: false, error: "Too many attempts. Please try again later." },
@@ -117,7 +119,7 @@ export async function POST(request: NextRequest) {
       throw new Error("Payment is not ready for fulfillment.")
     }
 
-    if (!claimProcessedPayment(paymentId)) {
+    if (!(await claimProcessedPayment(paymentId, kv))) {
       return NextResponse.json(
         { ok: false, error: "This payment has already been confirmed." },
         { status: 409 }
@@ -206,8 +208,8 @@ function isValidSignature(orderId: string, paymentId: string, signature: string,
     .update(`${orderId}|${paymentId}`)
     .digest("hex")
 
-  const expectedBuffer = Buffer.from(expected)
-  const actualBuffer = Buffer.from(signature)
+  const expectedBuffer = Uint8Array.from(Buffer.from(expected))
+  const actualBuffer = Uint8Array.from(Buffer.from(signature))
   if (expectedBuffer.length !== actualBuffer.length) {
     return false
   }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { parseRequestBody } from "@/lib/server/parse-body"
 import { createSubscriptionToken } from "@/lib/server/order-session"
 import { sendSubscriptionConfirmationEmail } from "@/lib/server/integrations"
+import { getKVNamespace } from "@/lib/server/kv"
 import {
   FORM_BODY_LIMIT_BYTES,
   checkRateLimit,
@@ -31,11 +32,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Submission is too large." }, { status: 413 })
     }
 
-    const rateLimit = checkRateLimit(request, {
+    const kv = await getKVNamespace()
+    const rateLimit = await checkRateLimit(request, {
       bucket: "subscribe",
       limit: 4,
       windowMs: 60 * 60 * 1000,
-    })
+    }, kv)
     if (!rateLimit.ok) {
       return NextResponse.json(
         { ok: false, error: "Too many attempts. Please try again later." },
