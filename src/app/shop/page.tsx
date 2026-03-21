@@ -1,8 +1,22 @@
+import type { Metadata } from "next"
 import { ShopClient } from "./ShopClient"
 
-export const metadata = {
-  title: "Shop BloodThirst — UNHOLY CO.",
-  description: "Order BloodThirst cans directly from the coven. Choose your ritual pack and get cold-forged hydration delivered."
+export const metadata: Metadata = {
+  title: "Shop BloodThirst",
+  description: "Order BloodThirst cans directly from the coven. Choose your ritual pack and get cold-forged hydration delivered.",
+  alternates: { canonical: '/shop' },
+  openGraph: {
+    title: "Shop BloodThirst — UNHOLY CO.",
+    description: "Order BloodThirst cans directly from the coven. Choose your ritual pack and get cold-forged hydration delivered.",
+    url: '/shop',
+    images: [{ url: '/og-hero.png', width: 1200, height: 630, alt: 'Shop BloodThirst — UNHOLY CO.' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Shop BloodThirst — UNHOLY CO.",
+    description: "Order BloodThirst cans directly from the coven. Choose your ritual pack and get cold-forged hydration delivered.",
+    images: ['/og-hero.png'],
+  },
 }
 
 /**

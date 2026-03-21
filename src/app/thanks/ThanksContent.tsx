@@ -1,6 +1,8 @@
 "use client"
 
+import { useEffect } from "react"
 import { motion } from "framer-motion"
+import { usePostHog } from "posthog-js/react"
 import { TransitionLink } from "@/components/ux/TransitionLink"
 
 type ReceiptSummary = {
@@ -25,6 +27,15 @@ const fadeUp = (delay = 0) => ({
 export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
   const isVerified = Boolean(receipt)
   const qtyLabel = receipt ? `${receipt.qty} cans` : null
+  const posthog = usePostHog()
+
+  useEffect(() => {
+    if (!isVerified || !receipt) return
+    posthog?.capture("order_completed", {
+      pack_id: receipt.packId,
+      quantity: receipt.qty,
+    })
+  }, [isVerified, receipt, posthog])
 
   return (
     <div className="relative min-h-[90vh] overflow-hidden">

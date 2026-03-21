@@ -2,6 +2,11 @@ import { SubscribeForm } from "@/components/forms/SubscribeForm"
 
 export const revalidate = 0
 
+export const metadata = {
+  title: "You Found the Mark — UNHOLY CO.",
+  robots: { index: false, follow: false },
+}
+
 /**
  * The landing page for users who scan a QR code on a BloodThirst can.
  * This component provides a call to action for users to sign up for perks and drops.

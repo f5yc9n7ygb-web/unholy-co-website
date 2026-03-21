@@ -1,102 +1,22 @@
 "use client"
 
-import Image from "next/image"
-import { useRef } from "react"
-import { motion, useScroll, useTransform } from "framer-motion"
-import Reveal from "@/components/ux/Reveal"
+import { useRef, useEffect, useState, Suspense } from "react"
+import { motion, useScroll, useTransform, useMotionValueEvent } from "framer-motion"
 import { TransitionLink } from "@/components/ux/TransitionLink"
 import { CountUp } from "@/components/ux/CountUp"
+import { PACKS } from "@/lib/shop/catalog"
 
-/* ─── Sub-components ─── */
-
-function TimelineNode({
-  act,
-  title,
-  description,
-  side,
-}: {
-  act: string
-  title: string
-  description: string
-  side: "left" | "right"
-}) {
-  return (
-    <div className="relative md:grid md:grid-cols-2 md:gap-12">
-      {/* Dot on the center line (desktop) */}
-      <div className="absolute left-1/2 top-1 hidden h-2.5 w-2.5 -translate-x-1/2 rounded-full border border-blood/40 bg-blood/20 md:block" />
-
-      {side === "left" ? (
-        <>
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
-            className="md:pr-12 md:text-right"
-          >
-            <span className="font-cinzel text-[10px] uppercase tracking-[0.4em] text-blood/60">
-              {act}
-            </span>
-            <h3 className="mt-2 font-cinzel text-xl font-bold text-offwhite md:text-2xl">
-              {title}
-            </h3>
-            <p className="mt-3 text-sm leading-relaxed text-bone/50 md:text-base">
-              {description}
-            </p>
-          </motion.div>
-          <div className="hidden md:block" />
-        </>
-      ) : (
-        <>
-          <div className="hidden md:block" />
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
-            className="md:pl-12"
-          >
-            <span className="font-cinzel text-[10px] uppercase tracking-[0.4em] text-blood/60">
-              {act}
-            </span>
-            <h3 className="mt-2 font-cinzel text-xl font-bold text-offwhite md:text-2xl">
-              {title}
-            </h3>
-            <p className="mt-3 text-sm leading-relaxed text-bone/50 md:text-base">
-              {description}
-            </p>
-          </motion.div>
-        </>
-      )}
-    </div>
-  )
-}
+/* ─── Lazy-load the heavy 3D scene ─── */
+import dynamic from "next/dynamic"
+const CinematicCanScene = dynamic(
+  () =>
+    import("@/components/3d/CinematicCanScene").then((m) => ({
+      default: m.CinematicCanScene,
+    })),
+  { ssr: false }
+)
 
 /* ─── Data ─── */
-
-const tastingNotes = [
-  {
-    act: "Act I",
-    title: "Opening Hit",
-    description:
-      "Bright mineral snap — a cold slap of alpine clarity that wakes the palate like a midnight siren.",
-    side: "left" as const,
-  },
-  {
-    act: "Act II",
-    title: "Mid-Palate",
-    description:
-      "Smooth bicarbonate body, ghost of calcium sweetness. Himalayan mineral clarity keeps things razor clean.",
-    side: "right" as const,
-  },
-  {
-    act: "Act III",
-    title: "Finale",
-    description:
-      "Clean, dry exit — zero aftertaste, full reset. Noble finish that lingers just long enough to remind you you're alive.",
-    side: "left" as const,
-  },
-]
 
 const specs = [
   { value: "500", unit: "ml", label: "Format" },
@@ -122,204 +42,289 @@ const minerals = [
     desc: "Electrolyte balance, blood pressure. The reason your body doesn't stage a full revolt after the third encore.",
   },
   {
-    symbol: "HCO₃",
+    symbol: "HCO\u2083",
     name: "Bicarbonates",
     desc: "Natural alkalinity. Clean, smooth finish — mineral water's signature without the wellness lecture.",
   },
 ]
 
-/* ─── Main Component ─── */
+/* ─── Scroll-synced text overlay ─── */
+
+function ScrollText({
+  children,
+  enterAt,
+  exitAt,
+  scrollProgress,
+  className = "",
+  align = "right",
+  startVisible = false,
+}: {
+  children: React.ReactNode
+  enterAt: number
+  exitAt: number
+  scrollProgress: ReturnType<typeof useScroll>["scrollYProgress"]
+  className?: string
+  align?: "left" | "right" | "center"
+  startVisible?: boolean
+}) {
+  const opacity = useTransform(scrollProgress,
+    startVisible
+      ? [exitAt - 0.03, exitAt]
+      : [enterAt, enterAt + 0.02, exitAt - 0.02, exitAt],
+    startVisible
+      ? [1, 0]
+      : [0, 1, 1, 0]
+  )
+
+  const y = useTransform(scrollProgress,
+    startVisible
+      ? [exitAt - 0.03, exitAt]
+      : [enterAt, enterAt + 0.03, exitAt - 0.03, exitAt],
+    startVisible
+      ? [0, -30]
+      : [40, 0, 0, -30]
+  )
+
+  const positionClass =
+    align === "right"
+      ? "right-4 md:right-8 lg:right-16 w-[42%] min-w-[260px] max-w-md"
+      : align === "left"
+        ? "left-4 md:left-8 lg:left-16 w-[42%] min-w-[260px] max-w-md"
+        : "left-1/2 -translate-x-1/2 max-w-2xl text-center"
+
+  return (
+    <motion.div
+      className={`pointer-events-none absolute top-1/2 -translate-y-1/2 z-20 ${positionClass} ${className}`}
+      style={{ opacity, y }}
+    >
+      {align !== "center" && (
+        <div className="absolute -inset-6 -z-10 rounded-2xl bg-gradient-to-r from-black/70 via-black/50 to-transparent" />
+      )}
+      {children}
+    </motion.div>
+  )
+}
+
+/* ─── Loading pulse ─── */
+
+function CanvasLoader() {
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <div
+        className="h-10 w-10 animate-pulse rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(176,0,32,0.8) 0%, rgba(176,0,32,0.1) 70%)",
+          boxShadow: "0 0 30px rgba(176,0,32,0.4)",
+        }}
+      />
+    </div>
+  )
+}
+
+/* ═══ Main Component ═══ */
 
 export function BloodThirstClient() {
-  /* Section 1: Cinematic Opener — scroll-driven */
-  const openerRef = useRef<HTMLDivElement>(null)
+  /* Master scroll container ref — the tall element that drives everything */
+  const containerRef = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({
-    target: openerRef,
-    offset: ["start start", "end start"],
+    target: containerRef,
+    offset: ["start start", "end end"],
   })
 
-  /* Letterbox bars shrink 15vh → 0 */
-  const barHeight = useTransform(scrollYProgress, [0, 0.5], ["15vh", "0vh"])
+  /* Mutable ref that the 3D scene reads every frame (no re-renders) */
+  const progressRef = useRef(0)
+  useMotionValueEvent(scrollYProgress, "change", (v) => {
+    progressRef.current = v
+  })
 
-  /* Can scales up, fades in */
-  const canScale = useTransform(scrollYProgress, [0, 0.5], [0.85, 1])
-  const canOpacity = useTransform(scrollYProgress, [0, 0.3], [0.6, 1])
+  /* 3D mounted state */
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
-  /* Title drifts up */
-  const titleY = useTransform(scrollYProgress, [0, 0.5], [16, 0])
-
-  /* Tagline fades in after bars start receding */
-  const taglineOpacity = useTransform(scrollYProgress, [0.2, 0.5], [0, 1])
+  /* Atmospheric blood glow — intensifies with scroll */
+  const glowOpacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.03, 0.08, 0.15])
+  const vignetteOpacity = useTransform(scrollYProgress, [0, 0.3], [0.8, 0.4])
 
   return (
     <>
-      {/* ═══ Section 1: CINEMATIC OPENER ═══ */}
-      <section ref={openerRef} className="relative h-[150vh]">
-        <div className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden">
-          {/* Subtle static radial gradient — NOT animated orbs */}
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(176,0,32,0.06)_0%,transparent_70%)]" />
+      {/* ═══ THE SCROLL CONTAINER — this is the "tall" element ═══
+          600vh gives us room for all the cinematic beats */}
+      <div ref={containerRef} className="relative h-[600vh]">
 
-          {/* Letterbox bar — top */}
+        {/* ── Sticky viewport: 3D canvas + text overlays ── */}
+        <div className="sticky top-0 h-screen w-full overflow-hidden">
+
+          {/* Atmospheric background layers */}
           <motion.div
-            className="pointer-events-none absolute inset-x-0 top-0 z-30 bg-black"
-            style={{ height: barHeight }}
+            className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_center,rgba(176,0,32,0.15)_0%,transparent_70%)]"
+            style={{ opacity: glowOpacity }}
           />
-          {/* Letterbox bar — bottom */}
           <motion.div
-            className="pointer-events-none absolute inset-x-0 bottom-0 z-30 bg-black"
-            style={{ height: barHeight }}
+            className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_center,transparent_50%,black_100%)]"
+            style={{ opacity: vignetteOpacity }}
           />
 
-          {/* Can — static centered, scales on scroll */}
-          <motion.div
-            className="relative z-10"
-            style={{ scale: canScale, opacity: canOpacity }}
-          >
-            <Image
-              src="/can.png"
-              alt="BLOODTHIRST by UNHOLY CO."
-              width={200}
-              height={360}
-              priority
-              className="drop-shadow-[0_20px_60px_rgba(0,0,0,0.6)]"
-            />
-          </motion.div>
+          {/* 3D Canvas — full screen */}
+          <div className="absolute inset-0 z-10">
+            {mounted ? (
+              <Suspense fallback={<CanvasLoader />}>
+                <CinematicCanScene scrollProgress={progressRef} />
+              </Suspense>
+            ) : (
+              <CanvasLoader />
+            )}
+          </div>
 
-          {/* Title block — below can */}
+          {/* ── Text overlays synced to scroll ── */}
+
+          {/* Act 0: Title card — fades IN after the mystery close-up reveals the can */}
           <motion.div
-            className="relative z-20 mt-8 text-center px-4"
-            style={{ y: titleY }}
+            className="pointer-events-none absolute inset-x-0 top-[15%] z-20 mx-auto w-full max-w-3xl text-center px-8"
+            style={{
+              opacity: useTransform(scrollYProgress, [0.08, 0.11, 0.15, 0.18], [0, 1, 1, 0]),
+              y: useTransform(scrollYProgress, [0.08, 0.11, 0.15, 0.18], [30, 0, 0, -30]),
+            }}
           >
-            <p className="text-[9px] uppercase tracking-[0.5em] text-bone/25 mb-3 md:text-[10px]">
+            <p className="mb-3 text-[9px] uppercase tracking-[0.5em] text-bone/25 md:text-[10px]">
               UNHOLY CO.
             </p>
-            <h1 className="font-cinzel text-4xl font-bold uppercase tracking-[0.12em] text-offwhite md:text-5xl lg:text-6xl">
+            <h1 className="font-cinzel text-3xl font-bold uppercase tracking-[0.08em] text-offwhite sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl">
               BloodThirst
             </h1>
-            <motion.p
-              className="mt-4 text-[10px] md:text-xs uppercase tracking-[0.3em] text-bone/40"
-              style={{ opacity: taglineOpacity }}
-            >
+            <p className="mt-4 text-[10px] uppercase tracking-[0.3em] text-bone/40 md:text-xs">
               Natural mineral water armored in obsidian-black aluminum
-            </motion.p>
+            </p>
           </motion.div>
-        </div>
-      </section>
 
-      {/* ═══ Section 2: STICKY PRODUCT + SCROLLING EDITORIAL ═══ */}
-      <section className="relative py-24 md:py-0">
-        <div className="mx-auto max-w-6xl px-4">
-          {/* Mobile: can shown once above text */}
-          <div className="mb-16 flex justify-center md:hidden">
-            <Image
-              src="/can.png"
-              alt="BloodThirst can"
-              width={140}
-              height={260}
-              className="drop-shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
-            />
-          </div>
+          {/* Act 1: The Elixir — can on RIGHT, text on LEFT */}
+          <ScrollText
+            scrollProgress={scrollYProgress}
+            enterAt={0.18}
+            exitAt={0.32}
+            align="left"
+          >
+            <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
+              The Elixir
+            </p>
+            <p className="text-lg leading-relaxed text-bone/70 md:text-xl">
+              BloodThirst is not just water. It never claimed to be. Natural mineral
+              water from Himalayan volcanic geology at 11,000 feet — sealed in matte
+              obsidian-black aluminum, because the contents finally warrant the
+              packaging.
+            </p>
+          </ScrollText>
 
-          <div className="md:grid md:grid-cols-2 md:gap-16">
-            {/* Left: Sticky can (desktop only) */}
-            <div className="hidden md:block">
-              <div className="sticky top-0 flex h-screen items-center justify-center">
-                {/* Thin blood thread line behind can */}
-                <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-blood/20 to-transparent" />
-                <Image
-                  src="/can.png"
-                  alt="BloodThirst can"
-                  width={180}
-                  height={340}
-                  className="relative z-10 drop-shadow-[0_20px_60px_rgba(0,0,0,0.5)]"
-                />
-              </div>
-            </div>
+          {/* Act 2: The Source — can on LEFT, text on RIGHT */}
+          <ScrollText
+            scrollProgress={scrollYProgress}
+            enterAt={0.39}
+            exitAt={0.50}
+            align="right"
+          >
+            <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
+              The Source
+            </p>
+            <p className="text-lg leading-relaxed text-bone/70 md:text-xl">
+              The Himalayas took 50 million years to form. The water had time to get
+              interesting — filtered through ancient volcanic rock, picking up calcium,
+              magnesium, potassium, and bicarbonates along the way.
+              Nature&apos;s own mineral formula.
+            </p>
+          </ScrollText>
 
-            {/* Right: Scrolling editorial blocks */}
-            <div className="space-y-32 md:space-y-48 md:py-[30vh]">
-              <Reveal>
-                <div>
-                  <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
-                    The Elixir
-                  </p>
-                  <p className="text-lg leading-relaxed text-bone/60 md:text-xl">
-                    BloodThirst is not just water. It never claimed to be. Natural mineral
-                    water from Himalayan volcanic geology at 11,000 feet — sealed in matte
-                    obsidian-black aluminum, because the contents finally warrant the
-                    packaging. Every sip is deliberate. Unapologetic. Hydration with a point
-                    of view.
-                  </p>
+          {/* Act 3: The Profile — camera orbits, text on right */}
+          <ScrollText
+            scrollProgress={scrollYProgress}
+            enterAt={0.54}
+            exitAt={0.63}
+            align="right"
+          >
+            <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
+              The Profile
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              {minerals.map((m) => (
+                <div key={m.symbol} className="border-l border-blood/20 pl-3">
+                  <span className="font-cinzel text-2xl font-black text-blood/40">
+                    {m.symbol}
+                  </span>
+                  <p className="mt-1 text-xs text-bone/50">{m.name}</p>
                 </div>
-              </Reveal>
-
-              <Reveal>
-                <div>
-                  <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
-                    The Source
-                  </p>
-                  <p className="text-lg leading-relaxed text-bone/60 md:text-xl">
-                    The Himalayas took 50 million years to form. The water had time to get
-                    interesting — filtered through ancient volcanic rock, picking up calcium,
-                    magnesium, potassium, and bicarbonates along the way.
-                    Nature&apos;s own mineral formula. We put it in a can. You&apos;re
-                    welcome.
-                  </p>
-                </div>
-              </Reveal>
-
-              <Reveal>
-                <div>
-                  <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
-                    The Stand
-                  </p>
-                  <p className="text-lg leading-relaxed text-bone/60 md:text-xl">
-                    Zero plastic, because the planet has enough problems. Zero compromise,
-                    because frankly so do you. Sealed in recycled aluminum for backstage
-                    riders, midnight creatives, and everyone who quietly decided that
-                    &apos;whatever&apos;s in the fridge&apos; stopped being enough.
-                  </p>
-                </div>
-              </Reveal>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ Section 3: TASTING NOTES — Vertical Timeline ═══ */}
-      <section className="relative overflow-hidden py-24 md:py-32">
-        <div className="mx-auto max-w-4xl px-4">
-          <Reveal>
-            <div className="text-center">
-              <p className="mb-2 text-[10px] uppercase tracking-[0.4em] text-bone/40">
-                Taste Profile
-              </p>
-              <h2 className="font-cinzel text-3xl font-bold text-offwhite md:text-4xl lg:text-5xl">
-                Three acts of clarity
-              </h2>
-            </div>
-          </Reveal>
-
-          {/* Timeline container */}
-          <div className="relative mt-16 md:mt-24">
-            {/* Centered blood line (desktop only) */}
-            <div className="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-blood/20 to-transparent md:block" />
-
-            <div className="space-y-12 md:space-y-20">
-              {tastingNotes.map((note) => (
-                <TimelineNode key={note.act} {...note} />
               ))}
             </div>
-          </div>
+            <p className="mt-4 text-sm text-bone/40">
+              We didn&apos;t add anything. Nature was already showing off.
+            </p>
+          </ScrollText>
+
+          {/* Act 4: The Stand — can on RIGHT, text on LEFT */}
+          <ScrollText
+            scrollProgress={scrollYProgress}
+            enterAt={0.67}
+            exitAt={0.78}
+            align="left"
+          >
+            <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
+              The Stand
+            </p>
+            <p className="text-lg leading-relaxed text-bone/70 md:text-xl">
+              Zero plastic, because the planet has enough problems. Zero compromise,
+              because frankly so do you. Sealed in recycled aluminum for backstage
+              riders, midnight creatives, and everyone who quietly decided that
+              &apos;whatever&apos;s in the fridge&apos; stopped being enough.
+            </p>
+          </ScrollText>
+
+          {/* Act 5: CTA — can left with scale punch, text right */}
+          <ScrollText
+            scrollProgress={scrollYProgress}
+            enterAt={0.82}
+            exitAt={1.01}
+            align="right"
+          >
+            <h2 className="font-cinzel text-4xl font-bold text-offwhite md:text-5xl lg:text-6xl">
+              Begin the ritual.
+            </h2>
+            <div className="pointer-events-auto mt-10 flex flex-col items-start gap-4">
+              <TransitionLink
+                href="/shop"
+                className="btn btn-primary px-10 py-3.5 text-sm"
+              >
+                Shop Now
+              </TransitionLink>
+              <TransitionLink
+                href="/bloodverse"
+                className="text-xs uppercase tracking-[0.3em] text-bone/30 transition-colors hover:text-blood/60"
+              >
+                or explore the Bloodverse
+              </TransitionLink>
+            </div>
+          </ScrollText>
+
+          {/* Scroll indicator — fades out as user scrolls */}
+          <motion.div
+            className="absolute bottom-8 left-1/2 z-30 -translate-x-1/2"
+            style={{
+              opacity: useTransform(scrollYProgress, [0, 0.03], [1, 0]),
+            }}
+          >
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-[9px] uppercase tracking-[0.4em] text-bone/30">
+                Scroll
+              </span>
+              <div className="h-8 w-px bg-gradient-to-b from-blood/40 to-transparent animate-pulse" />
+            </div>
+          </motion.div>
         </div>
-      </section>
+      </div>
 
-      {/* ═══ Section 4: SPECS — Counting Numbers ═══ */}
-      <section className="relative overflow-hidden py-24 md:py-32">
+      {/* ═══ BELOW THE FOLD — Traditional sections after the cinematic experience ═══ */}
+
+      {/* Specs */}
+      <section className="relative overflow-hidden bg-black py-24 md:py-32">
         <div className="mx-auto max-w-5xl px-4">
-          {/* Top rule */}
           <div className="h-px bg-blood/10" />
-
           <div className="grid grid-cols-2 gap-8 py-16 md:grid-cols-4 md:gap-12 md:py-20">
             {specs.map((spec) => (
               <div key={spec.label} className="text-center">
@@ -338,96 +343,172 @@ export function BloodThirstClient() {
               </div>
             ))}
           </div>
-
-          {/* Bottom rule */}
           <div className="h-px bg-blood/10" />
         </div>
       </section>
 
-      {/* ═══ Section 5: THE MINERALS ═══ */}
-      <section className="relative overflow-hidden py-24 md:py-32">
+      {/* Social Proof */}
+      <section className="relative overflow-hidden bg-black py-20 md:py-28">
         <div className="mx-auto max-w-5xl px-4">
-          <Reveal>
-            <div>
-              <p className="mb-2 text-[10px] uppercase tracking-[0.4em] text-bone/40">
-                The Profile
-              </p>
-              <h2 className="font-cinzel text-3xl font-bold text-offwhite md:text-4xl lg:text-5xl">
-                We didn&apos;t add anything.
-              </h2>
-              <p className="mt-3 text-sm text-bone/40 md:text-base">
-                Nature was already showing off.
-              </p>
-            </div>
-          </Reveal>
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="mb-12 text-center text-[10px] uppercase tracking-[0.5em] text-bone/30 md:mb-16 md:text-xs"
+          >
+            What they&apos;re saying
+          </motion.p>
 
-          <div className="relative mt-12 grid grid-cols-1 gap-px bg-blood/[0.12] sm:grid-cols-2 md:mt-16">
-            {minerals.map((m, i) => (
-              <motion.div
-                key={m.symbol}
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-3 md:gap-6">
+            {[
+              {
+                quote: "The most unnecessarily cool water brand I\u2019ve ever seen. And it actually tastes incredible.",
+                author: "Midnight creative",
+                detail: "Mumbai",
+              },
+              {
+                quote: "I bought it for the can. I stayed for the water. Now I keep buying it for both.",
+                author: "Weekend warrior",
+                detail: "Delhi",
+              },
+              {
+                quote: "Finally, water that doesn\u2019t pretend to be healthy. It just is. The skull helps.",
+                author: "True believer",
+                detail: "Bangalore",
+              },
+            ].map((t, i) => (
+              <motion.blockquote
+                key={i}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.6, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
-                className="bg-[#080808] p-8 md:p-10"
+                transition={{
+                  duration: 0.6,
+                  delay: i * 0.1,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
+                className="relative rounded-xl border border-white/[0.04] bg-[#080808] p-8"
               >
-                <span className="font-cinzel text-5xl font-black text-blood/25 md:text-6xl">
-                  {m.symbol}
+                <span className="absolute -top-3 left-6 font-cinzel text-4xl font-black text-blood/20">
+                  &ldquo;
                 </span>
-                <h3 className="mt-4 font-cinzel text-lg font-bold text-offwhite md:text-xl">
-                  {m.name}
-                </h3>
-                <p className="mt-3 text-sm leading-relaxed text-bone/50 md:text-base">
-                  {m.desc}
+                <p className="text-sm leading-relaxed text-bone/60 md:text-base">
+                  {t.quote}
                 </p>
-              </motion.div>
+                <footer className="mt-5 flex items-center gap-3">
+                  <div className="h-px w-6 bg-blood/30" />
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-offwhite/70">
+                      {t.author}
+                    </p>
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-bone/30">
+                      {t.detail}
+                    </p>
+                  </div>
+                </footer>
+              </motion.blockquote>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══ Section 6: CTA — Clean Close ═══ */}
-      <section className="relative overflow-hidden py-32 md:py-40">
-        {/* Gradient into footer */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] bg-gradient-to-t from-black/80 to-transparent" />
+      {/* Pack Selector */}
+      <section className="relative overflow-hidden bg-black py-24 md:py-32">
+        {/* Atmospheric glow */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(50% 40% at 50% 30%, rgba(176,0,32,0.06), transparent 70%)",
+          }}
+        />
 
-        <div className="relative z-10 mx-auto max-w-4xl px-4 text-center">
+        <div className="relative mx-auto max-w-5xl px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="mb-12 text-center md:mb-16"
           >
-            <h2 className="font-cinzel text-4xl font-bold text-offwhite md:text-5xl lg:text-6xl">
-              Begin the ritual.
+            <p className="mb-3 text-[10px] uppercase tracking-[0.5em] text-bone/30 md:text-xs">
+              Choose your ritual
+            </p>
+            <h2 className="font-cinzel text-3xl font-bold text-offwhite md:text-4xl lg:text-5xl">
+              Claim your supply.
             </h2>
           </motion.div>
 
-          <div className="mt-10 flex flex-col items-center gap-4">
-            <TransitionLink
-              href="/shop"
-              className="btn btn-primary px-10 py-3.5 text-sm"
-            >
-              Shop Now
-            </TransitionLink>
-            <TransitionLink
-              href="/bloodverse"
-              className="text-xs uppercase tracking-[0.3em] text-bone/30 transition-colors hover:text-blood/60"
-            >
-              or explore the Bloodverse
-            </TransitionLink>
-          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:gap-5">
+            {PACKS.map((pack, i) => {
+              const isFeatured = !!pack.tag
+              return (
+                <motion.div
+                  key={pack.id}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{
+                    duration: 0.6,
+                    delay: i * 0.1,
+                    ease: [0.16, 1, 0.3, 1],
+                  }}
+                  className={`group relative flex flex-col overflow-hidden rounded-xl border p-7 transition-all duration-300 hover:border-blood/30 ${
+                    isFeatured
+                      ? "border-blood/20 bg-[#0a0608]"
+                      : "border-white/[0.05] bg-[#080808]"
+                  }`}
+                >
+                  {/* Featured tag */}
+                  {pack.tag && (
+                    <span className="absolute right-4 top-4 rounded-full border border-blood/30 bg-blood/10 px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.25em] text-blood">
+                      {pack.tag}
+                    </span>
+                  )}
 
-          {/* Faded can sinking into gradient */}
-          <div className="pointer-events-none mt-20 flex justify-center">
-            <Image
-              src="/can.png"
-              alt=""
-              width={120}
-              height={230}
-              className="opacity-[0.15] translate-y-8"
-              aria-hidden="true"
-            />
+                  {/* Large decorative number */}
+                  <span className="pointer-events-none select-none font-cinzel text-6xl font-black text-offwhite/[0.03]">
+                    {`0${i + 1}`}
+                  </span>
+
+                  <h3 className="mt-2 font-cinzel text-xl font-bold uppercase tracking-wide text-offwhite">
+                    {pack.title}
+                  </h3>
+                  <p className="mt-1 text-xs text-bone/40">
+                    {pack.qty} &times; BloodThirst 500ml
+                  </p>
+
+                  <div className="my-5 h-px bg-white/[0.05]" />
+
+                  <p className="text-sm leading-relaxed text-bone/50">
+                    {pack.blurb}
+                  </p>
+
+                  <div className="mt-auto pt-6">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="font-cinzel text-3xl font-black text-offwhite">
+                        ₹{pack.price.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[10px] text-bone/30">
+                      ₹{pack.perCan}/can
+                    </p>
+                  </div>
+
+                  <TransitionLink
+                    href="/shop"
+                    className={`mt-5 block w-full rounded-lg py-3 text-center text-xs font-semibold uppercase tracking-[0.2em] transition-all duration-300 ${
+                      isFeatured
+                        ? "bg-blood text-offwhite hover:bg-[#8a0019] hover:text-white"
+                        : "border border-white/[0.08] bg-white/[0.03] text-bone/60 hover:border-blood/30 hover:bg-blood/10 hover:text-offwhite"
+                    }`}
+                  >
+                    Select Pack
+                  </TransitionLink>
+                </motion.div>
+              )
+            })}
           </div>
         </div>
       </section>

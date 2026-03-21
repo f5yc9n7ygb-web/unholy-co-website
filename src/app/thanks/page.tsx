@@ -3,7 +3,8 @@ import { ThanksContent } from "./ThanksContent"
 
 export const metadata = {
   title: "Thank You — UNHOLY CO.",
-  description: "Your order has been received. Check your email for confirmation and ritual tracking details."
+  description: "Your order has been received. Check your email for confirmation and ritual tracking details.",
+  robots: { index: false, follow: false },
 }
 
 type ThanksPageProps = {
