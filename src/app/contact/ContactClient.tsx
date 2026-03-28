@@ -42,6 +42,7 @@ export function ContactClient() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (status.state === "sending") return // prevent double submit
     if (!form.name || !form.email || !form.message) {
       setStatus({ state: "error", message: "Name, email, and message are required." })
       return
@@ -94,12 +95,14 @@ export function ContactClient() {
             {/* Headline with blinking cursor */}
             <h1 className="font-cinzel text-4xl font-bold text-offwhite md:text-5xl lg:text-6xl">
               Let&apos;s conspire.
-              <motion.span
-                aria-hidden="true"
-                animate={{ opacity: [1, 0] }}
-                transition={{ duration: 0.6, repeat: Infinity, repeatType: "reverse", ease: "linear" }}
-                className="ml-2 inline-block h-[0.85em] w-[2px] translate-y-[0.05em] bg-blood align-middle"
-              />
+              {status.state !== "success" && (
+                <motion.span
+                  aria-hidden="true"
+                  animate={{ opacity: [1, 0] }}
+                  transition={{ duration: 0.6, repeat: Infinity, repeatType: "reverse", ease: "linear" }}
+                  className="ml-2 inline-block h-[0.85em] w-[2px] translate-y-[0.05em] bg-blood align-middle"
+                />
+              )}
             </h1>
 
             <p className="mt-6 max-w-sm text-base leading-relaxed text-bone/50">

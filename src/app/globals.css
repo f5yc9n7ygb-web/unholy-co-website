@@ -75,9 +75,11 @@ h1, h2, h3 { font-family: var(--font-cinzel), Georgia, serif; }
   background-position: center;
   background-size: 35%;
   mix-blend-mode: overlay;
-  transition: opacity .7s ease;
+  transition: opacity .7s cubic-bezier(0.23, 1, 0.32, 1), transform .7s cubic-bezier(0.23, 1, 0.32, 1);
 }
-.rune-bg:hover { opacity: .20; }
+@media (hover: hover) and (pointer: fine) {
+  .rune-bg:hover { opacity: .20; }
+}
 
 /* title “blood drip” */
 @keyframes drip {
@@ -88,16 +90,18 @@ h1, h2, h3 { font-family: var(--font-cinzel), Georgia, serif; }
 .title-drip {
   position: relative;
 }
-.title-drip:hover::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  width: 2px;
-  height: 0;
-  background: rgb(176 0 32); /* blood */
-  transform: translateX(-50%);
-  animation: drip 1s forwards;
+@media (hover: hover) and (pointer: fine) {
+  .title-drip:hover::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    width: 2px;
+    height: 0;
+    background: rgb(176 0 32); /* blood */
+    transform: translateX(-50%);
+    animation: drip 1s forwards;
+  }
 }
 /* ===== BLOODVERSE EFFECTS (always visible, Safari-safe) ===== */
 
@@ -144,19 +148,23 @@ h1, h2, h3 { font-family: var(--font-cinzel), Georgia, serif; }
 /* Title drip */
 @keyframes drip { 0%{height:0;opacity:1} 80%{height:1.4rem;opacity:1} 100%{height:1.4rem;opacity:0} }
 .title-drip { position: relative; }
-.title-drip:hover::after {
-  content: ""; position: absolute; left: 50%; top: 100%;
-  width: 2px; height: 0; background: rgb(176 0 32);
-  transform: translateX(-50%); animation: drip 1s forwards;
+@media (hover: hover) and (pointer: fine) {
+  .title-drip:hover::after {
+    content: ""; position: absolute; left: 50%; top: 100%;
+    width: 2px; height: 0; background: rgb(176 0 32);
+    transform: translateX(-50%); animation: drip 1s forwards;
+  }
 }
 
 /* Rune overlay (we’ll feed a data-URI inline) */
 .rune-bg {
   position: absolute; inset: 0; z-index: 0; pointer-events: none;
   opacity: .14; background-repeat: no-repeat; background-position: center;
-  background-size: 38%; mix-blend-mode: overlay; transition: opacity .6s ease, transform .6s ease;
+  background-size: 38%; mix-blend-mode: overlay; transition: opacity .6s cubic-bezier(0.23, 1, 0.32, 1), transform .6s cubic-bezier(0.23, 1, 0.32, 1);
 }
-.rune-bg:hover { opacity: .24; transform: scale(1.02); }
+@media (hover: hover) and (pointer: fine) {
+  .rune-bg:hover { opacity: .24; transform: scale(1.02); }
+}
 /* --- Button hover contrast fix --- */
 .btn:hover,
 button.btn:hover {
@@ -200,18 +208,20 @@ button.btn:hover {
     box-shadow:
       0 10px 40px rgba(0,0,0,0.35),
       inset 0 1px 0 rgba(255,255,255,0.04);
-    transition: transform 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+    transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1), border-color 0.4s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.4s cubic-bezier(0.23, 1, 0.32, 1);
   }
 
-  .glass-panel:hover {
-    transform: translateY(-4px);
-    border-color: rgba(176, 0, 32, 0.45);
-    box-shadow: 0 32px 120px rgba(176, 0, 32, 0.18);
+  @media (hover: hover) and (pointer: fine) {
+    .glass-panel:hover {
+      transform: translateY(-4px);
+      border-color: rgba(176, 0, 32, 0.45);
+      box-shadow: 0 32px 120px rgba(176, 0, 32, 0.18);
+    }
   }
 
   .stat-card {
     @apply relative rounded-xl border border-ash/50 bg-ash/20 backdrop-blur-md p-3;
-    transition: transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+    transition: transform 0.35s cubic-bezier(0.23, 1, 0.32, 1), border-color 0.35s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.35s cubic-bezier(0.23, 1, 0.32, 1);
   }
 
   .stat-card::before {
@@ -225,10 +235,12 @@ button.btn:hover {
     opacity: 0.9;
   }
 
-  .stat-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(176, 0, 32, 0.35);
-    box-shadow: 0 18px 60px rgba(176, 0, 32, 0.15);
+  @media (hover: hover) and (pointer: fine) {
+    .stat-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(176, 0, 32, 0.35);
+      box-shadow: 0 18px 60px rgba(176, 0, 32, 0.15);
+    }
   }
 
   .red-glow-strong {
@@ -275,7 +287,7 @@ button.btn:hover {
     position: absolute;
     inset: -40% -20%;
     pointer-events: none;
-    transition: transform 0.6s ease, opacity 0.6s ease;
+    transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.6s cubic-bezier(0.23, 1, 0.32, 1);
   }
 
   .micro-hero::before {
@@ -288,10 +300,12 @@ button.btn:hover {
     opacity: 0.55;
   }
 
-  .micro-hero:hover::before,
-  .micro-hero:hover::after {
-    transform: scale(1.05);
-    opacity: 0.9;
+  @media (hover: hover) and (pointer: fine) {
+    .micro-hero:hover::before,
+    .micro-hero:hover::after {
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
   }
 
   .micro-hero-content {
@@ -417,11 +431,13 @@ button.btn:hover {
   height: 1.5px;
   background: #B00020;
   transform: translateX(-50%);
-  transition: width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: width 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.nav-link:hover::after {
-  width: 100%;
+@media (hover: hover) and (pointer: fine) {
+  .nav-link:hover::after {
+    width: 100%;
+  }
 }
 
 /* ===== BUTTON SHINE SWEEP ===== */
@@ -438,11 +454,13 @@ button.btn:hover {
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-  transition: left 0.5s ease;
+  transition: left 0.4s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.btn-primary:hover::after {
-  left: 100%;
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover::after {
+    left: 100%;
+  }
 }
 
 /* ===== MARQUEE ===== */
@@ -474,7 +492,7 @@ button.btn:hover {
 /* ===== CLIP-PATH IMAGE REVEAL ===== */
 .clip-reveal {
   clip-path: inset(100% 0 0 0);
-  transition: clip-path 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: clip-path 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .clip-reveal.revealed {
@@ -494,7 +512,7 @@ button.btn:hover {
 }
 
 .animate-step-in {
-  animation: step-in 0.4s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: step-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* ===== CLICK RIPPLE ===== */
@@ -518,7 +536,7 @@ button.btn:hover {
   pointer-events: none;
   z-index: 9990;
   transform: translate(-50%, -50%);
-  animation: click-ripple-expand 0.6s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+  animation: click-ripple-expand 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
   box-shadow: 0 0 20px rgba(176, 0, 32, 0.3);
 }
 
@@ -621,7 +639,7 @@ button.btn:hover {
 @keyframes vault-node-pop {
   from {
     opacity: 0;
-    transform: scale(0);
+    transform: scale(0.6);
   }
   to {
     opacity: 1;
@@ -651,7 +669,7 @@ button.btn:hover {
 
 /* Rune button hover glow */
 .vault-rune-btn {
-  transition: transform 0.2s ease, border-color 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+  transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1), border-color 0.3s cubic-bezier(0.23, 1, 0.32, 1), background-color 0.3s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 /* ===== TEXT SCRAMBLE ===== */
@@ -677,17 +695,17 @@ button.btn:hover {
 
 .ch-hero-fade {
   opacity: 0;
-  animation: ch-fade-in 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: ch-fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .ch-hero-rise {
   opacity: 0;
-  animation: ch-rise-in 1s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: ch-rise-in 1s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Scene reveal on scroll via animation-timeline (with fallback) */
 .ch-scene-reveal {
-  animation: ch-scene-up 0.7s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: ch-scene-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-timeline: view();
   animation-range: entry 0% entry 30%;
 }
@@ -695,7 +713,7 @@ button.btn:hover {
 /* Fallback for browsers without scroll-driven animations */
 @supports not (animation-timeline: view()) {
   .ch-scene-reveal {
-    animation: ch-scene-up 0.6s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+    animation: ch-scene-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 }
 

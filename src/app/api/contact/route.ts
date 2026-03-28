@@ -79,15 +79,12 @@ export async function POST(request: NextRequest) {
       SubmittedAt: new Date().toISOString(),
     })
 
+    // Notify team and send auto-response in parallel (best-effort)
     try {
-      await notifyTeam({
-        name,
-        email,
-        message,
-        phone,
-        source,
-        inquiryType,
-      })
+      await Promise.all([
+        notifyTeam({ name, email, message, phone, source, inquiryType }),
+        sendAutoResponse(name, email),
+      ])
     } catch (notificationError) {
       console.error("Contact notification error:", notificationError)
     }
@@ -135,6 +132,41 @@ async function notifyTeam(payload: {
     subject: CONTACT_NOTIFICATION_SUBJECT,
     html,
     text: `New contact submission from ${payload.name} (${payload.email})`,
+  })
+}
+
+async function sendAutoResponse(name: string, email: string) {
+  const firstName = name.split(" ")[0] || "there"
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px; color: #C9C9C9; background: #1a1a1a;">
+      <div style="text-align: center; margin-bottom: 32px;">
+        <span style="font-size: 14px; letter-spacing: 0.3em; font-weight: 700; color: #F6F6F6;">UNHOLY <span style="color: #B00020;">CO.</span></span>
+      </div>
+      <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #C9C9C9;">
+        Hey ${escapeHtml(firstName)},
+      </p>
+      <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #C9C9C9;">
+        We've received your message. Someone from the coven will get back to you within 24 hours.
+      </p>
+      <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #C9C9C9;">
+        If it's urgent, hit us on WhatsApp at <a href="https://wa.me/919870066131" style="color: #B00020; text-decoration: underline;">+91 98700 66131</a>.
+      </p>
+      <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(176,0,32,0.2); text-align: center;">
+        <p style="margin: 0; font-size: 11px; letter-spacing: 0.2em; color: rgba(201,201,201,0.3);">
+          UNHOLY CO. STAY UNHOLY.
+        </p>
+      </div>
+    </div>
+  `
+
+  const text = `Hey ${firstName},\n\nWe've received your message. Someone from the coven will get back to you within 24 hours.\n\nIf it's urgent, hit us on WhatsApp at +91 98700 66131.\n\n— UNHOLY CO.`
+
+  await sendMailjetEmail({
+    to: email,
+    subject: "We got your message — UNHOLY CO.",
+    html,
+    text,
   })
 }
 

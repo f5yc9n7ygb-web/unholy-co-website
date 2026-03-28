@@ -12,6 +12,12 @@ export function CountUp({ value, className = "" }: CountUpProps) {
   const [display, setDisplay] = useState(value)
   const [hasAnimated, setHasAnimated] = useState(false)
 
+  // Reset animation when value prop changes
+  useEffect(() => {
+    setHasAnimated(false)
+    setDisplay(value)
+  }, [value])
+
   useEffect(() => {
     const node = ref.current
     if (!node || hasAnimated) return
@@ -30,7 +36,8 @@ export function CountUp({ value, className = "" }: CountUpProps) {
 
     observer.observe(node)
     return () => observer.disconnect()
-  })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, hasAnimated])
 
   const animate = () => {
     setHasAnimated(true)

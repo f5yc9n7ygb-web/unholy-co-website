@@ -8,12 +8,18 @@ import { TransitionLink } from "@/components/ux/TransitionLink"
 type ReceiptSummary = {
   packId: string
   qty: number
+  orderId?: string
+  packTitle?: string
+  price?: number
+  shippingName?: string
+  shippingCity?: string
+  shippingState?: string
 } | null
 
 const steps = [
   { num: "01", title: "Confirmation", desc: "Email with your order details within minutes." },
   { num: "02", title: "Dispatch", desc: "Packed and handed to courier within 24–48 hours." },
-  { num: "03", title: "Delivered", desc: "Tracking link sent via email and SMS." },
+  { num: "03", title: "Track & Deliver", desc: "Track your order anytime at theunholy.co/track." },
 ]
 
 // No opacity in initial states — page-transition-content CSS handles the fade.
@@ -99,23 +105,26 @@ export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
         )}
 
         {/* ── Order details ── */}
-        {qtyLabel && (
+        {receipt && (
           <motion.div {...fadeUp(0.16)} className="mt-12">
             <p className="mb-1 text-[10px] uppercase tracking-[0.4em] text-bone/30">Order details</p>
             <div className="mt-4">
               <div className="h-px bg-blood/[0.12]" />
-              {[
-                { label: "Quantity", value: qtyLabel, mono: false },
-              ]
-                .filter(Boolean)
+              {([
+                receipt.orderId && { label: "Order ID", value: receipt.orderId, mono: true },
+                receipt.packTitle && { label: "Product", value: receipt.packTitle, mono: false },
+                { label: "Quantity", value: `${receipt.qty} cans`, mono: false },
+                receipt.price && { label: "Amount Paid", value: `₹${receipt.price.toLocaleString("en-IN")}`, mono: false },
+                receipt.shippingName && { label: "Delivering To", value: [receipt.shippingName, receipt.shippingCity, receipt.shippingState].filter(Boolean).join(", "), mono: false },
+              ].filter(Boolean) as Array<{ label: string; value: string; mono: boolean }>)
                 .map((row) => (
-                  <div key={(row as { label: string }).label}>
+                  <div key={row.label}>
                     <div className="flex items-center justify-between py-4">
                       <span className="text-xs uppercase tracking-widest text-bone/35">
-                        {(row as { label: string }).label}
+                        {row.label}
                       </span>
-                      <span className={`text-sm text-bone/70 ${(row as { mono: boolean }).mono ? "font-mono text-xs" : ""}`}>
-                        {(row as { value: string }).value}
+                      <span className={`text-sm text-bone/70 ${row.mono ? "font-mono text-xs" : ""}`}>
+                        {row.value}
                       </span>
                     </div>
                     <div className="h-px bg-blood/[0.08]" />
@@ -156,9 +165,14 @@ export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
             Contact Support
           </TransitionLink>
           {isVerified && (
-            <TransitionLink href="/drops" className="btn btn-primary px-6 py-3 text-sm">
-              Track the next drop
-            </TransitionLink>
+            <>
+              <TransitionLink href="/track" className="btn btn-primary px-6 py-3 text-sm">
+                Track Your Order
+              </TransitionLink>
+              <TransitionLink href="/drops" className="btn btn-ghost px-6 py-3 text-sm">
+                Track the next drop
+              </TransitionLink>
+            </>
           )}
         </motion.div>
 

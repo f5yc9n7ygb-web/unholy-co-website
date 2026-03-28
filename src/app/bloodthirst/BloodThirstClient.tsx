@@ -13,7 +13,26 @@ const CinematicCanScene = dynamic(
     import("@/components/3d/CinematicCanScene").then((m) => ({
       default: m.CinematicCanScene,
     })),
-  { ssr: false }
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div
+            className="h-12 w-12 animate-pulse rounded-full"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(176,0,32,0.6) 0%, rgba(176,0,32,0.05) 70%)",
+              boxShadow: "0 0 40px rgba(176,0,32,0.2)",
+            }}
+          />
+          <span className="font-cinzel text-xs uppercase tracking-[0.3em] text-bone/30">
+            Loading
+          </span>
+        </div>
+      </div>
+    ),
+  }
 )
 
 /* ─── Data ─── */
@@ -58,6 +77,7 @@ function ScrollText({
   className = "",
   align = "right",
   startVisible = false,
+  isMobile = false,
 }: {
   children: React.ReactNode
   enterAt: number
@@ -66,6 +86,7 @@ function ScrollText({
   className?: string
   align?: "left" | "right" | "center"
   startVisible?: boolean
+  isMobile?: boolean
 }) {
   const opacity = useTransform(scrollProgress,
     startVisible
@@ -85,20 +106,34 @@ function ScrollText({
       : [40, 0, 0, -30]
   )
 
-  const positionClass =
-    align === "right"
+  // On mobile: all text goes to bottom center, full width
+  const effectiveAlign = isMobile ? "center" : align
+
+  const positionClass = isMobile
+    ? "inset-x-0 px-6 text-center"
+    : effectiveAlign === "right"
       ? "right-4 md:right-8 lg:right-16 w-[42%] min-w-[260px] max-w-md"
-      : align === "left"
+      : effectiveAlign === "left"
         ? "left-4 md:left-8 lg:left-16 w-[42%] min-w-[260px] max-w-md"
         : "left-1/2 -translate-x-1/2 max-w-2xl text-center"
 
+  // Mobile: position text in the bottom portion (below the canvas area);
+  // Desktop: vertically centered (text overlays the full-screen canvas via z-index)
+  const verticalClass = isMobile
+    ? "bottom-[10%]"
+    : "top-1/2 -translate-y-1/2"
+
   return (
     <motion.div
-      className={`pointer-events-none absolute top-1/2 -translate-y-1/2 z-20 ${positionClass} ${className}`}
+      className={`pointer-events-none absolute z-20 ${verticalClass} ${positionClass} ${className}`}
       style={{ opacity, y }}
     >
-      {align !== "center" && (
+      {!isMobile && effectiveAlign !== "center" && (
         <div className="absolute -inset-6 -z-10 rounded-2xl bg-gradient-to-r from-black/70 via-black/50 to-transparent" />
+      )}
+      {/* Mobile dark gradient behind text for readability over the can */}
+      {isMobile && (
+        <div className="absolute -inset-x-4 -inset-y-6 -z-10 rounded-2xl bg-gradient-to-t from-black/80 via-black/60 to-transparent" />
       )}
       {children}
     </motion.div>
@@ -142,6 +177,15 @@ export function BloodThirstClient() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
+  /* Mobile detection — 768px breakpoint matches md: */
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [])
+
   /* Atmospheric blood glow — intensifies with scroll */
   const glowOpacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.03, 0.08, 0.15])
   const vignetteOpacity = useTransform(scrollYProgress, [0, 0.3], [0.8, 0.4])
@@ -165,11 +209,12 @@ export function BloodThirstClient() {
             style={{ opacity: vignetteOpacity }}
           />
 
-          {/* 3D Canvas — full screen */}
+          {/* 3D Canvas — full-screen on both mobile and desktop.
+              On mobile, a dark gradient scrim at the bottom covers the text zone. */}
           <div className="absolute inset-0 z-10">
             {mounted ? (
               <Suspense fallback={<CanvasLoader />}>
-                <CinematicCanScene scrollProgress={progressRef} />
+                <CinematicCanScene scrollProgress={progressRef} isMobile={isMobile} />
               </Suspense>
             ) : (
               <CanvasLoader />
@@ -178,9 +223,21 @@ export function BloodThirstClient() {
 
           {/* ── Text overlays synced to scroll ── */}
 
+          {/* Mobile bottom gradient scrim — darkens lower third so text overlays are readable */}
+          {isMobile && (
+            <div
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] h-[42%]"
+              style={{
+                background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.55) 50%, transparent 100%)",
+              }}
+            />
+          )}
+
           {/* Act 0: Title card — fades IN after the mystery close-up reveals the can */}
           <motion.div
-            className="pointer-events-none absolute inset-x-0 top-[15%] z-20 mx-auto w-full max-w-3xl text-center px-8"
+            className={`pointer-events-none absolute inset-x-0 z-20 mx-auto w-full max-w-3xl text-center px-8 ${
+              isMobile ? "top-[8%]" : "top-[15%]"
+            }`}
             style={{
               opacity: useTransform(scrollYProgress, [0.08, 0.11, 0.15, 0.18], [0, 1, 1, 0]),
               y: useTransform(scrollYProgress, [0.08, 0.11, 0.15, 0.18], [30, 0, 0, -30]),
@@ -203,11 +260,12 @@ export function BloodThirstClient() {
             enterAt={0.18}
             exitAt={0.32}
             align="left"
+            isMobile={isMobile}
           >
             <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
               The Elixir
             </p>
-            <p className="text-lg leading-relaxed text-bone/70 md:text-xl">
+            <p className="text-sm leading-relaxed text-bone/70 md:text-lg lg:text-xl">
               BloodThirst is not just water. It never claimed to be. Natural mineral
               water from Himalayan volcanic geology at 11,000 feet — sealed in matte
               obsidian-black aluminum, because the contents finally warrant the
@@ -221,11 +279,12 @@ export function BloodThirstClient() {
             enterAt={0.39}
             exitAt={0.50}
             align="right"
+            isMobile={isMobile}
           >
             <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
               The Source
             </p>
-            <p className="text-lg leading-relaxed text-bone/70 md:text-xl">
+            <p className="text-sm leading-relaxed text-bone/70 md:text-lg lg:text-xl">
               The Himalayas took 50 million years to form. The water had time to get
               interesting — filtered through ancient volcanic rock, picking up calcium,
               magnesium, potassium, and bicarbonates along the way.
@@ -239,6 +298,7 @@ export function BloodThirstClient() {
             enterAt={0.54}
             exitAt={0.63}
             align="right"
+            isMobile={isMobile}
           >
             <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
               The Profile
@@ -264,11 +324,12 @@ export function BloodThirstClient() {
             enterAt={0.67}
             exitAt={0.78}
             align="left"
+            isMobile={isMobile}
           >
             <p className="mb-4 text-[10px] uppercase tracking-[0.4em] text-blood/60">
               The Stand
             </p>
-            <p className="text-lg leading-relaxed text-bone/70 md:text-xl">
+            <p className="text-sm leading-relaxed text-bone/70 md:text-lg lg:text-xl">
               Zero plastic, because the planet has enough problems. Zero compromise,
               because frankly so do you. Sealed in recycled aluminum for backstage
               riders, midnight creatives, and everyone who quietly decided that
@@ -282,11 +343,12 @@ export function BloodThirstClient() {
             enterAt={0.82}
             exitAt={1.01}
             align="right"
+            isMobile={isMobile}
           >
-            <h2 className="font-cinzel text-4xl font-bold text-offwhite md:text-5xl lg:text-6xl">
+            <h2 className="font-cinzel text-3xl font-bold text-offwhite md:text-4xl lg:text-5xl xl:text-6xl">
               Begin the ritual.
             </h2>
-            <div className="pointer-events-auto mt-10 flex flex-col items-start gap-4">
+            <div className={`pointer-events-auto mt-8 flex flex-col gap-4 ${isMobile ? "items-center" : "items-start"}`}>
               <TransitionLink
                 href="/shop"
                 className="btn btn-primary px-10 py-3.5 text-sm"

@@ -66,8 +66,9 @@ export function ChapterHero({ chapterNumber, title, subtitle, timestamp }: Chapt
           <div className="ch-hero-fade pt-4" style={{ animationDelay: "1.1s" }}>
             <span
               className="inline-block rounded-full border border-blood/20 bg-blood/5 px-5 py-2 text-xs uppercase tracking-[0.25em] text-blood/70 font-mono"
-              dangerouslySetInnerHTML={{ __html: timestamp }}
-            />
+            >
+              {timestamp}
+            </span>
           </div>
         )}
       </div>

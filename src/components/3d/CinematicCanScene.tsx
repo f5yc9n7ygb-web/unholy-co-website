@@ -1,11 +1,13 @@
 "use client"
 
-import { useRef, useMemo, useEffect } from "react"
+import { useRef, useMemo, useEffect, useState } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { useGLTF, useTexture, Environment } from "@react-three/drei"
 import * as THREE from "three"
 
 /* ─── Shared lerp helper ─── */
+// Clamp delta to prevent huge jumps after tab-switch or long frames (especially Android)
+const clampDelta = (delta: number) => Math.min(delta, 0.1)
 const damp = (current: number, target: number, speed: number, delta: number) =>
   THREE.MathUtils.lerp(current, target, 1 - Math.exp(-speed * delta))
 
@@ -25,11 +27,10 @@ type Keyframe = {
 const FRONT = Math.PI - 1.1
 
 /*
- * CINEMATIC CHOREOGRAPHY
+ * CINEMATIC CHOREOGRAPHY — DESKTOP
  *
  * Rotation is CONTINUOUS in one direction (decreasing Y) —
  * the can completes a full 360° over the scroll journey.
- * No jarring direction reversals.
  *
  * Visual angle reference:
  *   FRONT          → BLOODTHIRST label (skull + drip)
@@ -38,15 +39,11 @@ const FRONT = Math.PI - 1.1
  *   FRONT - 3π/2   → Right side
  *   FRONT - 2π     → BLOODTHIRST label again (full revolution)
  */
-const keyframes: Keyframe[] = [
+const desktopKeyframes: Keyframe[] = [
   // ═══ ACT 0: MYSTERY CLOSE-UP → REVEAL ═══
-  // Camera starts inches from the can surface. Texture detail, metallic sheen, a hint of red.
-  // The viewer doesn't know what they're looking at yet.
   { progress: 0.0,  camera: [0.3, 0.6, 2.0],   lookAt: [0, 0.2, 0],   canRotY: FRONT,         canRotZ: 0,      canX: 0,    canY: 0,    canScale: 1.0  },
   { progress: 0.04, camera: [0.2, 0.5, 2.6],   lookAt: [0, 0.15, 0],  canRotY: FRONT - 0.05,  canRotZ: 0,      canX: 0,    canY: 0,    canScale: 1.0  },
-  // The pullback — "what IS that?" → "oh DAMN"
   { progress: 0.10, camera: [0, 0.3, 4.5],     lookAt: [0, 0, 0],     canRotY: FRONT - 0.15,  canRotZ: 0,      canX: 0,    canY: 0,    canScale: 1.0  },
-  // Full reveal — the can sits in space, title card appears
   { progress: 0.14, camera: [0, 0.2, 5.2],     lookAt: [0, 0, 0],     canRotY: FRONT - 0.3,   canRotZ: 0,      canX: 0,    canY: 0,    canScale: 1.0  },
 
   // ═══ ACT 1: THE ELIXIR — can slides RIGHT, leans, text LEFT ═══
@@ -55,7 +52,6 @@ const keyframes: Keyframe[] = [
   { progress: 0.30, camera: [0, 0.08, 4.5],    lookAt: [0.5, 0, 0],   canRotY: FRONT - 1.0,   canRotZ: -0.08,  canX: 1.6,  canY: 0,    canScale: 1.0  },
 
   // ═══ ACT 1.5: DRIFT INTO DARKNESS ═══
-  // Can drops, recedes, scales down. A beat of void before Source.
   { progress: 0.35, camera: [0, 0.5, 7.0],     lookAt: [0, -0.3, 0],  canRotY: FRONT - 1.4,   canRotZ: 0,      canX: 0,    canY: -0.4, canScale: 0.85 },
 
   // ═══ ACT 2: THE SOURCE — can emerges LEFT, tilts opposite, text RIGHT ═══
@@ -64,8 +60,6 @@ const keyframes: Keyframe[] = [
   { progress: 0.49, camera: [0, 0.2, 4.3],     lookAt: [-0.5, 0, 0],  canRotY: FRONT - 2.5,   canRotZ: 0.08,   canX: -1.6, canY: 0,    canScale: 1.0  },
 
   // ═══ ACT 3: THE PROFILE — CAMERA ORBITS around the can ═══
-  // Camera sweeps from left-above across to right-above. Can stays centered.
-  // This is the "walking around it in a dark room" moment.
   { progress: 0.53, camera: [-1.5, 1.8, 3.5],  lookAt: [0, 0, 0],     canRotY: FRONT - 3.0,   canRotZ: 0,      canX: 0,    canY: 0,    canScale: 1.0  },
   { progress: 0.57, camera: [0, 2.2, 3.0],     lookAt: [0, 0, 0],     canRotY: FRONT - 3.5,   canRotZ: 0,      canX: 0,    canY: 0,    canScale: 1.0  },
   { progress: 0.62, camera: [1.2, 1.5, 3.8],   lookAt: [0, 0, 0],     canRotY: FRONT - 4.2,   canRotZ: 0,      canX: 0,    canY: 0,    canScale: 1.0  },
@@ -76,13 +70,58 @@ const keyframes: Keyframe[] = [
   { progress: 0.76, camera: [0, 0.2, 4.2],     lookAt: [0.4, 0, 0],   canRotY: FRONT - 5.5,   canRotZ: -0.05,  canX: 1.6,  canY: 0,    canScale: 1.0  },
 
   // ═══ ACT 5: CTA — SCALE PUNCH, front-facing hero moment ═══
-  // Can returns to center-left, scales up, completes full revolution back to FRONT
   { progress: 0.82, camera: [0, 0.15, 3.8],    lookAt: [0, 0, 0],     canRotY: FRONT - Math.PI * 2 + 0.25, canRotZ: 0, canX: -1.0, canY: 0,    canScale: 1.05 },
   { progress: 0.92, camera: [0, 0.08, 3.2],    lookAt: [0, 0, 0],     canRotY: FRONT - Math.PI * 2 + 0.25, canRotZ: 0, canX: -1.0, canY: 0,    canScale: 1.12 },
   { progress: 1.0,  camera: [0, 0.05, 3.0],    lookAt: [0, 0, 0],     canRotY: FRONT - Math.PI * 2 + 0.25, canRotZ: 0, canX: -1.0, canY: 0,    canScale: 1.15 },
 ]
 
-function interpolateKeyframes(progress: number) {
+/*
+ * MOBILE CHOREOGRAPHY
+ *
+ * Full-screen canvas (same as desktop) — text overlaid at bottom via z-index.
+ * No canX offsets (portrait is too narrow for side slides).
+ * Can centered with slight upward push (canY 0.15) so lower portion falls in
+ * the text zone which has a dark gradient scrim.
+ * Tighter FOV (32) for a more cinematic telephoto look.
+ * Camera pulled to Z 4.7–5.2 — close enough that the can reads large.
+ */
+const mobileKeyframes: Keyframe[] = [
+  // ═══ ACT 0: MYSTERY CLOSE-UP → REVEAL ═══
+  { progress: 0.0,  camera: [0.2, 0.4, 2.2],   lookAt: [0, 0.1, 0],   canRotY: FRONT,         canRotZ: 0,      canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.04, camera: [0.1, 0.3, 3.0],   lookAt: [0, 0.1, 0],   canRotY: FRONT - 0.05,  canRotZ: 0,      canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.10, camera: [0, 0.2, 4.6],     lookAt: [0, 0.05, 0],  canRotY: FRONT - 0.15,  canRotZ: 0,      canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.14, camera: [0, 0.15, 5.0],    lookAt: [0, 0.05, 0],  canRotY: FRONT - 0.3,   canRotZ: 0,      canX: 0,  canY: 0.15, canScale: 1.0  },
+
+  // ═══ ACT 1: THE ELIXIR — centered, slight lean ═══
+  { progress: 0.18, camera: [0, 0.15, 4.8],    lookAt: [0, 0.05, 0],  canRotY: FRONT - 0.7,   canRotZ: -0.06,  canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.22, camera: [0, 0.12, 4.6],    lookAt: [0, 0.05, 0],  canRotY: FRONT - 0.8,   canRotZ: -0.08,  canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.30, camera: [0, 0.1, 4.5],     lookAt: [0, 0.05, 0],  canRotY: FRONT - 1.0,   canRotZ: -0.06,  canX: 0,  canY: 0.15, canScale: 1.0  },
+
+  // ═══ ACT 1.5: DRIFT INTO DARKNESS ═══
+  { progress: 0.35, camera: [0, 0.4, 6.0],     lookAt: [0, -0.1, 0],  canRotY: FRONT - 1.4,   canRotZ: 0,      canX: 0,  canY: -0.2, canScale: 0.8  },
+
+  // ═══ ACT 2: THE SOURCE — centered, tilts opposite ═══
+  { progress: 0.39, camera: [0, 0.15, 4.8],    lookAt: [0, 0.05, 0],  canRotY: FRONT - 2.0,   canRotZ: 0.06,   canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.42, camera: [0, 0.12, 4.6],    lookAt: [0, 0.05, 0],  canRotY: FRONT - 2.2,   canRotZ: 0.08,   canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.49, camera: [0, 0.1, 4.5],     lookAt: [0, 0.05, 0],  canRotY: FRONT - 2.5,   canRotZ: 0.06,   canX: 0,  canY: 0.15, canScale: 1.0  },
+
+  // ═══ ACT 3: THE PROFILE — dramatic overhead orbit ═══
+  { progress: 0.53, camera: [-0.6, 2.2, 3.8],  lookAt: [0, 0, 0],     canRotY: FRONT - 3.0,   canRotZ: 0,      canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.57, camera: [0, 2.8, 3.2],     lookAt: [0, 0, 0],     canRotY: FRONT - 3.5,   canRotZ: 0,      canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.62, camera: [0.6, 1.8, 4.2],   lookAt: [0, 0, 0],     canRotY: FRONT - 4.2,   canRotZ: 0,      canX: 0,  canY: 0.15, canScale: 1.0  },
+
+  // ═══ ACT 4: THE STAND — centered, gentle lean ═══
+  { progress: 0.66, camera: [0, 0.15, 4.8],    lookAt: [0, 0.05, 0],  canRotY: FRONT - 4.8,   canRotZ: -0.05,  canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.70, camera: [0, 0.12, 4.6],    lookAt: [0, 0.05, 0],  canRotY: FRONT - 5.1,   canRotZ: -0.06,  canX: 0,  canY: 0.15, canScale: 1.0  },
+  { progress: 0.76, camera: [0, 0.1, 4.5],     lookAt: [0, 0.05, 0],  canRotY: FRONT - 5.5,   canRotZ: -0.04,  canX: 0,  canY: 0.15, canScale: 1.0  },
+
+  // ═══ ACT 5: CTA — scale punch, front-facing hero ═══
+  { progress: 0.82, camera: [0, 0.1, 4.0],     lookAt: [0, 0.05, 0],  canRotY: FRONT - Math.PI * 2 + 0.25, canRotZ: 0, canX: 0,  canY: 0.15, canScale: 1.05 },
+  { progress: 0.92, camera: [0, 0.05, 3.3],    lookAt: [0, 0.05, 0],  canRotY: FRONT - Math.PI * 2 + 0.25, canRotZ: 0, canX: 0,  canY: 0.15, canScale: 1.12 },
+  { progress: 1.0,  camera: [0, 0.02, 3.0],    lookAt: [0, 0.05, 0],  canRotY: FRONT - Math.PI * 2 + 0.25, canRotZ: 0, canX: 0,  canY: 0.15, canScale: 1.18 },
+]
+
+function interpolateKeyframes(progress: number, keyframes: Keyframe[]) {
   const p = Math.max(0, Math.min(1, progress))
 
   // Find surrounding keyframes
@@ -116,7 +155,7 @@ function interpolateKeyframes(progress: number) {
 
 function CanModel() {
   const { scene } = useGLTF("/bloodthirst.glb")
-  const texture = useTexture("/bloodthirst-texture.png")
+  const texture = useTexture("/bloodthirst-texture.webp")
 
   texture.flipY = false
   texture.colorSpace = THREE.SRGBColorSpace
@@ -134,16 +173,16 @@ function CanModel() {
       mesh.material = mat
       if (mat.name === "aluminium") {
         mat.map = texture
-        mat.metalness = 0.6
-        mat.roughness = 0.35
-        mat.envMapIntensity = 1.0
+        mat.metalness = 0.85
+        mat.roughness = 0.15
+        mat.envMapIntensity = 1.6
         mat.needsUpdate = true
       } else {
         // Lid / base — polished aluminum
-        mat.color = new THREE.Color(0x222222)
-        mat.metalness = 0.9
-        mat.roughness = 0.18
-        mat.envMapIntensity = 1.2
+        mat.color = new THREE.Color(0x1a1a1a)
+        mat.metalness = 0.95
+        mat.roughness = 0.1
+        mat.envMapIntensity = 1.8
         mat.needsUpdate = true
       }
     })
@@ -154,22 +193,26 @@ function CanModel() {
 }
 
 useGLTF.preload("/bloodthirst.glb")
+useTexture.preload("/bloodthirst-texture.webp")
 
 /* ─── Camera Rig — follows keyframes + mouse parallax ─── */
 
 function CameraRig({
   scrollProgress,
   mouseRef,
+  activeKeyframes,
 }: {
   scrollProgress: React.RefObject<number>
   mouseRef: React.RefObject<{ x: number; y: number }>
+  activeKeyframes: Keyframe[]
 }) {
   const { camera } = useThree()
   const currentLookAt = useRef(new THREE.Vector3(0, 0, 0))
 
-  useFrame((_, delta) => {
+  useFrame((_, rawDelta) => {
+    const delta = clampDelta(rawDelta)
     const p = scrollProgress.current ?? 0
-    const kf = interpolateKeyframes(p)
+    const kf = interpolateKeyframes(p, activeKeyframes)
     const mouse = mouseRef.current ?? { x: 0, y: 0 }
 
     // Mouse parallax offset (subtle)
@@ -194,7 +237,13 @@ function CameraRig({
 
 /* ─── Can group — rotation, tilt, position, scale driven by scroll ─── */
 
-function CanGroup({ scrollProgress }: { scrollProgress: React.RefObject<number> }) {
+function CanGroup({
+  scrollProgress,
+  activeKeyframes,
+}: {
+  scrollProgress: React.RefObject<number>
+  activeKeyframes: Keyframe[]
+}) {
   const groupRef = useRef<THREE.Group>(null)
   const currentRotY = useRef(FRONT)
   const currentRotZ = useRef(0)
@@ -202,10 +251,11 @@ function CanGroup({ scrollProgress }: { scrollProgress: React.RefObject<number> 
   const currentY = useRef(0)
   const currentScale = useRef(1)
 
-  useFrame((_, delta) => {
+  useFrame((_, rawDelta) => {
     if (!groupRef.current) return
+    const delta = clampDelta(rawDelta)
     const p = scrollProgress.current ?? 0
-    const kf = interpolateKeyframes(p)
+    const kf = interpolateKeyframes(p, activeKeyframes)
 
     // Rotation — slightly faster damping so it converges on target
     currentRotY.current = damp(currentRotY.current, kf.canRotY, 6, delta)
@@ -239,8 +289,9 @@ function CanGroup({ scrollProgress }: { scrollProgress: React.RefObject<number> 
 function ParallaxKeyLight({ mouseRef }: { mouseRef: React.RefObject<{ x: number; y: number }> }) {
   const lightRef = useRef<THREE.DirectionalLight>(null)
 
-  useFrame((_, delta) => {
+  useFrame((_, rawDelta) => {
     if (!lightRef.current) return
+    const delta = clampDelta(rawDelta)
     const mouse = mouseRef.current ?? { x: 0, y: 0 }
     lightRef.current.position.x = damp(lightRef.current.position.x, 2 + mouse.x * 1.5, 4, delta)
     lightRef.current.position.y = damp(lightRef.current.position.y, 4 + mouse.y * 1.0, 4, delta)
@@ -250,8 +301,8 @@ function ParallaxKeyLight({ mouseRef }: { mouseRef: React.RefObject<{ x: number;
     <directionalLight
       ref={lightRef}
       position={[2, 4, 3]}
-      intensity={3.5}
-      color="#fff5e6"
+      intensity={4.5}
+      color="#fff8f0"
     />
   )
 }
@@ -261,7 +312,7 @@ function ParallaxKeyLight({ mouseRef }: { mouseRef: React.RefObject<{ x: number;
 function SceneTone() {
   const { gl } = useThree()
   gl.toneMapping = THREE.ACESFilmicToneMapping
-  gl.toneMappingExposure = 1.1
+  gl.toneMappingExposure = 1.2
   return null
 }
 
@@ -269,11 +320,13 @@ function SceneTone() {
 
 export type CinematicCanSceneProps = {
   scrollProgress: React.RefObject<number>
+  isMobile?: boolean
 }
 
-export function CinematicCanScene({ scrollProgress }: CinematicCanSceneProps) {
+export function CinematicCanScene({ scrollProgress, isMobile = false }: CinematicCanSceneProps) {
   const mouseRef = useRef({ x: 0, y: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
+  const activeKeyframes = isMobile ? mobileKeyframes : desktopKeyframes
 
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
@@ -290,30 +343,30 @@ export function CinematicCanScene({ scrollProgress }: CinematicCanSceneProps) {
   return (
     <div ref={containerRef} className="h-full w-full">
       <Canvas
-        camera={{ position: [0.3, 0.6, 2.0], fov: 35 }}
+        camera={{ position: [0.3, 0.6, 2.0], fov: isMobile ? 32 : 35 }}
         gl={{ antialias: true, alpha: true }}
         style={{ background: "transparent" }}
         dpr={[1, 2]}
       >
         <SceneTone />
-        <CameraRig scrollProgress={scrollProgress} mouseRef={mouseRef} />
+        <CameraRig scrollProgress={scrollProgress} mouseRef={mouseRef} activeKeyframes={activeKeyframes} />
 
         {/* Key light — follows mouse */}
         <ParallaxKeyLight mouseRef={mouseRef} />
 
         {/* Fill light — cool blue opposite side */}
-        <directionalLight position={[-3, 1, -1]} intensity={1.2} color="#8090b0" />
+        <directionalLight position={[-3, 1, -1]} intensity={1.5} color="#7080a0" />
 
         {/* Blood accent rim */}
-        <pointLight position={[-1.5, 0.5, -2]} intensity={2} color="#B00020" distance={6} decay={2} />
+        <pointLight position={[-1.5, 0.5, -2]} intensity={3} color="#B00020" distance={6} decay={2} />
 
         {/* Ambient — enough to lift shadow detail without washing out */}
-        <ambientLight intensity={0.35} color="#1a1a2e" />
+        <ambientLight intensity={0.4} color="#1a1a2e" />
 
-        {/* HDR environment for metallic reflections */}
+        {/* HDR environment for metallic reflections — preloaded in page.tsx */}
         <Environment files="/env.hdr" background={false} />
 
-        <CanGroup scrollProgress={scrollProgress} />
+        <CanGroup scrollProgress={scrollProgress} activeKeyframes={activeKeyframes} />
       </Canvas>
     </div>
   )

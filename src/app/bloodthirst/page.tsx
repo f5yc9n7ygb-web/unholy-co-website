@@ -42,6 +42,10 @@ const productSchema = {
 export default function BloodThirstPage() {
   return (
     <>
+      {/* Preload heavy 3D assets so they download in parallel with JS bundle */}
+      <link rel="preload" href="/bloodthirst.glb" as="fetch" crossOrigin="anonymous" />
+      <link rel="preload" href="/bloodthirst-texture.webp" as="fetch" crossOrigin="anonymous" />
+      <link rel="preload" href="/env.hdr" as="fetch" crossOrigin="anonymous" />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}

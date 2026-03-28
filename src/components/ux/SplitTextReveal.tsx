@@ -67,10 +67,11 @@ export function SplitTextReveal({
     })
 
     return () => {
+      // Kill the ScrollTrigger instance first (if attached), then the timeline
+      if (tl.scrollTrigger) {
+        tl.scrollTrigger.kill()
+      }
       tl.kill()
-      ScrollTrigger.getAll().forEach((st) => {
-        if (st.trigger === el) st.kill()
-      })
     }
   }, [text, stagger, duration, delay, scrub])
 

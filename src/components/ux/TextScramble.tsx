@@ -84,6 +84,10 @@ export function TextScramble({
     }
   }, [])
 
+  // Keep scramble ref current so the observer always calls the latest version
+  const scrambleRef = useRef(scramble)
+  scrambleRef.current = scramble
+
   // Trigger on scroll into view (fires once)
   useEffect(() => {
     if (!triggerOnView || !elRef.current) return
@@ -95,7 +99,7 @@ export function TextScramble({
         entries.forEach((entry) => {
           if (entry.isIntersecting && !hasViewTriggeredRef.current) {
             hasViewTriggeredRef.current = true
-            scramble()
+            scrambleRef.current()
             observer.disconnect()
           }
         })
@@ -105,7 +109,6 @@ export function TextScramble({
 
     observer.observe(node)
     return () => observer.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [triggerOnView, text])
 
   const Component = Tag as any

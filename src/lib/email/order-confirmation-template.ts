@@ -1,6 +1,7 @@
 export type OrderConfirmationOptions = {
   customerName: string
   customerEmail: string
+  customerPhone?: string
   orderId: string
   paymentId: string
   packTitle: string
@@ -10,7 +11,13 @@ export type OrderConfirmationOptions = {
   shippingCity: string
   shippingState: string
   shippingPincode: string
+  promoCode?: string
+  discountAmount?: number
 }
+
+const GST_RATE = 0.18
+function getGstAmount(price: number) { return Math.round((price * GST_RATE) / (1 + GST_RATE)) }
+function getBasePrice(price: number) { return price - getGstAmount(price) }
 
 export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string {
   const customerFirstName = escapeHtml(o.customerName.split(" ")[0] || "Customer")
@@ -23,6 +30,8 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
   const textDim = "#555555"
 
   const priceFormatted = `₹${o.packPrice.toLocaleString("en-IN")}`
+  const gstFormatted = `₹${getGstAmount(o.packPrice).toLocaleString("en-IN")}`
+  const basePriceFormatted = `₹${getBasePrice(o.packPrice).toLocaleString("en-IN")}`
   const addressBlock = [o.shippingAddress, o.shippingCity, o.shippingState, o.shippingPincode]
     .filter(Boolean)
     .join(", ")
@@ -92,7 +101,9 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
               <table width="100%" cellpadding="0" cellspacing="0">
                 ${row("Product", o.packTitle)}
                 ${row("Quantity", `${o.packQty} cans`)}
-                ${row("Amount Paid", priceFormatted)}
+                ${row("Subtotal", basePriceFormatted)}
+                ${row("GST (18%)", gstFormatted)}
+                ${row("Total Paid", priceFormatted)}
                 ${row("Order ID", o.orderId, true)}
                 ${row("Payment ID", o.paymentId, true)}
               </table>
@@ -112,16 +123,26 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
               <table width="100%" cellpadding="0" cellspacing="0">
                 ${step("01", "Confirmation", "This email confirms your order. Keep it for your records.")}
                 ${step("02", "Dispatch", "Packed and handed to the courier within 24–48 hours.")}
-                ${step("03", "Delivery", "Tracking link sent via email and SMS once dispatched.")}
+                ${step("03", "Track & Deliver", "Track your order anytime — we'll email you when it ships.")}
               </table>
             </td>
           </tr>
 
           <tr>
             <td style="padding:32px; text-align:center;">
-              <a href="https://theunholy.co/bloodverse" style="display:inline-block; background:${blood}; color:#fff; text-decoration:none; font-size:12px; font-weight:700; letter-spacing:0.15em; text-transform:uppercase; padding:14px 32px; border-radius:4px;">
-                Explore the Bloodverse
+              <a href="https://theunholy.co/track?order=${encodeURIComponent(o.orderId)}" style="display:inline-block; background:${blood}; color:#fff; text-decoration:none; font-size:12px; font-weight:700; letter-spacing:0.15em; text-transform:uppercase; padding:14px 32px; border-radius:4px;">
+                Track Your Order
               </a>
+              <div style="margin-top:14px;">
+                <a href="https://theunholy.co/api/invoice/${encodeURIComponent(o.orderId)}" style="font-size:11px; color:${textMuted}; text-decoration:underline;">
+                  Download GST Invoice (PDF)
+                </a>
+              </div>
+              <div style="margin-top:8px;">
+                <a href="https://theunholy.co/bloodverse" style="font-size:11px; color:${textMuted}; text-decoration:underline;">
+                  Explore the Bloodverse
+                </a>
+              </div>
             </td>
           </tr>
 
@@ -157,7 +178,9 @@ ORDER DETAILS
 -------------
 Product:    ${o.packTitle}
 Quantity:   ${o.packQty} cans
-Amount:     ₹${o.packPrice.toLocaleString("en-IN")}
+Subtotal:   ₹${getBasePrice(o.packPrice).toLocaleString("en-IN")}
+GST (18%):  ₹${getGstAmount(o.packPrice).toLocaleString("en-IN")}
+Total Paid: ₹${o.packPrice.toLocaleString("en-IN")}
 Order ID:   ${o.orderId}
 Payment ID: ${o.paymentId}
 
@@ -169,7 +192,13 @@ WHAT HAPPENS NEXT
 -----------------
 01 — This email confirms your order.
 02 — Packed and dispatched within 24–48 hours.
-03 — Tracking link sent via email and SMS once shipped.
+03 — Track your order anytime — we'll email you when it ships.
+
+TRACK YOUR ORDER
+https://theunholy.co/track?order=${o.orderId}
+
+DOWNLOAD GST INVOICE
+https://theunholy.co/api/invoice/${o.orderId}
 
 Questions? rituals@theunholy.co or WhatsApp +91 98700 66131
 

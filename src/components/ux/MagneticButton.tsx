@@ -30,10 +30,19 @@ export function MagneticButton({
 
   const handleLeave = () => setPos({ x: 0, y: 0 })
 
+  const isButton = as === "button"
+
   return (
     <div
       ref={ref}
-      role={as === "button" ? "button" : undefined}
+      role={isButton ? "button" : undefined}
+      tabIndex={isButton ? 0 : undefined}
+      onKeyDown={isButton ? (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          ref.current?.click()
+        }
+      } : undefined}
       className={className}
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}

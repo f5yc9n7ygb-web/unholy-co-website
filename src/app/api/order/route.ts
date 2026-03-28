@@ -2,7 +2,9 @@ import { Buffer } from "node:buffer"
 import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
 import type { ShippingForm } from "@/lib/shop/types"
-import { getRequiredEnv } from "@/lib/server/integrations"
+import { validatePromoCode } from "@/lib/shop/promo"
+import { getRequiredEnv, saveRecordToAirtable } from "@/lib/server/integrations"
+import { checkStock } from "@/lib/server/inventory"
 import { getKVNamespace } from "@/lib/server/kv"
 import {
   ORDER_SESSION_COOKIE,
@@ -23,9 +25,8 @@ import {
 const RAZORPAY_ENDPOINT = "https://api.razorpay.com/v1/orders"
 
 /**
- * Handles POST requests to create a new order.
- * This endpoint is intended for integration with a payment gateway like Razorpay.
- * It currently returns a mock order for demonstration purposes.
+ * Handles POST requests to create a Razorpay order and persist a pending cart
+ * record so the backend can still fulfill it if the browser drops mid-checkout.
  *
  * @param {NextRequest} request - The incoming Next.js request object containing order details.
  * @returns {Promise<NextResponse>} A JSON response with the created order or an error message.
@@ -58,9 +59,11 @@ export async function POST(request: NextRequest) {
     getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
     const body = await request.text()
-    const payload = parseJsonBody<{ packId?: string; shipping?: ShippingForm }>(body, ORDER_BODY_LIMIT_BYTES)
+    const payload = parseJsonBody<{ packId?: string; shipping?: ShippingForm; promoCode?: string; promoRecordId?: string }>(body, ORDER_BODY_LIMIT_BYTES)
     const packId = sanitizeText(payload.packId, 32)
     const shipping = normalizeShipping(payload.shipping)
+    const promoCode = sanitizeText(payload.promoCode, 30)
+    const promoRecordId = sanitizeText(payload.promoRecordId, 64)
     const pack = getPackById(packId)
 
     if (!pack) {
@@ -78,7 +81,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const amount = pack.price * 100
+    // Check stock availability
+    const stockInfo = await checkStock(pack.id, pack.qty)
+    if (!stockInfo.available) {
+      return NextResponse.json(
+        { ok: false, error: `${pack.title} is currently out of stock. Please try a different pack.` },
+        { status: 409 }
+      )
+    }
+
+    // Validate and apply promo code if provided
+    let discountAmount = 0
+    let validatedPromoRecordId: string | null = null
+    if (promoCode) {
+      const promoResult = await validatePromoCode(promoCode, pack.price)
+      if (promoResult.valid) {
+        discountAmount = promoResult.discountAmount
+        validatedPromoRecordId = promoResult.promo.recordId
+      }
+      // If promo is invalid, silently ignore — charge full price
+    }
+
+    const finalPrice = pack.price - discountAmount
+    const amount = finalPrice * 100
     const currency = "INR"
     const receipt = createOrderReceipt()
     const contextId = createOrderContextId()
@@ -115,6 +140,9 @@ export async function POST(request: NextRequest) {
       qty: pack.qty,
       amount,
       shipping,
+      promoCode: promoCode || undefined,
+      promoRecordId: validatedPromoRecordId || undefined,
+      discountAmount: discountAmount || undefined,
     })
 
     const nextResponse = NextResponse.json(
@@ -136,6 +164,37 @@ export async function POST(request: NextRequest) {
       path: "/",
       maxAge: 30 * 60,
     })
+
+    // Save abandoned cart intent — will be marked "converted" on successful payment
+    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+    const fullAddress = [
+      shipping.address,
+      shipping.city,
+      shipping.state,
+      shipping.pincode,
+    ].filter(Boolean).join(", ")
+    saveRecordToAirtable({
+      "Razorpay Order ID": String(order.id || ""),
+      "Pack": pack.title,
+      "Pack ID": pack.id,
+      "Quantity": pack.qty,
+      "Price": pack.price,
+      "Amount": finalPrice,
+      "Customer Name": shipping.name,
+      "Customer Email": shipping.email,
+      "Customer Phone": shipping.phone,
+      "Shipping Address": shipping.address,
+      "Shipping City": shipping.city,
+      "Shipping State": shipping.state,
+      "Shipping Pincode": shipping.pincode,
+      "Full Shipping Address": fullAddress,
+      ...(promoCode ? { "Promo Code": promoCode } : {}),
+      ...(discountAmount ? { "Discount Amount": discountAmount } : {}),
+      "Status": "pending",
+      "Created At": new Date().toISOString(),
+    }, { baseId: ordersBaseId, tableName: "Abandoned Carts" }).catch((err) =>
+      console.error("Abandoned cart save failed:", err)
+    )
 
     return nextResponse
   } catch (error: any) {

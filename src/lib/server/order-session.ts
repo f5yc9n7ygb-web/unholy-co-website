@@ -16,11 +16,20 @@ type OrderSessionPayload = {
   qty: number
   amount: number
   shipping: ShippingForm
+  promoCode?: string
+  promoRecordId?: string
+  discountAmount?: number
 }
 
 type ReceiptPayload = {
   packId: string
   qty: number
+  orderId?: string
+  packTitle?: string
+  price?: number
+  shippingName?: string
+  shippingCity?: string
+  shippingState?: string
 }
 
 type SubscriptionPayload = {
@@ -43,7 +52,7 @@ globalThis.__unholySingleUseStore = singleUseStore
 
 export const ORDER_SESSION_COOKIE = "__Host-unholy-order-session"
 
-const ORDER_SESSION_TTL_MS = 30 * 60 * 1000
+const ORDER_SESSION_TTL_MS = 60 * 60 * 1000
 const RECEIPT_TTL_MS = 2 * 60 * 60 * 1000
 const PAYMENT_REPLAY_TTL_MS = 24 * 60 * 60 * 1000
 const SUBSCRIPTION_TTL_MS = 24 * 60 * 60 * 1000

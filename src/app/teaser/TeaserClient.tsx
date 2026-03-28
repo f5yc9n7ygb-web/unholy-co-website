@@ -52,7 +52,7 @@ function CountdownUnit({ value, label }: { value: number; label: string }) {
     <div className="flex flex-col items-center gap-3">
       <div className="relative overflow-hidden">
         <motion.span
-          key={value}
+          key={`${label}-${value}`}
           initial={{ y: flip ? -20 : 0, opacity: flip ? 0 : 1 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.25, ease: "easeOut" }}

@@ -38,6 +38,7 @@ export function SubscribeForm({
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (status.state === "sending") return // prevent double submit
 
     const trimmedEmail = email.trim()
     if (!trimmedEmail) {

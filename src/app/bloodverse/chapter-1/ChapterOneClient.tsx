@@ -23,7 +23,7 @@ export default function ChapterOneClient() {
         chapterNumber="I"
         title="The Reaper Knocks"
         subtitle="It starts with a knock and ends with you questioning your reflection."
-        timestamp="3:33 AM &middot; Mumbai"
+        timestamp="3:33 AM · Mumbai"
       />
 
       {/* ── THE STORY ── */}

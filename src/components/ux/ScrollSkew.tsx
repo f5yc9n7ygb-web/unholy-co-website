@@ -9,37 +9,41 @@ import { useEffect, useRef } from "react"
 */
 
 // Module-level shared velocity tracker (one RAF for all ScrollSkew instances)
-let scrollVelocity = 0
-let lastScrollY = 0
-let listenerCount = 0
-let rafId: number | null = null
+const tracker = {
+  velocity: 0,
+  lastScrollY: 0,
+  listenerCount: 0,
+  rafId: null as number | null,
+  cleanup: null as (() => void) | null,
+}
 
 function startTracking() {
-  if (rafId !== null) return
+  if (tracker.rafId !== null) return
 
   const onScroll = () => {
     const current = window.scrollY
-    scrollVelocity = current - lastScrollY
-    lastScrollY = current
+    tracker.velocity = current - tracker.lastScrollY
+    tracker.lastScrollY = current
   }
 
   const tick = () => {
-    scrollVelocity *= 0.92 // decay
-    rafId = requestAnimationFrame(tick)
+    tracker.velocity *= 0.92 // decay
+    tracker.rafId = requestAnimationFrame(tick)
   }
 
   window.addEventListener("scroll", onScroll, { passive: true })
-  lastScrollY = window.scrollY
-  rafId = requestAnimationFrame(tick)
+  tracker.lastScrollY = window.scrollY
+  tracker.rafId = requestAnimationFrame(tick)
 
-  return () => {
+  tracker.cleanup = () => {
     window.removeEventListener("scroll", onScroll)
-    if (rafId !== null) cancelAnimationFrame(rafId)
-    rafId = null
+    if (tracker.rafId !== null) cancelAnimationFrame(tracker.rafId)
+    tracker.rafId = null
+    tracker.velocity = 0
+    tracker.lastScrollY = 0
+    tracker.cleanup = null
   }
 }
-
-let cleanupTracking: (() => void) | null = null
 
 interface ScrollSkewProps {
   children: React.ReactNode
@@ -61,15 +65,15 @@ export function ScrollSkew({
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
 
     // Start shared tracker if first instance
-    listenerCount++
-    if (listenerCount === 1) {
-      cleanupTracking = startTracking() || null
+    tracker.listenerCount++
+    if (tracker.listenerCount === 1) {
+      startTracking()
     }
 
     let localRaf: number
 
     const tick = () => {
-      const target = Math.max(-maxSkew, Math.min(maxSkew, scrollVelocity * 0.3))
+      const target = Math.max(-maxSkew, Math.min(maxSkew, tracker.velocity * 0.3))
       currentSkew.current += (target - currentSkew.current) * smooth
 
       if (wrapperRef.current) {
@@ -86,10 +90,9 @@ export function ScrollSkew({
 
     return () => {
       cancelAnimationFrame(localRaf)
-      listenerCount--
-      if (listenerCount === 0 && cleanupTracking) {
-        cleanupTracking()
-        cleanupTracking = null
+      tracker.listenerCount--
+      if (tracker.listenerCount === 0 && tracker.cleanup) {
+        tracker.cleanup()
       }
     }
   }, [maxSkew, smooth])

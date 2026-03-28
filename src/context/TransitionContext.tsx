@@ -69,9 +69,13 @@ export function TransitionProvider({ children }: { children: ReactNode }) {
     })
   }, [pathname])
 
+  // Use a ref to track pathname so the callback doesn't need it as a dependency
+  const pathnameRef = useRef(pathname)
+  pathnameRef.current = pathname
+
   const navigate = useCallback(
     (href: string) => {
-      if (href === pathname) return
+      if (href === pathnameRef.current) return
       if (tl.current) tl.current.kill()
 
       // Reset state
@@ -100,7 +104,7 @@ export function TransitionProvider({ children }: { children: ReactNode }) {
           ease: "power2.out",
         }, "-=0.2")
     },
-    [pathname, router]
+    [router]
   )
 
   return (

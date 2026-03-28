@@ -23,7 +23,7 @@ export default function ChapterTwoClient() {
         chapterNumber="II"
         title="The Feast of Shadows"
         subtitle="They drank. The city screamed. Nobody remembers why."
-        timestamp="72 Hours Later &middot; Location: [REDACTED]"
+        timestamp="72 Hours Later · Location: [REDACTED]"
       />
 
       {/* ── THE STORY ── */}

@@ -20,7 +20,7 @@ interface SpringButtonProps {
 export function SpringButton({
   children,
   className = "",
-  scale = 0.92,
+  scale = 0.96,
   magnetic = true,
   magneticStrength = 0.3,
 }: SpringButtonProps) {
@@ -71,7 +71,7 @@ export function SpringButton({
     gsap.to(wrapperRef.current, {
       scale: 1,
       duration: 0.5,
-      ease: "elastic.out(1.2, 0.35)",
+      ease: "elastic.out(1, 0.5)",
     })
   }
 

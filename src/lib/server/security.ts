@@ -193,6 +193,14 @@ export function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
+/**
+ * Escape a value for safe interpolation into an Airtable filterByFormula string.
+ * Prevents formula injection by escaping backslashes and double quotes.
+ */
+export function escapeAirtableValue(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+}
+
 export function hasFilledHoneypot(payload: Record<string, string>) {
   return Boolean(payload.company || payload.website)
 }

@@ -4,12 +4,21 @@ import Script from "next/script"
 import Image from "next/image"
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { PACKS, type Pack } from "@/lib/shop/catalog"
+import { PACKS, type Pack, getGstAmount, getBasePrice } from "@/lib/shop/catalog"
 import type { ShippingForm } from "@/lib/shop/types"
 import { usePageTransition } from "@/context/TransitionContext"
 
 type FormErrors = Partial<Record<keyof ShippingForm, string>>
 type Step = "select" | "shipping" | "review"
+
+type AppliedPromo = {
+  code: string
+  discountType: "percentage" | "flat"
+  discountValue: number
+  discountAmount: number
+  finalPrice: number
+  promoRecordId: string
+}
 
 declare global {
   interface Window { Razorpay: any }
@@ -48,6 +57,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   const [selected, setSelected] = useState<Pack>(PACKS[1])
   const [loading, setLoading] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null)
   const [form, setForm] = useState<ShippingForm>({
     name: "", email: "", phone: "", address: "", city: "", pincode: "", state: "",
   })
@@ -55,6 +65,37 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   const [touched, setTouched] = useState<Set<string>>(new Set())
 
   const key = razorpayKey
+
+  // ── Persist cart selection & shipping in localStorage ──
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("unholy_cart")
+      if (saved) {
+        const data = JSON.parse(saved)
+        if (data.packId) {
+          const pack = PACKS.find((p) => p.id === data.packId)
+          if (pack) setSelected(pack)
+        }
+        if (data.shipping) {
+          setForm((prev) => ({ ...prev, ...data.shipping }))
+        }
+      }
+    } catch { /* ignore corrupt data */ }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("unholy_cart", JSON.stringify({
+        packId: selected.id,
+        shipping: form,
+      }))
+    } catch { /* storage full or unavailable */ }
+  }, [selected, form])
+
+  // Clear promo when pack changes (discount may no longer apply)
+  useEffect(() => {
+    setAppliedPromo(null)
+  }, [selected.id])
 
   useEffect(() => {
     if (touched.size === 0) return
@@ -96,7 +137,12 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
       const res = await fetch("/api/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packId: selected.id, shipping: form }),
+        body: JSON.stringify({
+          packId: selected.id,
+          shipping: form,
+          promoCode: appliedPromo?.code || undefined,
+          promoRecordId: appliedPromo?.promoRecordId || undefined,
+        }),
       })
       const data = await res.json()
       if (!res.ok || !data?.ok) throw new Error("Unable to start checkout right now.")
@@ -126,6 +172,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
                   : "Payment verification failed."
               )
             }
+            try { localStorage.removeItem("unholy_cart") } catch {}
             navigate(
               `/thanks?receipt=${encodeURIComponent(verification.receiptToken)}`
             )
@@ -136,6 +183,11 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
         },
         theme: { color: "#B00020" },
         modal: { ondismiss: () => setLoading(false) },
+      })
+      rz.on("payment.failed", (resp: any) => {
+        const reason = resp?.error?.description || "Payment was declined. Please try again or use a different payment method."
+        setPayError(reason)
+        setLoading(false)
       })
       rz.open()
     } catch (e: any) {
@@ -207,6 +259,9 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
                 form={form}
                 loading={loading}
                 payError={payError}
+                appliedPromo={appliedPromo}
+                onApplyPromo={setAppliedPromo}
+                onRemovePromo={() => setAppliedPromo(null)}
                 onBack={() => go("shipping")}
                 onChangeProduct={() => go("select")}
                 onChangeShipping={() => go("shipping")}
@@ -590,15 +645,15 @@ function ShippingStep({ selected, form, errors, onChange, onBlur, onBack, onNext
               <div className="py-4 space-y-2.5 text-sm border-b border-white/[0.06]">
                 <div className="flex justify-between text-bone/55">
                   <span>Subtotal</span>
-                  <span className="text-offwhite">₹{selected.price.toLocaleString("en-IN")}</span>
+                  <span className="text-offwhite">₹{getBasePrice(selected.price).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between text-bone/55">
+                  <span>GST (18%)</span>
+                  <span className="text-offwhite/60">₹{getGstAmount(selected.price).toLocaleString("en-IN")}</span>
                 </div>
                 <div className="flex justify-between text-bone/55">
                   <span>Shipping</span>
                   <span className="text-xs font-medium text-green-400">FREE</span>
-                </div>
-                <div className="flex justify-between text-bone/55">
-                  <span>Taxes</span>
-                  <span className="text-xs text-offwhite/60">Included</span>
                 </div>
               </div>
 
@@ -620,16 +675,55 @@ function ShippingStep({ selected, form, errors, onChange, onBlur, onBack, onNext
 }
 
 /* ─── Step 3: Review & Pay ─── */
-function ReviewStep({ selected, form, loading, payError, onBack, onChangeProduct, onChangeShipping, onPay }: {
+function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPromo, onRemovePromo, onBack, onChangeProduct, onChangeShipping, onPay }: {
   selected: Pack
   form: ShippingForm
   loading: boolean
   payError: string | null
+  appliedPromo: AppliedPromo | null
+  onApplyPromo: (promo: AppliedPromo) => void
+  onRemovePromo: () => void
   onBack: () => void
   onChangeProduct: () => void
   onChangeShipping: () => void
   onPay: () => void
 }) {
+  const [promoInput, setPromoInput] = useState("")
+  const [promoLoading, setPromoLoading] = useState(false)
+  const [promoError, setPromoError] = useState<string | null>(null)
+
+  const applyPromo = async () => {
+    if (!promoInput.trim()) return
+    setPromoLoading(true)
+    setPromoError(null)
+    try {
+      const res = await fetch("/api/promo/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoInput.trim(), orderTotal: selected.price }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data?.ok) {
+        setPromoError(data?.error || "Invalid promo code.")
+        return
+      }
+      onApplyPromo({
+        code: data.code,
+        discountType: data.discountType,
+        discountValue: data.discountValue,
+        discountAmount: data.discountAmount,
+        finalPrice: data.finalPrice,
+        promoRecordId: data.promoRecordId,
+      })
+      setPromoInput("")
+    } catch {
+      setPromoError("Unable to validate code right now.")
+    } finally {
+      setPromoLoading(false)
+    }
+  }
+
+  const effectiveTotal = appliedPromo ? appliedPromo.finalPrice : selected.price
   return (
     <div className="container max-w-5xl">
       {/* Header */}
@@ -714,30 +808,79 @@ function ReviewStep({ selected, form, loading, payError, onBack, onChangeProduct
             <div className="space-y-3.5 text-sm">
               <div className="flex justify-between text-bone/55">
                 <span>{selected.title} ({selected.qty} cans)</span>
-                <span className="text-offwhite">₹{selected.price.toLocaleString("en-IN")}</span>
+                <span className="text-offwhite">₹{getBasePrice(selected.price).toLocaleString("en-IN")}</span>
+              </div>
+              <div className="flex justify-between text-bone/55">
+                <span>GST (18%)</span>
+                <span className="text-offwhite/60">₹{getGstAmount(selected.price).toLocaleString("en-IN")}</span>
               </div>
               <div className="flex justify-between text-bone/55">
                 <span>Shipping</span>
                 <span className="text-xs font-medium text-green-400">FREE</span>
               </div>
-              <div className="flex justify-between text-bone/55">
-                <span>Taxes</span>
-                <span className="text-xs text-offwhite/60">Included</span>
-              </div>
+              {appliedPromo && (
+                <div className="flex justify-between text-green-400">
+                  <span className="flex items-center gap-2">
+                    Discount ({appliedPromo.code})
+                    <button onClick={onRemovePromo} className="text-[10px] text-bone/30 hover:text-blood transition-colors">✕</button>
+                  </span>
+                  <span>−₹{appliedPromo.discountAmount.toLocaleString("en-IN")}</span>
+                </div>
+              )}
             </div>
+
+            {/* Promo code input */}
+            {!appliedPromo && (
+              <div className="mt-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={promoInput}
+                    onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(null) }}
+                    placeholder="Promo code"
+                    className="flex-1 rounded-lg border border-white/[0.08] bg-black/50 px-3 py-2 text-xs text-offwhite placeholder:text-bone/20 outline-none transition-colors focus:border-blood/40"
+                    onKeyDown={(e) => e.key === "Enter" && applyPromo()}
+                  />
+                  <button
+                    onClick={applyPromo}
+                    disabled={promoLoading || !promoInput.trim()}
+                    className="rounded-lg border border-blood/30 bg-blood/10 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-blood transition-all hover:bg-blood/20 disabled:opacity-40"
+                  >
+                    {promoLoading ? "..." : "Apply"}
+                  </button>
+                </div>
+                {promoError && (
+                  <p className="mt-1.5 text-[11px] text-blood/80">{promoError}</p>
+                )}
+              </div>
+            )}
 
             <div className="my-6 h-px bg-white/[0.06]" />
 
             <div className="flex items-center justify-between">
               <span className="font-cinzel text-lg font-bold text-offwhite">Total</span>
               <span className="font-cinzel text-2xl font-black text-blood">
-                ₹{selected.price.toLocaleString("en-IN")}
+                ₹{effectiveTotal.toLocaleString("en-IN")}
               </span>
             </div>
 
             {payError && (
-              <div className="mt-4 rounded-xl border border-blood/30 bg-blood/10 px-4 py-3 text-xs text-blood">
-                {payError}
+              <div className="mt-4 rounded-xl border border-blood/30 bg-blood/10 px-5 py-4">
+                <p className="text-xs font-semibold text-blood">{payError}</p>
+                <div className="mt-3 flex items-center gap-3 text-[10px]">
+                  <button
+                    onClick={onPay}
+                    className="rounded-md bg-blood/20 px-3 py-1.5 font-semibold uppercase tracking-wider text-blood transition-colors hover:bg-blood/30"
+                  >
+                    Try Again
+                  </button>
+                  <a
+                    href="/contact"
+                    className="text-bone/40 underline underline-offset-2 transition-colors hover:text-bone/60"
+                  >
+                    Contact support
+                  </a>
+                </div>
               </div>
             )}
 
@@ -762,20 +905,37 @@ function ReviewStep({ selected, form, loading, payError, onBack, onChangeProduct
                 </span>
               ) : (
                 <span className="font-cinzel tracking-wider">
-                  Complete Ritual · ₹{selected.price.toLocaleString("en-IN")}
+                  Complete Ritual · ₹{effectiveTotal.toLocaleString("en-IN")}
                 </span>
               )}
             </motion.button>
 
-            <div className="mt-5 flex items-center justify-center gap-2 text-[11px] text-bone/35">
-              <LockIcon />
-              Powered by Razorpay · 256-bit SSL
-            </div>
-            <div className="mt-2 flex justify-center gap-3 text-[10px] uppercase tracking-wider text-bone/20">
-              <span>UPI</span><span>·</span>
-              <span>Cards</span><span>·</span>
-              <span>Net Banking</span><span>·</span>
-              <span>Wallets</span>
+            {/* Trust badges */}
+            <div className="mt-5 rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3 space-y-2.5">
+              <div className="flex items-center justify-center gap-2 text-[11px] text-bone/40">
+                <LockIcon />
+                <span>256-bit SSL Encrypted · PCI DSS Compliant</span>
+              </div>
+              <div className="flex justify-center gap-3 text-[10px] uppercase tracking-wider text-bone/25">
+                <span>UPI</span><span>·</span>
+                <span>Cards</span><span>·</span>
+                <span>Net Banking</span><span>·</span>
+                <span>Wallets</span>
+              </div>
+              <div className="flex items-center justify-center gap-4 pt-1 text-[10px] text-bone/25">
+                <span className="flex items-center gap-1">
+                  <ShieldIcon />
+                  Secure Checkout
+                </span>
+                <span className="flex items-center gap-1">
+                  <TruckIcon />
+                  Free Shipping
+                </span>
+                <span className="flex items-center gap-1">
+                  <RefreshIcon />
+                  Easy Returns
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -819,11 +979,35 @@ function LuxField({ label, field, value, error, placeholder, type = "text", onCh
   )
 }
 
-/* ─── Lock Icon ─── */
+/* ─── Icons ─── */
 function LockIcon() {
   return (
     <svg className="h-3.5 w-3.5 shrink-0 text-bone/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+  )
+}
+
+function ShieldIcon() {
+  return (
+    <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
+  )
+}
+
+function TruckIcon() {
+  return (
+    <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+    </svg>
+  )
+}
+
+function RefreshIcon() {
+  return (
+    <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
     </svg>
   )
 }

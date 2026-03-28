@@ -40,3 +40,19 @@ export const PACKS: Pack[] = [
 export function getPackById(id: string) {
   return PACKS.find((pack) => pack.id === id) || null
 }
+
+/**
+ * GST rate for natural mineral water (HSN 2201).
+ * Prices in the catalog are GST-inclusive.
+ */
+export const GST_RATE = 0.18
+
+/** Extract GST amount from a GST-inclusive price */
+export function getGstAmount(inclusivePrice: number): number {
+  return Math.round((inclusivePrice * GST_RATE) / (1 + GST_RATE))
+}
+
+/** Get base price (before GST) from a GST-inclusive price */
+export function getBasePrice(inclusivePrice: number): number {
+  return inclusivePrice - getGstAmount(inclusivePrice)
+}

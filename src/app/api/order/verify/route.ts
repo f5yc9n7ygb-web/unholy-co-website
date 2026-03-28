@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 import { Buffer } from "node:buffer"
 import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
-import { getRequiredEnv, sendOrderConfirmationEmail, saveRecordToAirtable } from "@/lib/server/integrations"
+import { getRequiredEnv, sendOrderConfirmationEmail, saveRecordToAirtable, queryAirtableRecords, updateAirtableRecord } from "@/lib/server/integrations"
 import { getKVNamespace } from "@/lib/server/kv"
 import {
   ORDER_SESSION_COOKIE,
@@ -13,11 +13,15 @@ import {
 import {
   ORDER_BODY_LIMIT_BYTES,
   checkRateLimit,
+  escapeAirtableValue,
   parseJsonBody,
   sanitizeText,
   validateContentLength,
   validateRequestOrigin,
 } from "@/lib/server/security"
+import { createShiprocketOrder } from "@/lib/server/shiprocket"
+import { decrementStock } from "@/lib/server/inventory"
+import { incrementPromoUsage } from "@/lib/shop/promo"
 
 const RAZORPAY_ORDERS_ENDPOINT = "https://api.razorpay.com/v1/orders"
 const RAZORPAY_PAYMENTS_ENDPOINT = "https://api.razorpay.com/v1/payments"
@@ -119,18 +123,12 @@ export async function POST(request: NextRequest) {
       throw new Error("Payment is not ready for fulfillment.")
     }
 
-    if (!(await claimProcessedPayment(paymentId, kv))) {
-      return NextResponse.json(
-        { ok: false, error: "This payment has already been confirmed." },
-        { status: 409 }
-      )
-    }
-
     const pack = getPackById(orderSession.packId)
     if (!pack) {
       throw new Error("Verified payment is missing a valid pack.")
     }
 
+    const chargedAmount = Number((orderSession.amount / 100).toFixed(2))
     const fullAddress = [
       orderSession.shipping.address,
       orderSession.shipping.city,
@@ -139,50 +137,137 @@ export async function POST(request: NextRequest) {
     ].filter(Boolean).join(", ")
     const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
-    saveRecordToAirtable({
+    if (!(await claimProcessedPayment(paymentId, kv))) {
+      await backfillExistingPaymentRecord({
+        ordersBaseId,
+        orderId,
+        paymentId,
+        shipping: orderSession.shipping,
+        fullAddress,
+        amount: chargedAmount,
+        promoCode: orderSession.promoCode,
+        discountAmount: orderSession.discountAmount,
+      }).catch((err) => console.error("Payment backfill failed:", err))
+
+      await markAbandonedCartConverted(ordersBaseId, orderId).catch((err) =>
+        console.error("Abandoned cart update failed:", err)
+      )
+
+      return createSuccessResponse({
+        pack,
+        orderId,
+        chargedAmount,
+        shippingName: orderSession.shipping.name,
+        shippingCity: orderSession.shipping.city,
+        shippingState: orderSession.shipping.state,
+      })
+    }
+
+    await saveRecordToAirtable({
       "Payment ID": paymentId,
       "Order ID": orderId,
       "Pack": pack.title,
       "Quantity": pack.qty,
-      "Amount": pack.price,
+      "Amount": chargedAmount,
       "Customer Name": orderSession.shipping.name,
       "Customer Email": orderSession.shipping.email,
       "Customer Phone": orderSession.shipping.phone,
       "Full Shipping Address": fullAddress,
+      "Shipping Address": orderSession.shipping.address,
+      "Shipping City": orderSession.shipping.city,
+      "Shipping State": orderSession.shipping.state,
+      "Shipping Pincode": orderSession.shipping.pincode,
       "Timestamp": new Date().toISOString(),
-    }, { baseId: ordersBaseId, tableName: "Payments" }).catch((err) => console.error("Order Airtable save failed:", err))
+      "Shipping Status": "Processing",
+      ...(orderSession.promoCode ? { "Promo Code": orderSession.promoCode } : {}),
+      ...(orderSession.discountAmount ? { "Discount Amount": orderSession.discountAmount } : {}),
+    }, { baseId: ordersBaseId, tableName: "Payments" })
+
+    // Decrement inventory stock
+    decrementStock(pack.id, pack.qty).catch((err) => console.error("Inventory decrement failed:", err))
+
+    // Increment promo code usage if one was applied
+    if (orderSession.promoRecordId) {
+      incrementPromoUsage(orderSession.promoRecordId).catch((err) => console.error("Promo usage increment failed:", err))
+    }
+
+    // Create Shiprocket order (best-effort — skips if not configured)
+    createShiprocketOrder({
+      orderId,
+      orderDate: new Date().toISOString().split("T")[0]!,
+      billingName: orderSession.shipping.name,
+      billingEmail: orderSession.shipping.email,
+      billingPhone: orderSession.shipping.phone,
+      billingAddress: orderSession.shipping.address,
+      billingCity: orderSession.shipping.city,
+      billingState: orderSession.shipping.state,
+      billingPincode: orderSession.shipping.pincode,
+      productName: pack.title,
+      productQty: pack.qty,
+      productPrice: chargedAmount,
+      weight: Math.max(0.5, pack.qty * 0.4),
+    })
+      .then(async (result) => {
+        if (result) {
+          // Update the Airtable payment record with shipping details
+          const paymentRecords = await queryAirtableRecords({
+            baseId: ordersBaseId,
+            tableName: "Payments",
+            filterByFormula: `{Order ID} = "${escapeAirtableValue(orderId)}"`,
+            maxRecords: 1,
+          })
+          if (paymentRecords.length > 0) {
+            await updateAirtableRecord({
+              baseId: ordersBaseId,
+              tableName: "Payments",
+              recordId: paymentRecords[0]!.id,
+              fields: {
+                "Shiprocket Order ID": result.orderId,
+                "Shipment ID": result.shipmentId,
+                "AWB Code": result.awbCode || "",
+                "Courier Name": result.courierName || "",
+                "Shipping Status": result.pickupRequested
+                  ? "Pickup Requested"
+                  : result.awbCode
+                    ? "AWB Assigned"
+                    : "Processing",
+              },
+            })
+          }
+        }
+      })
+      .catch((err) => console.error("Shiprocket order creation failed:", err))
 
     sendOrderConfirmationEmail({
       customerName: orderSession.shipping.name || "Customer",
       customerEmail: orderSession.shipping.email,
+      customerPhone: orderSession.shipping.phone,
       orderId,
       paymentId,
       packTitle: pack.title,
       packQty: pack.qty,
-      packPrice: pack.price,
+      packPrice: chargedAmount,
       shippingAddress: orderSession.shipping.address,
       shippingCity: orderSession.shipping.city,
       shippingState: orderSession.shipping.state,
       shippingPincode: orderSession.shipping.pincode,
+      promoCode: orderSession.promoCode,
+      discountAmount: orderSession.discountAmount,
     }).catch((err) => console.error("Order confirmation email failed:", err))
 
-    const response = NextResponse.json({
-      ok: true,
-      receiptToken: createReceiptToken({
-        packId: pack.id,
-        qty: pack.qty,
-      }),
-    })
+    // Mark abandoned cart as converted
+    markAbandonedCartConverted(ordersBaseId, orderId).catch((err) =>
+      console.error("Abandoned cart update failed:", err)
+    )
 
-    response.cookies.set(ORDER_SESSION_COOKIE, "", {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 0,
+    return createSuccessResponse({
+      pack,
+      orderId,
+      chargedAmount,
+      shippingName: orderSession.shipping.name,
+      shippingCity: orderSession.shipping.city,
+      shippingState: orderSession.shipping.state,
     })
-
-    return response
   } catch (error: any) {
     console.error("Order verification error:", error?.message || error)
     return NextResponse.json(
@@ -215,6 +300,119 @@ function isValidSignature(orderId: string, paymentId: string, signature: string,
   }
 
   return timingSafeEqual(expectedBuffer, actualBuffer)
+}
+
+function createSuccessResponse(options: {
+  pack: NonNullable<ReturnType<typeof getPackById>>
+  orderId: string
+  chargedAmount: number
+  shippingName: string
+  shippingCity: string
+  shippingState: string
+}) {
+  const response = NextResponse.json({
+    ok: true,
+    receiptToken: createReceiptToken({
+      packId: options.pack.id,
+      qty: options.pack.qty,
+      orderId: options.orderId,
+      packTitle: options.pack.title,
+      price: options.chargedAmount,
+      shippingName: options.shippingName,
+      shippingCity: options.shippingCity,
+      shippingState: options.shippingState,
+    }),
+  })
+
+  response.cookies.set(ORDER_SESSION_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  })
+
+  return response
+}
+
+async function backfillExistingPaymentRecord(options: {
+  ordersBaseId: string
+  orderId: string
+  paymentId: string
+  shipping: {
+    name: string
+    email: string
+    phone: string
+    address: string
+    city: string
+    state: string
+    pincode: string
+  }
+  fullAddress: string
+  amount: number
+  promoCode?: string
+  discountAmount?: number
+}) {
+  const paymentRecords = await queryAirtableRecords({
+    baseId: options.ordersBaseId,
+    tableName: "Payments",
+    filterByFormula: `{Payment ID} = "${escapeAirtableValue(options.paymentId)}"`,
+    maxRecords: 1,
+  })
+
+  if (paymentRecords.length === 0) {
+    return
+  }
+
+  const record = paymentRecords[0]!
+  const fields = record.fields
+  const updateFields: Record<string, string | number> = {}
+
+  if (!String(fields["Order ID"] || "")) updateFields["Order ID"] = options.orderId
+  if (!String(fields["Customer Name"] || "")) updateFields["Customer Name"] = options.shipping.name
+  if (!String(fields["Customer Email"] || "")) updateFields["Customer Email"] = options.shipping.email
+  if (!String(fields["Customer Phone"] || "")) updateFields["Customer Phone"] = options.shipping.phone
+  if (!String(fields["Full Shipping Address"] || "")) updateFields["Full Shipping Address"] = options.fullAddress
+  if (!String(fields["Shipping Address"] || "")) updateFields["Shipping Address"] = options.shipping.address
+  if (!String(fields["Shipping City"] || "")) updateFields["Shipping City"] = options.shipping.city
+  if (!String(fields["Shipping State"] || "")) updateFields["Shipping State"] = options.shipping.state
+  if (!String(fields["Shipping Pincode"] || "")) updateFields["Shipping Pincode"] = options.shipping.pincode
+  if (!Number(fields["Amount"] || 0)) updateFields["Amount"] = options.amount
+  if (options.promoCode && !String(fields["Promo Code"] || "")) updateFields["Promo Code"] = options.promoCode
+  if (options.discountAmount && !Number(fields["Discount Amount"] || 0)) {
+    updateFields["Discount Amount"] = options.discountAmount
+  }
+
+  if (Object.keys(updateFields).length === 0) {
+    return
+  }
+
+  await updateAirtableRecord({
+    baseId: options.ordersBaseId,
+    tableName: "Payments",
+    recordId: record.id,
+    fields: updateFields,
+  })
+}
+
+async function markAbandonedCartConverted(ordersBaseId: string, orderId: string) {
+  const records = await queryAirtableRecords({
+    baseId: ordersBaseId,
+    tableName: "Abandoned Carts",
+    filterByFormula: `{Razorpay Order ID} = "${escapeAirtableValue(orderId)}"`,
+    maxRecords: 1,
+  })
+
+  if (records.length === 0) {
+    return
+  }
+
+  await updateAirtableRecord({
+    baseId: ordersBaseId,
+    tableName: "Abandoned Carts",
+    recordId: records[0]!.id,
+    fields: { "Status": "converted", "Converted At": new Date().toISOString() },
+  })
 }
 
 export async function GET() {

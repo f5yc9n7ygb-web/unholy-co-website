@@ -6,12 +6,16 @@ import { useEffect, useState } from "react"
 import logoMark from "@/public/uhc-logo.png"
 
 const DISPLAY_DURATION = 1800
+// Minimum time the preloader stays visible (even if image loads instantly)
+const MIN_DISPLAY = 600
 
 export function Preloader() {
   const prefersReducedMotion = useReducedMotion()
   const [isVisible, setIsVisible] = useState(true)
   const [shouldRender, setShouldRender] = useState(true)
   const [isFirstVisit, setIsFirstVisit] = useState(true)
+  const [logoReady, setLogoReady] = useState(false)
+  const mountTime = useState(() => Date.now())[0]
 
   useEffect(() => {
     try {
@@ -33,12 +37,24 @@ export function Preloader() {
     }
   }, [isVisible])
 
+  // Wait for BOTH: logo loaded AND minimum display time elapsed
+  useEffect(() => {
+    if (!isFirstVisit || !logoReady) return
+    const duration = prefersReducedMotion ? 400 : DISPLAY_DURATION
+    const elapsed = Date.now() - mountTime
+    const remaining = Math.max(0, duration - elapsed)
+    // Ensure at least MIN_DISPLAY ms of visibility
+    const delay = Math.max(remaining, MIN_DISPLAY - elapsed)
+    const timer = setTimeout(() => setIsVisible(false), delay)
+    return () => clearTimeout(timer)
+  }, [prefersReducedMotion, isFirstVisit, logoReady, mountTime])
+
+  // Safety valve: if the image never loads, dismiss after a generous timeout
   useEffect(() => {
     if (!isFirstVisit) return
-    const duration = prefersReducedMotion ? 400 : DISPLAY_DURATION
-    const timer = setTimeout(() => setIsVisible(false), duration)
+    const timer = setTimeout(() => setLogoReady(true), 5000)
     return () => clearTimeout(timer)
-  }, [prefersReducedMotion, isFirstVisit])
+  }, [isFirstVisit])
 
   if (!shouldRender || !isFirstVisit) return null
 
@@ -68,7 +84,7 @@ export function Preloader() {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.25 } }}
-              transition={{ duration: 0.5, ease: [0.4, 0.05, 0.2, 1] }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             >
               <Image
                 src={logoMark}
@@ -77,6 +93,7 @@ export function Preloader() {
                 priority
                 placeholder="empty"
                 className="object-contain"
+                onLoad={() => setLogoReady(true)}
               />
             </motion.div>
             <motion.span
@@ -84,14 +101,14 @@ export function Preloader() {
               initial={{ opacity: 0, scaleY: 0.3 }}
               animate={{ opacity: 1, scaleY: 1 }}
               exit={{ opacity: 0, scaleY: 0, transition: { duration: 0.3 } }}
-              transition={{ duration: 0.6, ease: [0.4, 0.05, 0.2, 1] }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             />
             <motion.h1
               className="preloader-wordmark"
               initial={{ opacity: 0, letterSpacing: "0.2em" }}
               animate={{ opacity: 1, letterSpacing: "0.5em" }}
               exit={{ opacity: 0, y: -12, transition: { duration: 0.3 } }}
-              transition={{ duration: 0.7, ease: [0.4, 0.05, 0.2, 1] }}
+              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
             >
               UNHOLY CO.
             </motion.h1>
@@ -100,7 +117,7 @@ export function Preloader() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6, transition: { duration: 0.25 } }}
-              transition={{ duration: 0.6, delay: 0.15, ease: [0.4, 0.05, 0.2, 1] }}
+              transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
             >
               BLOODTHIRST RITUAL IN PROGRESS
             </motion.p>
@@ -110,7 +127,7 @@ export function Preloader() {
             <motion.span
               initial={{ width: "5%" }}
               animate={{ width: isVisible ? "80%" : "100%" }}
-              exit={{ width: "100%", transition: { duration: 0.4, ease: [0.4, 0.05, 0.2, 1] } }}
+              exit={{ width: "100%", transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } }}
               transition={{ duration: 1.8, ease: [0.6, 0.05, 0.4, 1] }}
             />
           </div>

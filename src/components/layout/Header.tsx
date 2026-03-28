@@ -14,7 +14,8 @@ const NAV_ITEMS: Array<{
   { label: "Drops", href: "/drops" as Route, eyebrow: "Limited runs", description: "Small-batch releases for night crawlers and back rooms." },
   { label: "Story", href: "/story" as Route, eyebrow: "Origin myth", description: "How BloodThirst was forged in neon glow and velvet darkness." },
   { label: "Bloodverse", href: "/bloodverse" as Route, eyebrow: "Immersive lore", description: "Audio-visual transmissions from the cult of hydration." },
-  { label: "Contact", href: "/contact" as Route, eyebrow: "Summon us", description: "Partnerships, drops, and rituals. We reply fast after midnight." }
+  { label: "Contact", href: "/contact" as Route, eyebrow: "Summon us", description: "Partnerships, drops, and rituals. We reply fast after midnight." },
+  { label: "Track Order", href: "/track" as Route, eyebrow: "Shipment status", description: "Track your BloodThirst order in real-time." }
 ]
 
 /**
@@ -31,7 +32,7 @@ export function Header() {
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10)
     onScroll()
-    window.addEventListener('scroll', onScroll)
+    window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 

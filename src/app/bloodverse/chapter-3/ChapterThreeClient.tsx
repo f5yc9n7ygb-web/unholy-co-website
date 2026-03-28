@@ -23,7 +23,7 @@ export default function ChapterThreeClient() {
         chapterNumber="III"
         title="The Choir of Ash"
         subtitle="The final sip. The first truth. The wall between story and reality breaks."
-        timestamp="Dawn &middot; The Highest Point"
+        timestamp="Dawn · The Highest Point"
       />
 
       {/* ── THE STORY ── */}

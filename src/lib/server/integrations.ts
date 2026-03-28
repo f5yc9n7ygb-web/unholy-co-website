@@ -1,6 +1,12 @@
 import { buildWelcomeEmailHtml } from "@/lib/email/welcome-template";
 import { buildOrderConfirmationHtml, buildOrderConfirmationText, type OrderConfirmationOptions } from "@/lib/email/order-confirmation-template";
+import {
+  buildAbandonedCartEmail1Html, buildAbandonedCartEmail1Text,
+  buildAbandonedCartEmail2Html, buildAbandonedCartEmail2Text,
+  type AbandonedCartEmailOptions,
+} from "@/lib/email/abandoned-cart-templates";
 import { Buffer } from "node:buffer";
+import { generateInvoicePdf } from "@/lib/pdf/generate-invoice";
 
 type AirtableOptions = {
   tableName?: string;
@@ -9,11 +15,18 @@ type AirtableOptions = {
 
 type AirtableFields = Record<string, string | number | boolean | null | undefined>;
 
+type MailjetAttachment = {
+  ContentType: string;
+  Filename: string;
+  Base64Content: string;
+};
+
 type MailjetOptions = {
   to: string | string[];
   subject: string;
   html?: string;
   text?: string;
+  attachments?: MailjetAttachment[];
 };
 
 const AIRTABLE_ENDPOINT = "https://api.airtable.com/v0";
@@ -87,6 +100,7 @@ export async function sendMailjetEmail(options: MailjetOptions): Promise<void> {
           Subject: options.subject,
           HTMLPart: options.html,
           TextPart: options.text,
+          ...(options.attachments?.length ? { Attachments: options.attachments } : {}),
         },
       ],
     }),
@@ -104,11 +118,43 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
     return;
   }
 
+  // Generate invoice PDF to attach
+  let attachments: MailjetAttachment[] = [];
+  try {
+    const pdfBytes = await generateInvoicePdf({
+      orderId: options.orderId,
+      paymentId: options.paymentId,
+      pack: options.packTitle,
+      quantity: options.packQty,
+      amount: options.packPrice,
+      customerName: options.customerName,
+      customerEmail: options.customerEmail,
+      customerPhone: options.customerPhone,
+      shippingAddress: options.shippingAddress,
+      shippingCity: options.shippingCity,
+      shippingState: options.shippingState,
+      shippingPincode: options.shippingPincode,
+      timestamp: new Date().toISOString(),
+      promoCode: options.promoCode,
+      discountAmount: options.discountAmount,
+    });
+
+    attachments = [{
+      ContentType: "application/pdf",
+      Filename: `UNHOLY-Invoice-${options.orderId}.pdf`,
+      Base64Content: Buffer.from(pdfBytes).toString("base64"),
+    }];
+  } catch (err) {
+    // Don't block the email if PDF generation fails
+    console.error("Invoice PDF generation failed, sending email without attachment:", err);
+  }
+
   await sendMailjetEmail({
     to: options.customerEmail,
     subject: `Order confirmed — BloodThirst is on its way.`,
     html: buildOrderConfirmationHtml(options),
     text: buildOrderConfirmationText(options),
+    attachments,
   });
 }
 
@@ -187,4 +233,101 @@ function removeOptionalAirtableFields(fields: AirtableFields) {
   });
 
   return changed ? Object.fromEntries(sanitizedEntries) : null;
+}
+
+/* ─── Airtable Query & Update Helpers ─── */
+
+export type AirtableRecord = {
+  id: string;
+  fields: AirtableFields;
+};
+
+export async function queryAirtableRecords(options: {
+  baseId: string;
+  tableName: string;
+  filterByFormula: string;
+  maxRecords?: number;
+  sort?: Array<{ field: string; direction?: "asc" | "desc" }>;
+}): Promise<AirtableRecord[]> {
+  const token = getRequiredEnv("AIRTABLE_TOKEN");
+  const params = new URLSearchParams({
+    filterByFormula: options.filterByFormula,
+    maxRecords: String(options.maxRecords || 100),
+  });
+  if (options.sort) {
+    options.sort.forEach((s, i) => {
+      params.append(`sort[${i}][field]`, s.field);
+      if (s.direction) params.append(`sort[${i}][direction]`, s.direction);
+    });
+  }
+
+  const url = `${AIRTABLE_ENDPOINT}/${options.baseId}/${encodeURIComponent(options.tableName)}?${params}`;
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Airtable query error (${response.status}): ${message}`);
+  }
+
+  const data = await response.json() as { records: AirtableRecord[] };
+  return data.records;
+}
+
+export async function updateAirtableRecord(options: {
+  baseId: string;
+  tableName: string;
+  recordId: string;
+  fields: AirtableFields;
+}): Promise<void> {
+  const token = getRequiredEnv("AIRTABLE_TOKEN");
+  const url = `${AIRTABLE_ENDPOINT}/${options.baseId}/${encodeURIComponent(options.tableName)}/${options.recordId}`;
+
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ fields: options.fields }),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Airtable update error (${response.status}): ${message}`);
+  }
+}
+
+/* ─── Abandoned Cart Emails ─── */
+
+export type AbandonedCartSendOptions = AbandonedCartEmailOptions & { customerEmail: string };
+
+export async function sendAbandonedCartEmail1(options: AbandonedCartSendOptions): Promise<void> {
+  if (!hasMailjetConfig()) {
+    console.warn("Mailjet is not configured; skipping abandoned cart email 1.");
+    return;
+  }
+
+  await sendMailjetEmail({
+    to: options.customerEmail,
+    subject: "Your ritual was left unfinished.",
+    html: buildAbandonedCartEmail1Html(options),
+    text: buildAbandonedCartEmail1Text(options),
+  });
+}
+
+export async function sendAbandonedCartEmail2(options: AbandonedCartSendOptions): Promise<void> {
+  if (!hasMailjetConfig()) {
+    console.warn("Mailjet is not configured; skipping abandoned cart email 2.");
+    return;
+  }
+
+  await sendMailjetEmail({
+    to: options.customerEmail,
+    subject: "The BloodThirst doesn't forget.",
+    html: buildAbandonedCartEmail2Html(options),
+    text: buildAbandonedCartEmail2Text(options),
+  });
 }

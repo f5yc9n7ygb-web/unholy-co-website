@@ -9,7 +9,7 @@ import * as THREE from "three"
 
 function CanModel({ autoRotate }: { autoRotate: boolean }) {
   const { scene } = useGLTF("/bloodthirst.glb")
-  const texture = useTexture("/bloodthirst-texture.png")
+  const texture = useTexture("/bloodthirst-texture.webp")
   const ref = useRef<THREE.Group>(null)
 
   texture.flipY = false
@@ -49,7 +49,9 @@ function CanModel({ autoRotate }: { autoRotate: boolean }) {
 
   useFrame((_, delta) => {
     if (autoRotate && ref.current) {
-      ref.current.rotation.y += delta * 0.3
+      // Clamp delta to prevent runaway rotation after tab-switch or long frames
+      const dt = Math.min(delta, 0.1)
+      ref.current.rotation.y += dt * 0.3
     }
   })
 
@@ -69,6 +71,7 @@ function BloodCaustic() {
   useFrame(({ clock }) => {
     if (meshRef.current) {
       const mat = meshRef.current.material as THREE.MeshBasicMaterial
+      // clock.elapsedTime is safe — it doesn't spike on tab-switch like delta does
       mat.opacity = 0.12 + Math.sin(clock.elapsedTime * 0.8) * 0.04
     }
   })

@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { label: "Story",       href: "/story"       },
   { label: "Bloodverse",  href: "/bloodverse"  },
   { label: "Shop",        href: "/shop"        },
+  { label: "FAQ",          href: "/faq"         },
   { label: "Contact",     href: "/contact"     },
 ]
 
@@ -86,17 +87,37 @@ export function Footer() {
           </nav>
         </div>
 
-        {/* Contact */}
+        {/* Support */}
         <div className="space-y-4">
           <p className="text-[10px] uppercase tracking-[0.4em] text-bone/25">Ritual Support</p>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <a
               href="mailto:rituals@theunholy.co"
               className="block text-sm text-offwhite/40 transition-colors hover:text-blood"
             >
               rituals@theunholy.co
             </a>
-            <p className="text-xs text-offwhite/25">
+            <TransitionLink
+              href="/track"
+              className="block text-sm text-offwhite/40 transition-colors hover:text-blood"
+            >
+              Track Order
+            </TransitionLink>
+            <TransitionLink
+              href="/refund"
+              className="block text-sm text-offwhite/40 transition-colors hover:text-blood"
+            >
+              Refunds &amp; Returns
+            </TransitionLink>
+            <a
+              href="https://wa.me/919870066131"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-sm text-offwhite/40 transition-colors hover:text-blood"
+            >
+              WhatsApp Support
+            </a>
+            <p className="pt-1 text-xs text-offwhite/25">
               We reply fast after midnight.
             </p>
           </div>
