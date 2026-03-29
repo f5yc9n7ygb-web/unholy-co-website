@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json() as { query?: string }
-    const query = sanitizeText(body.query, 120).toLowerCase()
+    const query = sanitizeText(body.query, 120)
 
     if (!query) {
       return NextResponse.json({ ok: false, error: "Please enter an order ID or email." }, { status: 400 })
@@ -46,8 +46,11 @@ export async function POST(request: NextRequest) {
 
     const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
-    // Only allow tracking by order ID (not email alone) to prevent enumeration
-    const filterFormula = `{Order ID} = "${escapeAirtableValue(query)}"`
+    // If query looks like an email, search by Customer Email; otherwise by Order ID
+    const isEmail = query.includes("@")
+    const filterFormula = isEmail
+      ? `{Customer Email} = "${escapeAirtableValue(query.toLowerCase())}"`
+      : `{Order ID} = "${escapeAirtableValue(query)}"`
 
     const records = await queryAirtableRecords({
       baseId: ordersBaseId,
