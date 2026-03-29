@@ -153,17 +153,25 @@ export async function POST(request: NextRequest) {
           amount: order.amount,
           currency: order.currency,
         },
+        // Belt-and-suspenders: pass token in body as fallback for envs where KV isn't bound
+        sessionToken,
       },
       { status: 200 }
     )
 
     nextResponse.cookies.set(ORDER_SESSION_COOKIE, sessionToken, {
       httpOnly: true,
-      sameSite: "strict",
+      sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: 30 * 60,
     })
+
+    // Store session in KV keyed by Razorpay order ID — most reliable retrieval
+    // path for Cloudflare edge where cookie Set-Cookie headers can be dropped.
+    if (kv) {
+      await kv.put(`os:${order.id}`, sessionToken, { expirationTtl: 30 * 60 })
+    }
 
     // Save abandoned cart intent — will be marked "converted" on successful payment
     const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")

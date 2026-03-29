@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 import { getGstAmount, getBasePrice, GST_RATE } from "@/lib/shop/catalog"
+import { UHC_LOGO_BASE64 } from "./logo"
 
 export type InvoiceData = {
   orderId: string
@@ -42,9 +43,9 @@ function getStateCode(state: string): string {
   return STATE_CODES[state.toLowerCase().trim()] || ""
 }
 
-/** Supplier state — Delhi */
-const SUPPLIER_STATE = "Delhi"
-const SUPPLIER_STATE_CODE = "07"
+/** Supplier state — Uttar Pradesh */
+const SUPPLIER_STATE = "Uttar Pradesh"
+const SUPPLIER_STATE_CODE = "09"
 
 /**
  * Generate a GST-compliant A4 tax invoice PDF.
@@ -53,7 +54,7 @@ const SUPPLIER_STATE_CODE = "07"
  * - Supplier name, address, GSTIN
  * - Sequential invoice number (unique per FY)
  * - Date of issue
- * - Recipient name, address, state name + code (for B2C > ₹50k or interstate)
+ * - Recipient name, address, state name + code (for B2C > Rs. 50k or interstate)
  * - HSN code, description, quantity, unit, rate, taxable value
  * - CGST/SGST or IGST shown separately
  * - Place of supply with state name
@@ -96,9 +97,16 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   const leftMargin = 50
   const rightEdge = 545
 
+  // Load the logo
+  const logoBytes = Uint8Array.from(atob(UHC_LOGO_BASE64), c => c.charCodeAt(0))
+  const logoImage = await pdf.embedPng(logoBytes)
+  
   // ── Header ──
-  page.drawText("UNHOLY CO.", {
-    x: leftMargin, y, size: 22, font: fontBold, color: bloodRed,
+  page.drawImage(logoImage, {
+    x: leftMargin, y: y - 16, width: 36, height: 36,
+  })
+  page.drawText("Unholy Beverages Pvt Ltd", {
+    x: leftMargin + 45, y, size: 20, font: fontBold, color: bloodRed,
   })
   page.drawText("TAX INVOICE", {
     x: rightEdge - fontBold.widthOfTextAtSize("TAX INVOICE", 14),
@@ -106,8 +114,8 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   })
 
   y -= 18
-  page.drawText("Himalayan Natural Mineral Water for the Counterculture", {
-    x: leftMargin, y, size: 8, font: fontRegular, color: grey,
+  page.drawText("Cause your lever already hates you", {
+    x: leftMargin + 45, y, size: 9, font: fontRegular, color: grey,
   })
 
   // Separator
@@ -120,10 +128,11 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   // ── Supplier Details (Rule 46(a)) ──
   y -= 24
   const companyLines = [
-    "UNHOLY CO.",
-    "New Delhi, India",
+    "Unholy Beverages Pvt Ltd",
+    "C-12, Bank Colony, Krishna Nagar",
+    "Mathura, 281004",
     `State: ${SUPPLIER_STATE} (${SUPPLIER_STATE_CODE})`,
-    "GSTIN: [As applicable]",
+    "GSTIN: 09AADCU8103C1ZL",
   ]
   for (const line of companyLines) {
     page.drawText(line, { x: leftMargin, y, size: 9, font: fontRegular, color: grey })
@@ -205,8 +214,8 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     { label: "HSN", x: 240 },
     { label: "Qty", x: 295 },
     { label: "Unit", x: 335 },
-    { label: "Rate (₹)", x: 380 },
-    { label: "Taxable Val (₹)", x: 460 },
+    { label: "Rate (Rs.)", x: 380 },
+    { label: "Taxable Val (Rs.)", x: 440 },
   ]
   for (const col of cols) {
     page.drawText(col.label, { x: col.x, y: y + 2, size: 7.5, font: fontBold, color: grey })
@@ -247,22 +256,22 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   const totalValCol = 460
 
   const totals: [string, string, boolean?][] = [
-    ["Taxable Value", `₹${originalBasePrice.toLocaleString("en-IN")}`],
+    ["Taxable Value", `Rs. ${originalBasePrice.toLocaleString("en-IN")}`],
   ]
 
   // Discount line (Section 15(3) CGST Act — must show on invoice)
   if (discountAmount && discountAmount > 0) {
     const discountLabel = promoCode ? `Discount (${promoCode})` : "Discount"
-    totals.push([discountLabel, `− ₹${discountAmount.toLocaleString("en-IN")}`])
-    totals.push(["Taxable Value (after discount)", `₹${basePrice.toLocaleString("en-IN")}`])
+    totals.push([discountLabel, `− Rs. ${discountAmount.toLocaleString("en-IN")}`])
+    totals.push(["Taxable Value (after discount)", `Rs. ${basePrice.toLocaleString("en-IN")}`])
   }
 
   // Tax breakdown — IGST for interstate, CGST+SGST for intra-state
   if (isInterstate) {
-    totals.push([`IGST (${GST_RATE * 100}%)`, `₹${gstAmount.toLocaleString("en-IN")}`])
+    totals.push([`IGST (${GST_RATE * 100}%)`, `Rs. ${gstAmount.toLocaleString("en-IN")}`])
   } else {
-    totals.push([`CGST (${(GST_RATE * 100) / 2}%)`, `₹${(gstAmount / 2).toLocaleString("en-IN")}`])
-    totals.push([`SGST (${(GST_RATE * 100) / 2}%)`, `₹${(gstAmount / 2).toLocaleString("en-IN")}`])
+    totals.push([`CGST (${(GST_RATE * 100) / 2}%)`, `Rs. ${(gstAmount / 2).toLocaleString("en-IN")}`])
+    totals.push([`SGST (${(GST_RATE * 100) / 2}%)`, `Rs. ${(gstAmount / 2).toLocaleString("en-IN")}`])
   }
 
   for (const [label, value] of totals) {
@@ -278,7 +287,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     thickness: 1, color: bloodRed,
   })
   page.drawText("TOTAL", { x: totalCol, y: y - 8, size: 11, font: fontBold, color: black })
-  page.drawText(`₹${amount.toLocaleString("en-IN")}`, {
+  page.drawText(`Rs. ${amount.toLocaleString("en-IN")}`, {
     x: totalValCol, y: y - 8, size: 11, font: fontBold, color: bloodRed,
   })
 
@@ -297,10 +306,10 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   page.drawText("This is a computer-generated invoice and does not require a physical signature.", {
     x: leftMargin, y: footerY + 16, size: 7, font: fontRegular, color: grey,
   })
-  page.drawText("UNHOLY CO. — theunholy.co — rituals@theunholy.co — +91 98700 66131", {
+  page.drawText("UNHOLY CO. — theunholy.co — rituals@theunholy.co", {
     x: leftMargin, y: footerY + 4, size: 7, font: fontRegular, color: grey,
   })
-  page.drawText("Subject to Delhi jurisdiction.", {
+  page.drawText("Subject to Mathura jurisdiction.", {
     x: leftMargin, y: footerY - 8, size: 7, font: fontRegular, color: grey,
   })
 

@@ -162,6 +162,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
                 razorpay_order_id: data.order.id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
+                sessionToken: data.sessionToken,
               }),
             })
             const verification = await verifyResponse.json()
@@ -169,7 +170,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
               throw new Error(
                 verifyResponse.status === 409
                   ? "This payment has already been confirmed."
-                  : "Payment verification failed."
+                  : "We could not verify your payment immediately. Please contact rituals@theunholy.co"
               )
             }
             try { localStorage.removeItem("unholy_cart") } catch {}

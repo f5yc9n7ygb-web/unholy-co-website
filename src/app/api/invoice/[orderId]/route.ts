@@ -52,7 +52,10 @@ export async function GET(
       discountAmount: Number(fields["Discount Amount"] || 0) || undefined,
     })
 
-    return new NextResponse(pdfBytes, {
+    // Use the Web standard Response (not NextResponse) — accepts Uint8Array directly
+    // and works correctly in both Node.js and Cloudflare Workers runtimes without
+    // TypeScript BodyInit type conflicts.
+    return new Response(pdfBytes as any, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

@@ -90,7 +90,7 @@ export async function sendMailjetEmail(options: MailjetOptions): Promise<void> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`,
+      Authorization: `Basic ${btoa(`${apiKey}:${apiSecret}`)}`,
     },
     body: JSON.stringify({
       Messages: [
@@ -139,10 +139,17 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
       discountAmount: options.discountAmount,
     });
 
+    // Cloudflare Edge safe conversion of Uint8Array to base64
+    let binary = "";
+    for (let i = 0; i < pdfBytes.byteLength; i++) {
+      binary += String.fromCharCode(pdfBytes[i]);
+    }
+    const base64Pdf = btoa(binary);
+
     attachments = [{
       ContentType: "application/pdf",
       Filename: `UNHOLY-Invoice-${options.orderId}.pdf`,
-      Base64Content: Buffer.from(pdfBytes).toString("base64"),
+      Base64Content: base64Pdf,
     }];
   } catch (err) {
     // Don't block the email if PDF generation fails
@@ -234,6 +241,38 @@ function removeOptionalAirtableFields(fields: AirtableFields) {
 
   return changed ? Object.fromEntries(sanitizedEntries) : null;
 }
+
+/**
+ * Log an error to the Airtable 'Errors' table.
+ */
+export async function logErrorToAirtable(context: string, error: unknown, options?: { baseId?: string; }) {
+  try {
+    const baseId = options?.baseId || process.env.AIRTABLE_ORDERS_BASE_ID;
+    const token = process.env.AIRTABLE_TOKEN;
+    if (!baseId || !token) return;
+
+    let message = "Unknown Error";
+    let stack = "";
+
+    if (error instanceof Error) {
+      message = error.message;
+      stack = error.stack || "";
+    } else if (typeof error === "string") {
+      message = error;
+    } else {
+      message = JSON.stringify(error);
+    }
+
+    await writeRecord(baseId, token, "Errors", {
+      Context: context,
+      Message: message,
+      Stack: stack,
+    });
+  } catch (err) {
+    console.error("Failed to log error to Airtable:", err);
+  }
+}
+
 
 /* ─── Airtable Query & Update Helpers ─── */
 

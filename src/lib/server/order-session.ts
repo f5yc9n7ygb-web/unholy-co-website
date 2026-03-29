@@ -50,7 +50,7 @@ globalThis.__unholyProcessedPayments = processedPayments
 const singleUseStore = globalThis.__unholySingleUseStore ?? new Map<string, number>()
 globalThis.__unholySingleUseStore = singleUseStore
 
-export const ORDER_SESSION_COOKIE = "__Host-unholy-order-session"
+export const ORDER_SESSION_COOKIE = "unholy-order-session"
 
 const ORDER_SESSION_TTL_MS = 60 * 60 * 1000
 const RECEIPT_TTL_MS = 2 * 60 * 60 * 1000

@@ -1,8 +1,8 @@
-import { createHmac, timingSafeEqual } from "node:crypto"
+import { createHmac } from "node:crypto"
 import { Buffer } from "node:buffer"
 import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
-import { getRequiredEnv, sendOrderConfirmationEmail, saveRecordToAirtable, queryAirtableRecords, updateAirtableRecord } from "@/lib/server/integrations"
+import { getRequiredEnv, sendOrderConfirmationEmail, saveRecordToAirtable, queryAirtableRecords, updateAirtableRecord, logErrorToAirtable } from "@/lib/server/integrations"
 import { getKVNamespace } from "@/lib/server/kv"
 import {
   ORDER_SESSION_COOKIE,
@@ -56,11 +56,11 @@ export async function POST(request: NextRequest) {
       razorpay_order_id?: string
       razorpay_payment_id?: string
       razorpay_signature?: string
+      sessionToken?: string
     }>(body, ORDER_BODY_LIMIT_BYTES)
     const orderId = sanitizeText(payload.razorpay_order_id, 64)
     const paymentId = sanitizeText(payload.razorpay_payment_id, 64)
     const signature = sanitizeText(payload.razorpay_signature, 128)
-    const orderSession = readOrderSessionToken(request.cookies.get(ORDER_SESSION_COOKIE)?.value)
 
     if (!orderId || !paymentId || !signature) {
       return NextResponse.json(
@@ -69,9 +69,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Resolution order: KV (most reliable on Cloudflare edge) → body token → cookie
+    const kvToken = kv ? await kv.get(`os:${orderId}`) : null
+    const bodyToken = sanitizeText(payload.sessionToken, 2048)
+    const cookieToken = request.cookies.get(ORDER_SESSION_COOKIE)?.value
+    const rawToken = kvToken || bodyToken || cookieToken
+    const orderSession = readOrderSessionToken(rawToken)
+
+    console.log(`[verify] orderId=${orderId} kvToken=${!!kvToken} bodyToken=${!!bodyToken} cookieToken=${!!cookieToken} sessionOk=${!!orderSession}`)
+
     if (!orderSession || orderSession.orderId !== orderId) {
       return NextResponse.json(
-        { ok: false, error: "This checkout session is invalid or expired." },
+        { ok: false, error: `This checkout session is invalid or expired. (kv=${!!kvToken} body=${!!bodyToken} cookie=${!!cookieToken} parsed=${!!orderSession})` },
         { status: 400 }
       )
     }
@@ -173,43 +182,32 @@ export async function POST(request: NextRequest) {
       "Customer Email": orderSession.shipping.email,
       "Customer Phone": orderSession.shipping.phone,
       "Full Shipping Address": fullAddress,
-      "Shipping Address": orderSession.shipping.address,
-      "Shipping City": orderSession.shipping.city,
-      "Shipping State": orderSession.shipping.state,
-      "Shipping Pincode": orderSession.shipping.pincode,
       "Timestamp": new Date().toISOString(),
       "Shipping Status": "Processing",
       ...(orderSession.promoCode ? { "Promo Code": orderSession.promoCode } : {}),
       ...(orderSession.discountAmount ? { "Discount Amount": orderSession.discountAmount } : {}),
     }, { baseId: ordersBaseId, tableName: "Payments" })
 
-    // Decrement inventory stock
-    decrementStock(pack.id, pack.qty).catch((err) => console.error("Inventory decrement failed:", err))
-
-    // Increment promo code usage if one was applied
-    if (orderSession.promoRecordId) {
-      incrementPromoUsage(orderSession.promoRecordId).catch((err) => console.error("Promo usage increment failed:", err))
-    }
-
-    // Create Shiprocket order (best-effort — skips if not configured)
-    createShiprocketOrder({
-      orderId,
-      orderDate: new Date().toISOString().split("T")[0]!,
-      billingName: orderSession.shipping.name,
-      billingEmail: orderSession.shipping.email,
-      billingPhone: orderSession.shipping.phone,
-      billingAddress: orderSession.shipping.address,
-      billingCity: orderSession.shipping.city,
-      billingState: orderSession.shipping.state,
-      billingPincode: orderSession.shipping.pincode,
-      productName: pack.title,
-      productQty: pack.qty,
-      productPrice: chargedAmount,
-      weight: Math.max(0.5, pack.qty * 0.4),
-    })
-      .then(async (result) => {
+    // Await all post-order background tasks so they don't get killed by the Edge runtime immediately
+    await Promise.allSettled([
+      decrementStock(pack.id, pack.qty),
+      orderSession.promoRecordId ? incrementPromoUsage(orderSession.promoRecordId) : Promise.resolve(),
+      createShiprocketOrder({
+        orderId,
+        orderDate: new Date().toISOString().split("T")[0]!,
+        billingName: orderSession.shipping.name,
+        billingEmail: orderSession.shipping.email,
+        billingPhone: orderSession.shipping.phone,
+        billingAddress: orderSession.shipping.address,
+        billingCity: orderSession.shipping.city,
+        billingState: orderSession.shipping.state,
+        billingPincode: orderSession.shipping.pincode,
+        productName: pack.title,
+        productQty: pack.qty,
+        productPrice: chargedAmount,
+        weight: pack.qty * 0.5,
+      }).then(async (result) => {
         if (result) {
-          // Update the Airtable payment record with shipping details
           const paymentRecords = await queryAirtableRecords({
             baseId: ordersBaseId,
             tableName: "Payments",
@@ -235,30 +233,36 @@ export async function POST(request: NextRequest) {
             })
           }
         }
+      }),
+      sendOrderConfirmationEmail({
+        customerName: orderSession.shipping.name || "Customer",
+        customerEmail: orderSession.shipping.email,
+        customerPhone: orderSession.shipping.phone,
+        orderId,
+        paymentId,
+        packTitle: pack.title,
+        packQty: pack.qty,
+        packPrice: chargedAmount,
+        shippingAddress: orderSession.shipping.address,
+        shippingCity: orderSession.shipping.city,
+        shippingState: orderSession.shipping.state,
+        shippingPincode: orderSession.shipping.pincode,
+        promoCode: orderSession.promoCode,
+        discountAmount: orderSession.discountAmount,
+      }),
+      markAbandonedCartConverted(ordersBaseId, orderId)
+    ]).then(results => {
+      // Safely monitor background task exceptions
+      results.forEach((result, idx) => {
+        if (result.status === "rejected") {
+          console.error(`Background task ${idx} failed in verify route:`, result.reason)
+          logErrorToAirtable(
+            `Background Task ${idx} Failure (Order: ${orderId})`,
+            result.reason?.stack || result.reason?.message || String(result.reason)
+          ).catch(e => console.error("Error logger failed:", e))
+        }
       })
-      .catch((err) => console.error("Shiprocket order creation failed:", err))
-
-    sendOrderConfirmationEmail({
-      customerName: orderSession.shipping.name || "Customer",
-      customerEmail: orderSession.shipping.email,
-      customerPhone: orderSession.shipping.phone,
-      orderId,
-      paymentId,
-      packTitle: pack.title,
-      packQty: pack.qty,
-      packPrice: chargedAmount,
-      shippingAddress: orderSession.shipping.address,
-      shippingCity: orderSession.shipping.city,
-      shippingState: orderSession.shipping.state,
-      shippingPincode: orderSession.shipping.pincode,
-      promoCode: orderSession.promoCode,
-      discountAmount: orderSession.discountAmount,
-    }).catch((err) => console.error("Order confirmation email failed:", err))
-
-    // Mark abandoned cart as converted
-    markAbandonedCartConverted(ordersBaseId, orderId).catch((err) =>
-      console.error("Abandoned cart update failed:", err)
-    )
+    })
 
     return createSuccessResponse({
       pack,
@@ -270,8 +274,10 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error("Order verification error:", error?.message || error)
+    await logErrorToAirtable("Order Verification", error)
+    
     return NextResponse.json(
-      { ok: false, error: "Unable to verify the payment right now." },
+      { ok: false, error: "Payment verification failed. Please contact customer support." },
       { status: 500 }
     )
   }
@@ -293,13 +299,16 @@ function isValidSignature(orderId: string, paymentId: string, signature: string,
     .update(`${orderId}|${paymentId}`)
     .digest("hex")
 
-  const expectedBuffer = Uint8Array.from(Buffer.from(expected))
-  const actualBuffer = Uint8Array.from(Buffer.from(signature))
-  if (expectedBuffer.length !== actualBuffer.length) {
+  if (expected.length !== signature.length) {
     return false
   }
 
-  return timingSafeEqual(expectedBuffer, actualBuffer)
+  let mismatch = 0
+  for (let i = 0; i < expected.length; i++) {
+    mismatch |= expected.charCodeAt(i) ^ signature.charCodeAt(i)
+  }
+
+  return mismatch === 0
 }
 
 function createSuccessResponse(options: {
@@ -326,7 +335,7 @@ function createSuccessResponse(options: {
 
   response.cookies.set(ORDER_SESSION_COOKIE, "", {
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 0,
@@ -373,10 +382,6 @@ async function backfillExistingPaymentRecord(options: {
   if (!String(fields["Customer Email"] || "")) updateFields["Customer Email"] = options.shipping.email
   if (!String(fields["Customer Phone"] || "")) updateFields["Customer Phone"] = options.shipping.phone
   if (!String(fields["Full Shipping Address"] || "")) updateFields["Full Shipping Address"] = options.fullAddress
-  if (!String(fields["Shipping Address"] || "")) updateFields["Shipping Address"] = options.shipping.address
-  if (!String(fields["Shipping City"] || "")) updateFields["Shipping City"] = options.shipping.city
-  if (!String(fields["Shipping State"] || "")) updateFields["Shipping State"] = options.shipping.state
-  if (!String(fields["Shipping Pincode"] || "")) updateFields["Shipping Pincode"] = options.shipping.pincode
   if (!Number(fields["Amount"] || 0)) updateFields["Amount"] = options.amount
   if (options.promoCode && !String(fields["Promo Code"] || "")) updateFields["Promo Code"] = options.promoCode
   if (options.discountAmount && !Number(fields["Discount Amount"] || 0)) {
