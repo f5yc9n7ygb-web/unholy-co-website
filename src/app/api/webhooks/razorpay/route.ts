@@ -23,6 +23,7 @@ import {
   sendOrderConfirmationEmail,
   queryAirtableRecords,
   updateAirtableRecord,
+  logErrorToAirtable,
 } from "@/lib/server/integrations"
 import { getKVNamespace } from "@/lib/server/kv"
 import { escapeAirtableValue } from "@/lib/server/security"
@@ -175,10 +176,6 @@ export async function POST(request: NextRequest) {
         "Customer Email": customerEmail,
         "Customer Phone": customerPhone,
         "Full Shipping Address": fullAddress,
-        "Shipping Address": shippingAddress,
-        "Shipping City": shippingCity,
-        "Shipping State": shippingState,
-        "Shipping Pincode": shippingPincode,
         "Timestamp": new Date().toISOString(),
         "Shipping Status": "Processing",
         ...(promoCode ? { "Promo Code": promoCode } : {}),
@@ -187,54 +184,50 @@ export async function POST(request: NextRequest) {
       { baseId: ordersBaseId, tableName: "Payments" }
     )
 
-    // Mark cart as converted
-    await updateAirtableRecord({
-      baseId: ordersBaseId,
-      tableName: "Abandoned Carts",
-      recordId: cart.id,
-      fields: { Status: "converted", "Converted At": new Date().toISOString() },
-    }).catch((err) => console.error("Webhook: cart update failed:", err))
-
-    // Decrement inventory
-    decrementStock(pack.id, pack.qty).catch((err) => console.error("Webhook: inventory decrement failed:", err))
-
-    // Send confirmation email
-    sendOrderConfirmationEmail({
-      customerName: customerName || "Customer",
-      customerEmail,
-      customerPhone,
-      orderId,
-      paymentId,
-      packTitle: pack.title,
-      packQty: pack.qty,
-      packPrice: chargedAmount,
-      shippingAddress,
-      shippingCity,
-      shippingState,
-      shippingPincode,
-      promoCode: promoCode || undefined,
-      discountAmount: discountAmount || undefined,
-    }).catch((err) => console.error("Webhook: confirmation email failed:", err))
+    const backgroundTasks = [
+      updateAirtableRecord({
+        baseId: ordersBaseId,
+        tableName: "Abandoned Carts",
+        recordId: cart.id,
+        fields: { Status: "converted", "Converted At": new Date().toISOString() },
+      }),
+      decrementStock(pack.id, pack.qty),
+      sendOrderConfirmationEmail({
+        customerName: customerName || "Customer",
+        customerEmail,
+        customerPhone,
+        orderId,
+        paymentId,
+        packTitle: pack.title,
+        packQty: pack.qty,
+        packPrice: chargedAmount,
+        shippingAddress,
+        shippingCity,
+        shippingState,
+        shippingPincode,
+        promoCode: promoCode || undefined,
+        discountAmount: discountAmount || undefined,
+      })
+    ]
 
     if (shippingAddress && shippingCity && shippingState && shippingPincode) {
-      createShiprocketOrder({
-        orderId,
-        orderDate: new Date().toISOString().split("T")[0]!,
-        billingName: customerName,
-        billingEmail: customerEmail,
-        billingPhone: customerPhone,
-        billingAddress: shippingAddress,
-        billingCity: shippingCity,
-        billingState: shippingState,
-        billingPincode: shippingPincode,
-        productName: pack.title,
-        productQty: pack.qty,
-        productPrice: chargedAmount,
-        weight: Math.max(0.5, pack.qty * 0.4),
-      })
-        .then(async (result) => {
+      backgroundTasks.push(
+        createShiprocketOrder({
+          orderId,
+          orderDate: new Date().toISOString().split("T")[0]!,
+          billingName: customerName,
+          billingEmail: customerEmail,
+          billingPhone: customerPhone,
+          billingAddress: shippingAddress,
+          billingCity: shippingCity,
+          billingState: shippingState,
+          billingPincode: shippingPincode,
+          productName: pack.title,
+          productQty: pack.qty,
+          productPrice: chargedAmount,
+          weight: pack.qty * 0.5,
+        }).then(async (result) => {
           if (result) {
-            // Update Airtable with shipping info
             const paymentRecords = await queryAirtableRecords({
               baseId: ordersBaseId,
               tableName: "Payments",
@@ -261,14 +254,17 @@ export async function POST(request: NextRequest) {
             }
           }
         })
-        .catch((err) => console.error("Webhook: Shiprocket order failed:", err))
+      )
     } else {
       console.warn(`Webhook: Missing shipping address for order ${orderId}; skipping Shiprocket creation.`)
     }
 
+    await Promise.allSettled(backgroundTasks)
+
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     console.error("Razorpay webhook error:", error?.message || error)
+    await logErrorToAirtable("Razorpay Webhook", error)
     return NextResponse.json({ ok: false }, { status: 500 })
   }
 }
