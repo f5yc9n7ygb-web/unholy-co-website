@@ -199,70 +199,17 @@ export async function createShiprocketOrder(
     status_code: number
   }
 
-  // Step 2: Request auto-courier assignment (AWB generation)
-  let awbCode: string | null = null
-  let courierName: string | null = null
-  let pickupRequested = false
-
-  if (orderData.shipment_id) {
-    try {
-      const courierResponse = await fetch(`${API_BASE}/courier/assign/awb`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ shipment_id: orderData.shipment_id }),
-      })
-
-      if (!courierResponse.ok) {
-        const errText = await courierResponse.text()
-        console.error(`Shiprocket AWB assign HTTP error (${courierResponse.status}):`, errText)
-      } else if (courierResponse.ok) {
-        const courierData = (await courierResponse.json()) as {
-          response?: {
-            data?: {
-              awb_code?: string
-              courier_name?: string
-            }
-          }
-          awb_assign_status?: number
-          response_message?: string
-        }
-        // Log the full response so we can diagnose assignment failures
-        console.log("Shiprocket AWB assign response:", JSON.stringify(courierData))
-        awbCode = courierData.response?.data?.awb_code || null
-        courierName = courierData.response?.data?.courier_name || null
-
-        if (awbCode) {
-          const pickupResponse = await fetch(`${API_BASE}/courier/generate/pickup`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              shipment_id: [orderData.shipment_id],
-            }),
-          })
-
-          if (!pickupResponse.ok) {
-            const pickupError = await pickupResponse.text()
-            console.warn(
-              `Shiprocket pickup request failed (${pickupResponse.status}): ${pickupError}`
-            )
-          } else {
-            pickupRequested = true
-          }
-        }
-      }
-    } catch (err) {
-      // AWB assignment can be retried later — don't fail the order
-      console.error("Shiprocket AWB assignment failed (will retry):", err)
-    }
-  }
+  // AWB assignment is handled manually in the Shiprocket dashboard.
+  // Shiprocket webhooks will push AWB + status updates back to Airtable
+  // via /api/webhooks/tracking-updates once the courier is assigned.
 
   return {
     orderId: orderData.order_id,
     shipmentId: orderData.shipment_id,
-    awbCode,
-    courierName,
+    awbCode: null,
+    courierName: null,
     status: orderData.status || "NEW",
-    pickupRequested,
+    pickupRequested: false,
   }
 }
 
