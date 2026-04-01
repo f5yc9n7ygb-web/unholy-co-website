@@ -4,6 +4,8 @@ export type AbandonedCartEmailOptions = {
   packQty: number
   packPrice: number
   shopUrl?: string
+  promoCode?: string
+  discountAmount?: number
 }
 
 const blood = "#B00020"
@@ -83,6 +85,12 @@ export function buildAbandonedCartEmail1Html(o: AbandonedCartEmailOptions): stri
   const firstName = escapeHtml(o.customerName.split(" ")[0] || "Sinner")
   const shopUrl = o.shopUrl || "https://theunholy.co/shop"
   const priceFormatted = `₹${o.packPrice.toLocaleString("en-IN")}`
+  const hasDiscount = o.promoCode && o.discountAmount && o.discountAmount > 0
+  const discountRow = hasDiscount ? `
+                <tr>
+                  <td style="padding:14px 0; border-bottom:1px solid ${border}; color:${blood}; font-size:11px; text-transform:uppercase; letter-spacing:0.12em; width:40%;">Discount (${escapeHtml(o.promoCode!)})</td>
+                  <td style="padding:14px 0; border-bottom:1px solid ${border}; color:${blood}; font-size:13px; text-align:right; font-weight:700;">−₹${o.discountAmount!.toLocaleString("en-IN")}</td>
+                </tr>` : ""
 
   const content = `
           <tr>
@@ -108,6 +116,7 @@ export function buildAbandonedCartEmail1Html(o: AbandonedCartEmailOptions): stri
                   <td style="padding:14px 0; border-bottom:1px solid ${border}; color:${textMuted}; font-size:11px; text-transform:uppercase; letter-spacing:0.12em; width:40%;">Quantity</td>
                   <td style="padding:14px 0; border-bottom:1px solid ${border}; color:${textMain}; font-size:13px; text-align:right;">${o.packQty} cans</td>
                 </tr>
+                ${discountRow}
                 <tr>
                   <td style="padding:14px 0; border-bottom:1px solid ${border}; color:${textMuted}; font-size:11px; text-transform:uppercase; letter-spacing:0.12em; width:40%;">Total</td>
                   <td style="padding:14px 0; border-bottom:1px solid ${border}; color:${textMain}; font-size:13px; text-align:right; font-weight:700;">${priceFormatted}</td>
@@ -145,6 +154,9 @@ export function buildAbandonedCartEmail1Html(o: AbandonedCartEmailOptions): stri
 export function buildAbandonedCartEmail1Text(o: AbandonedCartEmailOptions): string {
   const firstName = o.customerName.split(" ")[0] || "Sinner"
   const shopUrl = o.shopUrl || "https://theunholy.co/shop"
+  const discountLine = o.promoCode && o.discountAmount && o.discountAmount > 0
+    ? `Discount (${o.promoCode}): −₹${o.discountAmount.toLocaleString("en-IN")}\n`
+    : ""
 
   return `YOUR RITUAL WAS LEFT UNFINISHED — UNHOLY CO.
 
@@ -155,7 +167,7 @@ WHAT YOU LEFT BEHIND
 --------------------
 Product:  ${o.packTitle}
 Quantity: ${o.packQty} cans
-Total:    ₹${o.packPrice.toLocaleString("en-IN")}
+${discountLine}Total:    ₹${o.packPrice.toLocaleString("en-IN")}
 
 Some things aren't meant to be abandoned. This is one of them.
 
@@ -175,6 +187,12 @@ export function buildAbandonedCartEmail2Html(o: AbandonedCartEmailOptions): stri
   const firstName = escapeHtml(o.customerName.split(" ")[0] || "Sinner")
   const shopUrl = o.shopUrl || "https://theunholy.co/shop"
   const priceFormatted = `₹${o.packPrice.toLocaleString("en-IN")}`
+  const hasDiscount = o.promoCode && o.discountAmount && o.discountAmount > 0
+  const discountRow = hasDiscount ? `
+                <tr>
+                  <td style="padding:14px 0; border-bottom:1px solid ${border}; color:${blood}; font-size:11px; text-transform:uppercase; letter-spacing:0.12em; width:40%;">Discount (${escapeHtml(o.promoCode!)})</td>
+                  <td style="padding:14px 0; border-bottom:1px solid ${border}; color:${blood}; font-size:13px; text-align:right; font-weight:700;">−₹${o.discountAmount!.toLocaleString("en-IN")}</td>
+                </tr>` : ""
 
   const content = `
           <tr>
@@ -200,6 +218,7 @@ export function buildAbandonedCartEmail2Html(o: AbandonedCartEmailOptions): stri
                   <td style="padding:14px 0; border-bottom:1px solid ${border}; color:${textMuted}; font-size:11px; text-transform:uppercase; letter-spacing:0.12em; width:40%;">Quantity</td>
                   <td style="padding:14px 0; border-bottom:1px solid ${border}; color:${textMain}; font-size:13px; text-align:right;">${o.packQty} cans</td>
                 </tr>
+                ${discountRow}
                 <tr>
                   <td style="padding:14px 0; color:${textMuted}; font-size:11px; text-transform:uppercase; letter-spacing:0.12em; width:40%;">Total</td>
                   <td style="padding:14px 0; color:${textMain}; font-size:13px; text-align:right; font-weight:700;">${priceFormatted}</td>
@@ -276,7 +295,7 @@ STILL WAITING FOR YOU
 ---------------------
 Product:  ${o.packTitle}
 Quantity: ${o.packQty} cans
-Total:    ₹${o.packPrice.toLocaleString("en-IN")}
+${o.promoCode && o.discountAmount && o.discountAmount > 0 ? `Discount (${o.promoCode}): −₹${o.discountAmount.toLocaleString("en-IN")}\n` : ""}Total:    ₹${o.packPrice.toLocaleString("en-IN")}
 
 WHAT YOU'RE MISSING
 -------------------

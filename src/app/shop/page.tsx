@@ -1,5 +1,12 @@
 import type { Metadata } from "next"
 import { ShopClient } from "./ShopClient"
+import { ShopClosedClient } from "./ShopClosedClient"
+
+// Revalidate every 30s so the launch date check flips quickly without
+// cold-starting a new edge isolate on every single visitor request.
+export const revalidate = 30
+
+const LAUNCH_DATE = new Date('2026-04-02T07:30:00.000Z') // April 2 1:00 PM IST
 
 export const metadata: Metadata = {
   title: "Shop BloodThirst",
@@ -23,8 +30,13 @@ export const metadata: Metadata = {
  * The server-side component for the shop page.
  * Reads the Razorpay key at request time (from runtime secrets) and passes
  * it as a prop to the client — avoids dependency on NEXT_PUBLIC build-time baking.
+ * Shows a countdown page until launch on April 2nd 1:00 PM IST.
  */
 export default function ShopPage() {
+  // TODO: TESTING BYPASS — restore launch gate before deploy!
+  // if (new Date() < LAUNCH_DATE) {
+  //   return <ShopClosedClient />
+  // }
   const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || ""
   return <ShopClient razorpayKey={razorpayKey} />
 }

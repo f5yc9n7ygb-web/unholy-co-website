@@ -10,13 +10,19 @@ import { generateInvoicePdf } from "@/lib/pdf/generate-invoice"
 export const dynamic = "force-dynamic"
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
     const { orderId } = await params
     if (!orderId) {
       return NextResponse.json({ error: "Order ID is required" }, { status: 400 })
+    }
+
+    // Require the customer's email to prove they own this order
+    const emailParam = request.nextUrl.searchParams.get("email")?.trim().toLowerCase()
+    if (!emailParam) {
+      return NextResponse.json({ error: "Email is required" }, { status: 401 })
     }
 
     const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
@@ -34,6 +40,13 @@ export async function GET(
     }
 
     const fields = records[0]!.fields
+
+    // Verify the requester is the order's customer
+    const orderEmail = String(fields["Customer Email"] || "").toLowerCase().trim()
+    if (!orderEmail || orderEmail !== emailParam) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 })
+    }
+    const invoiceSeq = Number(fields["Invoice Number"] || 0) || undefined
     const pdfBytes = await generateInvoicePdf({
       orderId,
       paymentId: String(fields["Payment ID"] || ""),
@@ -50,6 +63,7 @@ export async function GET(
       timestamp: String(fields["Timestamp"] || new Date().toISOString()),
       promoCode: String(fields["Promo Code"] || "") || undefined,
       discountAmount: Number(fields["Discount Amount"] || 0) || undefined,
+      invoiceSeq,
     })
 
     // Use the Web standard Response (not NextResponse) — accepts Uint8Array directly

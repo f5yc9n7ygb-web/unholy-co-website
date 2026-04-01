@@ -21,10 +21,12 @@ import {
   getRequiredEnv,
   saveRecordToAirtable,
   sendOrderConfirmationEmail,
+  sendMailjetEmail,
   queryAirtableRecords,
   updateAirtableRecord,
   logErrorToAirtable,
 } from "@/lib/server/integrations"
+import { buildPaymentFailedHtml, buildPaymentFailedText } from "@/lib/email/payment-failed-template"
 import { getKVNamespace } from "@/lib/server/kv"
 import { escapeAirtableValue } from "@/lib/server/security"
 import { claimProcessedPayment } from "@/lib/server/order-session"
@@ -74,13 +76,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Handle payment.failed — log to Airtable for tracking
+    // Handle payment.failed — log to Airtable and notify customer
     if (event.event === "payment.failed") {
       const failedPayment = event.payload?.payment?.entity
       if (failedPayment) {
         const ordersBaseId = process.env.AIRTABLE_ORDERS_BASE_ID
         if (ordersBaseId) {
-          // Update the abandoned cart record with failure info
           const cartRecords = await queryAirtableRecords({
             baseId: ordersBaseId,
             tableName: "Abandoned Carts",
@@ -89,15 +90,34 @@ export async function POST(request: NextRequest) {
           }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
 
           if (cartRecords.length > 0) {
-            await updateAirtableRecord({
+            const cart = cartRecords[0]!
+            const cf = cart.fields
+
+            // Update cart status
+            updateAirtableRecord({
               baseId: ordersBaseId,
               tableName: "Abandoned Carts",
-              recordId: cartRecords[0]!.id,
+              recordId: cart.id,
               fields: {
                 Status: "payment_failed",
                 "Last Failure": new Date().toISOString(),
               },
             }).catch((err) => console.error("Webhook: cart failure update failed:", err))
+
+            // Notify the customer
+            const customerEmail = String(cf["Customer Email"] || "")
+            const customerName = String(cf["Customer Name"] || "Customer")
+            const packTitle = String(cf["Pack"] || "BloodThirst")
+            const siteUrl = process.env.PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://theunholy.co"
+
+            if (customerEmail) {
+              sendMailjetEmail({
+                to: customerEmail,
+                subject: "Your payment didn't go through.",
+                html: buildPaymentFailedHtml({ customerName, packTitle, shopUrl: `${siteUrl}/shop` }),
+                text: buildPaymentFailedText({ customerName, packTitle, shopUrl: `${siteUrl}/shop` }),
+              }).catch((err) => console.error("Webhook: payment failed email error:", err))
+            }
           }
         }
       }
@@ -116,14 +136,27 @@ export async function POST(request: NextRequest) {
 
     const { id: paymentId, order_id: orderId } = payment
 
-    // Idempotency — skip if already processed by the verify route
+    // Idempotency layer 1 — KV claim (fast, survives across edge isolates)
     const kv = await getKVNamespace()
     if (!(await claimProcessedPayment(paymentId, kv))) {
       return NextResponse.json({ ok: true, message: "Already processed" })
     }
 
-    // Look up the abandoned cart record to get order details
     const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+
+    // Idempotency layer 2 — Airtable dedup check as fallback for KV race window
+    const existingPayment = await queryAirtableRecords({
+      baseId: ordersBaseId,
+      tableName: "Payments",
+      filterByFormula: `{Payment ID} = "${escapeAirtableValue(paymentId)}"`,
+      maxRecords: 1,
+    }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
+
+    if (existingPayment.length > 0) {
+      return NextResponse.json({ ok: true, message: "Already processed (dedup)" })
+    }
+
+    // Look up the abandoned cart record to get order details
     const cartRecords = await queryAirtableRecords({
       baseId: ordersBaseId,
       tableName: "Abandoned Carts",
@@ -252,6 +285,23 @@ export async function POST(request: NextRequest) {
                 },
               })
             }
+          }
+        }).catch(async (err) => {
+          console.error("Webhook: Shiprocket order creation failed:", err)
+          logErrorToAirtable(`Shiprocket Failed (Order: ${orderId})`, err).catch(() => {})
+          const failedRecords = await queryAirtableRecords({
+            baseId: ordersBaseId,
+            tableName: "Payments",
+            filterByFormula: `{Order ID} = "${escapeAirtableValue(orderId)}"`,
+            maxRecords: 1,
+          }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
+          if (failedRecords.length > 0) {
+            await updateAirtableRecord({
+              baseId: ordersBaseId,
+              tableName: "Payments",
+              recordId: failedRecords[0]!.id,
+              fields: { "Shipping Status": "Shiprocket Failed" },
+            }).catch(() => {})
           }
         })
       )

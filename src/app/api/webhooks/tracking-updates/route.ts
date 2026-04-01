@@ -17,6 +17,7 @@ import {
 } from "@/lib/server/integrations"
 import { escapeAirtableValue } from "@/lib/server/security"
 import { buildShippingUpdateHtml, buildShippingUpdateText } from "@/lib/email/shipping-update-template"
+import { getKVNamespace } from "@/lib/server/kv"
 
 /** Shiprocket sr-status code → human-readable status */
 const STATUS_MAP: Record<number, string> = {
@@ -49,15 +50,15 @@ export async function POST(request: NextRequest) {
 
     // Verify webhook authenticity via shared secret
     const webhookSecret = process.env.SHIPROCKET_WEBHOOK_SECRET
-    if (webhookSecret) {
-      const receivedToken =
-        request.headers.get("x-api-key") ||
-        request.headers.get("authorization")?.replace("Bearer ", "")
-      if (receivedToken !== webhookSecret) {
-        return NextResponse.json({ ok: false, error: "Invalid webhook token" }, { status: 401 })
-      }
-    } else {
-      console.warn("SHIPROCKET_WEBHOOK_SECRET not configured — accepting webhook without auth")
+    if (!webhookSecret) {
+      console.error("SHIPROCKET_WEBHOOK_SECRET is not configured — rejecting webhook")
+      return NextResponse.json({ ok: false, error: "Webhook not configured" }, { status: 500 })
+    }
+    const receivedToken =
+      request.headers.get("x-api-key") ||
+      request.headers.get("authorization")?.replace("Bearer ", "")
+    if (receivedToken !== webhookSecret) {
+      return NextResponse.json({ ok: false, error: "Invalid webhook token" }, { status: 401 })
     }
 
     let body: {
@@ -137,6 +138,18 @@ export async function POST(request: NextRequest) {
     }
 
     const record = records[0]!
+
+    // Idempotency: skip if we already processed this exact status event for this record
+    const kv = await getKVNamespace()
+    if (kv && effectiveStatusId) {
+      const dedupKey = `sr_evt:${record.id}:${effectiveStatusId}`
+      const already = await kv.get(dedupKey)
+      if (already) {
+        return NextResponse.json({ ok: true, message: "Already processed" })
+      }
+      // Claim this event — 48h TTL is enough to cover any Shiprocket retry window
+      await kv.put(dedupKey, "1", { expirationTtl: 48 * 60 * 60 })
+    }
     const fields = record.fields
 
     // Update Airtable with new status

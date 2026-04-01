@@ -20,7 +20,7 @@ const BLOOD_LETTERS = ["B", "L", "O", "O", "D"]
 const THIRST_LETTERS = ["T", "H", "I", "R", "S", "T"]
 const ALL_LETTERS = [...BLOOD_LETTERS, ...THIRST_LETTERS]
 
-type Phase = "idle" | "rift" | "text" | "can" | "complete"
+type Phase = "idle" | "rift" | "text" | "complete"
 
 // 3D explosion vectors — letters fly outward in all directions on scroll
 const EXPLOSION = [
@@ -118,7 +118,7 @@ function BloodLetter({
     ]
   )
 
-  const showText = phase === "text" || phase === "can" || phase === "complete"
+  const showText = phase === "text" || phase === "complete"
 
   return (
     <motion.span
@@ -191,8 +191,7 @@ export default function HomeHero() {
     const timers = [
       setTimeout(() => setPhase("rift"), 350),
       setTimeout(() => setPhase("text"), 850),
-      setTimeout(() => setPhase("can"), 1550),
-      setTimeout(() => setPhase("complete"), 2400),
+      setTimeout(() => setPhase("complete"), 1800),
     ]
     return () => timers.forEach(clearTimeout)
   }, [])
@@ -235,24 +234,41 @@ export default function HomeHero() {
   const springCanTiltX = useSpring(canTiltX, { stiffness: 70, damping: 18 })
 
   useEffect(() => {
-    if (phase !== "complete") return
     let raf: number
     const loop = () => {
-      const mx = mouseRef.current.x / window.innerWidth - 0.5
-      const my = mouseRef.current.y / window.innerHeight - 0.5
-      const fade = Math.max(0, 1 - scrollYProgress.get() * 5)
-      canMagX.set(mx * 35 * fade)
-      canMagY.set(my * 25 * fade)
-      canTiltY.set(mx * 10 * fade)
-      canTiltX.set(-my * 6 * fade)
+      const scroll = scrollYProgress.get()
+      // Only track when can is visible (scroll > 0.15) and hasn't faded (scroll < 0.5)
+      const visible = scroll > 0.15 && scroll < 0.5
+      if (visible) {
+        const mx = mouseRef.current.x / window.innerWidth - 0.5
+        const my = mouseRef.current.y / window.innerHeight - 0.5
+        // Magnetic strength peaks mid-range, fades near edges
+        const strength = Math.min(1, (scroll - 0.15) / 0.2) * Math.max(0, 1 - (scroll - 0.35) / 0.15)
+        canMagX.set(mx * 35 * strength)
+        canMagY.set(my * 25 * strength)
+        canTiltY.set(mx * 10 * strength)
+        canTiltX.set(-my * 6 * strength)
+      } else {
+        canMagX.set(0)
+        canMagY.set(0)
+        canTiltY.set(0)
+        canTiltX.set(0)
+      }
       raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
-  }, [phase, canMagX, canMagY, canTiltX, canTiltY, scrollYProgress])
+  }, [canMagX, canMagY, canTiltX, canTiltY, scrollYProgress])
 
-  // Can scroll transforms
-  const canScrollScale = useTransform(scrollYProgress, [0, 0.15, 0.35], [1, 1.06, 1.12])
+  // Can scroll transforms — revealed by scroll, not time
+  const rawCanScale = useTransform(scrollYProgress, [0.15, 0.42], [0.5, 1])
+  const rawCanY = useTransform(scrollYProgress, [0.15, 0.42], [80, 0])
+  const rawCanRotate = useTransform(scrollYProgress, [0.15, 0.40], [-6, 0])
+  const canOpacity = useTransform(scrollYProgress, [0.15, 0.36], [0, 1])
+  const canScale = useSpring(rawCanScale, { stiffness: 80, damping: 12 })
+  const canY = useSpring(rawCanY, { stiffness: 90, damping: 14 })
+  const canRotate = useSpring(rawCanRotate, { stiffness: 70, damping: 10 })
+  const canScrollScale = useTransform(scrollYProgress, [0.36, 0.50], [1, 1.08])
 
   // ── Glow layers ───────────────────────────────────────────────────────────
   const glowOpacity = useTransform(scrollYProgress, [0.08, 0.35], [0, 0.8])
@@ -270,7 +286,6 @@ export default function HomeHero() {
 
   // Derived booleans
   const showFluid = phase !== "idle"
-  const showCan = phase === "can" || phase === "complete"
 
   return (
     <section ref={containerRef} className="relative h-[250vh]">
@@ -343,16 +358,15 @@ export default function HomeHero() {
               transformStyle: "preserve-3d",
             }}
           >
-            {/* ── The Can ── */}
+            {/* ── The Can — scroll-revealed ── */}
             <motion.div
               className="absolute z-10"
-              initial={{ y: 140, opacity: 0, scale: 0.6 }}
-              animate={
-                showCan
-                  ? { y: 0, opacity: 1, scale: 1 }
-                  : { y: 140, opacity: 0, scale: 0.6 }
-              }
-              transition={{ type: "spring", stiffness: 70, damping: 11 }}
+              style={{
+                scale: canScale,
+                opacity: canOpacity,
+                y: canY,
+                rotate: canRotate,
+              }}
             >
               <motion.div
                 style={{
@@ -370,7 +384,7 @@ export default function HomeHero() {
                     duration: 4.5,
                     repeat: Infinity,
                     ease: "easeInOut",
-                    delay: 1,
+                    delay: 0.6,
                   }}
                 >
                   <Image

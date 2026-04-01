@@ -95,7 +95,9 @@ export async function decrementStock(packId: string, qty: number): Promise<void>
         fields: { Stock: newStock },
       })
 
-      // Verify the write landed correctly (optimistic check)
+      // Verify our write landed. If the value differs from what we wrote,
+      // another concurrent request read the same stale value and overwrote us
+      // (or overwrote the other request). Re-read and retry.
       const verifyRecords = await queryAirtableRecords({
         baseId,
         tableName: INVENTORY_TABLE,
@@ -105,10 +107,8 @@ export async function decrementStock(packId: string, qty: number): Promise<void>
 
       if (verifyRecords.length > 0) {
         const verifiedStock = Number(verifyRecords[0]!.fields["Stock"] || 0)
-        // If stock is higher than what we wrote, another request may have
-        // read the same value and written concurrently. Retry with fresh read.
-        if (verifiedStock > newStock) {
-          console.warn(`Inventory: stale write detected for ${packId} (attempt ${attempt + 1}), retrying...`)
+        if (verifiedStock !== newStock) {
+          console.warn(`Inventory: write conflict for ${packId} (attempt ${attempt + 1}), retrying...`)
           continue
         }
       }

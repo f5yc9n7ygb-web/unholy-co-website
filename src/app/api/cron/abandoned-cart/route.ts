@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
           packTitle: String(f["Pack"] || "BloodThirst"),
           packQty: Number(f["Quantity"] || 0),
           packPrice: Number(f["Price"] || 0),
+          promoCode: String(f["Promo Code"] || "") || undefined,
+          discountAmount: Number(f["Discount Amount"] || 0) || undefined,
         })
 
         await updateAirtableRecord({
@@ -93,6 +95,8 @@ export async function POST(request: NextRequest) {
           packTitle: String(f["Pack"] || "BloodThirst"),
           packQty: Number(f["Quantity"] || 0),
           packPrice: Number(f["Price"] || 0),
+          promoCode: String(f["Promo Code"] || "") || undefined,
+          discountAmount: Number(f["Discount Amount"] || 0) || undefined,
         })
 
         await updateAirtableRecord({

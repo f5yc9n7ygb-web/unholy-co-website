@@ -20,6 +20,8 @@ export type InvoiceData = {
   promoCode?: string
   /** Discount amount (already subtracted from `amount`) */
   discountAmount?: number
+  /** Sequential invoice number within the financial year */
+  invoiceSeq?: number
 }
 
 /* ─── Indian state name → GST state code ─── */
@@ -141,7 +143,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
 
   // ── Invoice details on right (Rule 46(b), (c)) ──
   let rightY = height - 50 - 18 - 16 - 24
-  const invoiceNo = generateInvoiceNumber(orderId, timestamp)
+  const invoiceNo = generateInvoiceNumber(orderId, timestamp, data.invoiceSeq)
   const invoiceDetails: [string, string][] = [
     ["Invoice No:", invoiceNo],
     ["Invoice Date:", formatInvoiceDate(timestamp)],
@@ -318,9 +320,10 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
 
 /**
  * Generate a sequential invoice number per financial year.
- * Format: UHC/YY-YY/ORDER_SUFFIX (max 16 chars per Rule 46(b))
+ * Format: UHC/YY-YY/SUFFIX/SEQ
+ * e.g. UHC/26-27/3EBCV3/1, UHC/26-27/3EBCV3/2, etc.
  */
-function generateInvoiceNumber(orderId: string, timestamp: string): string {
+function generateInvoiceNumber(orderId: string, timestamp: string, invoiceSeq?: number): string {
   const date = new Date(timestamp)
   const year = date.getFullYear()
   const month = date.getMonth() + 1 // 1-indexed
@@ -328,9 +331,10 @@ function generateInvoiceNumber(orderId: string, timestamp: string): string {
   const fyStart = month >= 4 ? year : year - 1
   const fyEnd = fyStart + 1
   const fy = `${String(fyStart).slice(2)}-${String(fyEnd).slice(2)}`
-  // Use last 6 chars of orderId as the sequence suffix
+  // Use last 6 chars of orderId as the order suffix
   const suffix = orderId.replace(/^order_/, "").slice(-6).toUpperCase()
-  return `UHC/${fy}/${suffix}`
+  const seq = invoiceSeq ?? 0
+  return `UHC/${fy}/${suffix}/${seq}`
 }
 
 function formatInvoiceDate(isoString: string): string {

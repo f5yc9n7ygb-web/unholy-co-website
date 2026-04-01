@@ -123,7 +123,6 @@ export async function incrementPromoUsage(recordId: string): Promise<void> {
     try {
       const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
-      // Use record ID directly via Airtable API (not filterByFormula) to avoid injection
       const records = await queryAirtableRecords({
         baseId,
         tableName: PROMO_TABLE,
@@ -133,14 +132,38 @@ export async function incrementPromoUsage(recordId: string): Promise<void> {
 
       if (records.length === 0) return
 
-      const current = Number(records[0]!.fields["Used Count"] || 0)
+      const fields = records[0]!.fields
+      const current = Number(fields["Used Count"] || 0)
+      const maxUses = Number(fields["Max Uses"] || 0)
 
+      // Re-validate usage limit at increment time to catch races from validation→fulfillment gap
+      if (maxUses > 0 && current >= maxUses) {
+        console.warn(`Promo ${recordId}: usage limit reached at increment (current=${current}, max=${maxUses})`)
+        return
+      }
+
+      const newCount = current + 1
       await updateAirtableRecord({
         baseId,
         tableName: PROMO_TABLE,
         recordId,
-        fields: { "Used Count": current + 1 },
+        fields: { "Used Count": newCount },
       })
+
+      // Verify our write landed; retry if a concurrent request overwrote it
+      const verifyRecords = await queryAirtableRecords({
+        baseId,
+        tableName: PROMO_TABLE,
+        filterByFormula: `RECORD_ID() = "${escapeAirtableValue(recordId)}"`,
+        maxRecords: 1,
+      })
+      if (verifyRecords.length > 0) {
+        const verifiedCount = Number(verifyRecords[0]!.fields["Used Count"] || 0)
+        if (verifiedCount !== newCount) {
+          console.warn(`Promo ${recordId}: write conflict (attempt ${attempt + 1}), retrying...`)
+          continue
+        }
+      }
 
       return // success
     } catch (err) {

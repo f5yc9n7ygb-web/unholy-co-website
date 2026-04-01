@@ -37,8 +37,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = await request.json() as { query?: string }
+    const body = await request.json() as { query?: string; orderId?: string }
     const query = sanitizeText(body.query, 120)
+    const orderIdHint = sanitizeText(body.orderId, 64)
 
     if (!query) {
       return NextResponse.json({ ok: false, error: "Please enter an order ID or email." }, { status: 400 })
@@ -46,10 +47,18 @@ export async function POST(request: NextRequest) {
 
     const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
-    // If query looks like an email, search by Customer Email; otherwise by Order ID
+    // Email searches require an order ID to prevent PII enumeration.
+    // Order ID searches are self-authenticating (the ID is the secret).
     const isEmail = query.includes("@")
+    if (isEmail && !orderIdHint) {
+      return NextResponse.json({
+        ok: false,
+        error: "Please enter your order ID along with your email. You can find it in your confirmation email.",
+      }, { status: 400 })
+    }
+
     const filterFormula = isEmail
-      ? `{Customer Email} = "${escapeAirtableValue(query.toLowerCase())}"`
+      ? `AND({Customer Email} = "${escapeAirtableValue(query.toLowerCase())}", {Order ID} = "${escapeAirtableValue(orderIdHint)}")`
       : `{Order ID} = "${escapeAirtableValue(query)}"`
 
     const records = await queryAirtableRecords({

@@ -76,11 +76,9 @@ export async function POST(request: NextRequest) {
     const rawToken = kvToken || bodyToken || cookieToken
     const orderSession = readOrderSessionToken(rawToken)
 
-    console.log(`[verify] orderId=${orderId} kvToken=${!!kvToken} bodyToken=${!!bodyToken} cookieToken=${!!cookieToken} sessionOk=${!!orderSession}`)
-
     if (!orderSession || orderSession.orderId !== orderId) {
       return NextResponse.json(
-        { ok: false, error: `This checkout session is invalid or expired. (kv=${!!kvToken} body=${!!bodyToken} cookie=${!!cookieToken} parsed=${!!orderSession})` },
+        { ok: false, error: "This checkout session is invalid or expired. Please start a new order." },
         { status: 400 }
       )
     }
@@ -93,16 +91,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const orderResponse = await fetch(`${RAZORPAY_ORDERS_ENDPOINT}/${orderId}`, {
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
-      },
-      cache: "no-store",
-    })
+    const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`
 
-    const order = await orderResponse.json()
+    const [orderResponse, paymentResponse] = await Promise.all([
+      fetch(`${RAZORPAY_ORDERS_ENDPOINT}/${orderId}`, { headers: { Authorization: authHeader }, cache: "no-store" }),
+      fetch(`${RAZORPAY_PAYMENTS_ENDPOINT}/${paymentId}`, { headers: { Authorization: authHeader }, cache: "no-store" }),
+    ])
+
+    const [order, payment] = await Promise.all([
+      orderResponse.json(),
+      paymentResponse.json(),
+    ])
+
     if (!orderResponse.ok) {
       throw new Error("Unable to retrieve the order.")
+    }
+    if (!paymentResponse.ok) {
+      throw new Error("Unable to retrieve the payment.")
     }
 
     if (String(order?.notes?.contextId || "") !== orderSession.contextId) {
@@ -111,17 +116,6 @@ export async function POST(request: NextRequest) {
 
     if (Number(order?.amount) !== orderSession.amount) {
       throw new Error("Order amount verification failed.")
-    }
-
-    const paymentResponse = await fetch(`${RAZORPAY_PAYMENTS_ENDPOINT}/${paymentId}`, {
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
-      },
-      cache: "no-store",
-    })
-    const payment = await paymentResponse.json()
-    if (!paymentResponse.ok) {
-      throw new Error("Unable to retrieve the payment.")
     }
 
     if (String(payment?.order_id || "") !== orderId) {
@@ -232,6 +226,23 @@ export async function POST(request: NextRequest) {
               },
             })
           }
+        }
+      }).catch(async (err) => {
+        console.error("Shiprocket order creation failed:", err)
+        logErrorToAirtable(`Shiprocket Failed (Order: ${orderId})`, err).catch(() => {})
+        const failedRecords = await queryAirtableRecords({
+          baseId: ordersBaseId,
+          tableName: "Payments",
+          filterByFormula: `{Order ID} = "${escapeAirtableValue(orderId)}"`,
+          maxRecords: 1,
+        }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
+        if (failedRecords.length > 0) {
+          await updateAirtableRecord({
+            baseId: ordersBaseId,
+            tableName: "Payments",
+            recordId: failedRecords[0]!.id,
+            fields: { "Shipping Status": "Shiprocket Failed" },
+          }).catch(() => {})
         }
       }),
       sendOrderConfirmationEmail({

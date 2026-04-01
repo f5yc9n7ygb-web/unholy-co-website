@@ -118,6 +118,31 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
     return;
   }
 
+  // Assign a sequential invoice number and persist it to Airtable
+  let invoiceSeq: number | undefined;
+  try {
+    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID");
+    invoiceSeq = await getNextInvoiceSeq(ordersBaseId);
+
+    // Find the payment record and store the invoice number
+    const paymentRecords = await queryAirtableRecords({
+      baseId: ordersBaseId,
+      tableName: "Payments",
+      filterByFormula: `{Order ID} = "${options.orderId.replace(/"/g, '\\"')}"`,
+      maxRecords: 1,
+    });
+    if (paymentRecords.length > 0) {
+      await updateAirtableRecord({
+        baseId: ordersBaseId,
+        tableName: "Payments",
+        recordId: paymentRecords[0]!.id,
+        fields: { "Invoice Number": invoiceSeq },
+      });
+    }
+  } catch (err) {
+    console.error("Invoice sequence assignment failed:", err);
+  }
+
   // Generate invoice PDF to attach
   let attachments: MailjetAttachment[] = [];
   try {
@@ -137,6 +162,7 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
       timestamp: new Date().toISOString(),
       promoCode: options.promoCode,
       discountAmount: options.discountAmount,
+      invoiceSeq,
     });
 
     // Cloudflare Edge safe conversion of Uint8Array to base64
@@ -202,21 +228,36 @@ export async function sendSubscriptionConfirmationEmail(options: {
   });
 }
 
+/** Retry a fetch up to maxRetries times on 429 (Airtable rate limit), with exponential backoff. */
+async function fetchWithAirtableRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options)
+    if (response.status !== 429 || attempt === maxRetries) {
+      return response
+    }
+    // Airtable returns Retry-After header; fall back to exponential backoff (250ms, 500ms, 1000ms)
+    const retryAfter = Number(response.headers.get("Retry-After") || 0)
+    const delayMs = retryAfter > 0 ? retryAfter * 1000 : 250 * Math.pow(2, attempt)
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
+  }
+  // Unreachable but satisfies TS
+  return fetch(url, options)
+}
+
 async function writeRecord(baseId: string, token: string, tableName: string, fields: AirtableFields) {
-  const response = await fetch(`${AIRTABLE_ENDPOINT}/${baseId}/${encodeURIComponent(tableName)}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      records: [
-        {
-          fields,
-        },
-      ],
-    }),
-  });
+  const response = await fetchWithAirtableRetry(
+    `${AIRTABLE_ENDPOINT}/${baseId}/${encodeURIComponent(tableName)}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        records: [{ fields }],
+      }),
+    }
+  );
 
   if (response.ok) {
     return { ok: true as const };
@@ -301,7 +342,7 @@ export async function queryAirtableRecords(options: {
   }
 
   const url = `${AIRTABLE_ENDPOINT}/${options.baseId}/${encodeURIComponent(options.tableName)}?${params}`;
-  const response = await fetch(url, {
+  const response = await fetchWithAirtableRetry(url, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
@@ -324,7 +365,7 @@ export async function updateAirtableRecord(options: {
   const token = getRequiredEnv("AIRTABLE_TOKEN");
   const url = `${AIRTABLE_ENDPOINT}/${options.baseId}/${encodeURIComponent(options.tableName)}/${options.recordId}`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithAirtableRetry(url, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -337,6 +378,29 @@ export async function updateAirtableRecord(options: {
     const message = await response.text();
     throw new Error(`Airtable update error (${response.status}): ${message}`);
   }
+}
+
+/* ─── Invoice Sequence Helper ─── */
+
+/**
+ * Get the next sequential invoice number for the current Indian financial year.
+ * Counts existing Payments records that have an "Invoice Number" assigned and returns count + 1.
+ */
+export async function getNextInvoiceSeq(ordersBaseId: string): Promise<number> {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const fyStart = month >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  const fyStartDate = `${fyStart}-04-01T00:00:00.000Z`;
+  const fyEndDate = `${fyStart + 1}-04-01T00:00:00.000Z`;
+
+  const records = await queryAirtableRecords({
+    baseId: ordersBaseId,
+    tableName: "Payments",
+    filterByFormula: `AND(IS_AFTER({Timestamp}, "${fyStartDate}"), IS_BEFORE({Timestamp}, "${fyEndDate}"), {Invoice Number} != "")`,
+    maxRecords: 1000,
+  });
+
+  return records.length + 1;
 }
 
 /* ─── Abandoned Cart Emails ─── */

@@ -15,7 +15,7 @@ export type OrderConfirmationOptions = {
   discountAmount?: number
 }
 
-const GST_RATE = 0.18
+const GST_RATE = 0.05
 function getGstAmount(price: number) { return Math.round((price * GST_RATE) / (1 + GST_RATE)) }
 function getBasePrice(price: number) { return price - getGstAmount(price) }
 
@@ -102,7 +102,7 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
                 ${row("Product", o.packTitle)}
                 ${row("Quantity", `${o.packQty} cans`)}
                 ${row("Subtotal", basePriceFormatted)}
-                ${row("GST (18%)", gstFormatted)}
+                ${row("GST (5%)", gstFormatted)}
                 ${row("Total Paid", priceFormatted)}
                 ${row("Order ID", o.orderId, true)}
                 ${row("Payment ID", o.paymentId, true)}
@@ -179,7 +179,7 @@ ORDER DETAILS
 Product:    ${o.packTitle}
 Quantity:   ${o.packQty} cans
 Subtotal:   ₹${getBasePrice(o.packPrice).toLocaleString("en-IN")}
-GST (18%):  ₹${getGstAmount(o.packPrice).toLocaleString("en-IN")}
+GST (5%):  ₹${getGstAmount(o.packPrice).toLocaleString("en-IN")}
 Total Paid: ₹${o.packPrice.toLocaleString("en-IN")}
 Order ID:   ${o.orderId}
 Payment ID: ${o.paymentId}

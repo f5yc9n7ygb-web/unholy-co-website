@@ -95,7 +95,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "Are prices inclusive of taxes?",
         answer:
-          "Yes. All prices displayed are inclusive of 18% GST. What you see is what you pay — no surprises at checkout.",
+          "Yes. All prices displayed are inclusive of 5% GST. What you see is what you pay — no surprises at checkout.",
       },
       {
         question: "Is my payment information secure?",

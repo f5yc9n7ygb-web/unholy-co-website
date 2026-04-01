@@ -3,7 +3,7 @@
 import Script from "next/script"
 import Image from "next/image"
 import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
+import { motion, MotionConfig } from "framer-motion"
 import { PACKS, type Pack, getGstAmount, getBasePrice } from "@/lib/shop/catalog"
 import type { ShippingForm } from "@/lib/shop/types"
 import { usePageTransition } from "@/context/TransitionContext"
@@ -84,12 +84,15 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   }, [])
 
   useEffect(() => {
-    try {
-      localStorage.setItem("unholy_cart", JSON.stringify({
-        packId: selected.id,
-        shipping: form,
-      }))
-    } catch { /* storage full or unavailable */ }
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem("unholy_cart", JSON.stringify({
+          packId: selected.id,
+          shipping: form,
+        }))
+      } catch { /* storage full or unavailable */ }
+    }, 300)
+    return () => clearTimeout(timer)
   }, [selected, form])
 
   // Clear promo when pack changes (discount may no longer apply)
@@ -208,7 +211,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   const stepIndex = STEPS.indexOf(step)
 
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
 
       {/* Atmospheric background — fixed blood glow orbs */}
@@ -271,7 +274,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
             )}
         </div>
       </div>
-    </>
+    </MotionConfig>
   )
 }
 
@@ -389,7 +392,7 @@ function SelectStep({ packs, selected, onSelect, onContinue }: {
               key={pack.id}
               onClick={() => onSelect(pack)}
               whileHover={{ y: isActive ? 0 : -4 }}
-              className={`group relative flex min-h-[420px] flex-col overflow-hidden rounded-2xl border p-7 text-left transition-all duration-500 ${
+              className={`group relative flex min-h-[200px] md:min-h-[420px] flex-col overflow-hidden rounded-2xl border p-7 text-left transition-all duration-500 ${
                 isActive
                   ? "border-blood/65 bg-black/50 shadow-[0_0_70px_rgba(176,0,32,0.22),inset_0_0_80px_rgba(176,0,32,0.06)]"
                   : "border-white/[0.07] bg-black/30 hover:border-white/[0.15] hover:bg-black/40"
@@ -518,7 +521,7 @@ function SelectStep({ packs, selected, onSelect, onContinue }: {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-5 shrink-0">
+        <div className="flex w-full items-center gap-5 sm:w-auto sm:shrink-0">
           <div className="text-right">
             <p className="font-cinzel text-2xl font-bold text-offwhite">
               ₹{selected.price.toLocaleString("en-IN")}
@@ -529,7 +532,7 @@ function SelectStep({ packs, selected, onSelect, onContinue }: {
             onClick={onContinue}
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.98 }}
-            className="btn btn-primary px-8 py-3.5 text-sm"
+            className="btn btn-primary flex-1 px-8 py-3.5 text-sm sm:flex-none"
           >
             Proceed →
           </motion.button>
@@ -585,20 +588,28 @@ function ShippingStep({ selected, form, errors, onChange, onBlur, onBack, onNext
             <LuxField label="City" field="city" value={form.city} error={errors.city}
               placeholder="Mumbai" onChange={onChange} onBlur={onBlur} />
             <div>
-              <label className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-bone/45">State</label>
-              <select
-                value={form.state}
-                onChange={(e) => onChange("state", e.target.value)}
-                onBlur={() => onBlur("state")}
-                className={`w-full rounded-xl border bg-black/50 px-4 py-3 text-sm text-offwhite outline-none transition-all duration-200 focus:border-blood/60 focus:ring-1 focus:ring-blood/20 ${
-                  errors.state ? "border-blood/60" : "border-white/[0.08]"
-                }`}
-              >
-                <option value="">Select state</option>
-                {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <label htmlFor="field-state" className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-bone/45">State</label>
+              <div className="relative">
+                <select
+                  id="field-state"
+                  value={form.state}
+                  onChange={(e) => onChange("state", e.target.value)}
+                  onBlur={() => onBlur("state")}
+                  className={`w-full appearance-none rounded-xl border bg-black/50 px-4 py-3 text-sm outline-none transition-all duration-200 focus:border-blood/60 focus:ring-1 focus:ring-blood/20 ${
+                    errors.state ? "border-blood/60" : "border-white/[0.08]"
+                  } ${form.state ? "text-offwhite" : "text-bone/20"}`}
+                >
+                  <option value="" disabled>Select state</option>
+                  {INDIAN_STATES.map((s) => <option key={s} value={s} className="text-black">{s}</option>)}
+                </select>
+                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-bone/30">
+                  <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path d="M4 6l4 4 4-4" />
+                  </svg>
+                </div>
+              </div>
               {errors.state && (
-                <p className="mt-1.5 text-xs text-blood/80">{errors.state}</p>
+                <p className="mt-1.5 text-xs text-blood" role="alert">{errors.state}</p>
               )}
             </div>
           </div>
@@ -649,7 +660,7 @@ function ShippingStep({ selected, form, errors, onChange, onBlur, onBack, onNext
                   <span className="text-offwhite">₹{getBasePrice(selected.price).toLocaleString("en-IN")}</span>
                 </div>
                 <div className="flex justify-between text-bone/55">
-                  <span>GST (18%)</span>
+                  <span>GST (5%)</span>
                   <span className="text-offwhite/60">₹{getGstAmount(selected.price).toLocaleString("en-IN")}</span>
                 </div>
                 <div className="flex justify-between text-bone/55">
@@ -812,7 +823,7 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
                 <span className="text-offwhite">₹{getBasePrice(selected.price).toLocaleString("en-IN")}</span>
               </div>
               <div className="flex justify-between text-bone/55">
-                <span>GST (18%)</span>
+                <span>GST (5%)</span>
                 <span className="text-offwhite/60">₹{getGstAmount(selected.price).toLocaleString("en-IN")}</span>
               </div>
               <div className="flex justify-between text-bone/55">
@@ -960,12 +971,14 @@ function LuxField({ label, field, value, error, placeholder, type = "text", onCh
   onChange: (f: keyof ShippingForm, v: string) => void
   onBlur: (f: keyof ShippingForm) => void
 }) {
+  const inputId = `field-${field}`
   return (
     <div>
-      <label className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-bone/45">
+      <label htmlFor={inputId} className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-bone/45">
         {label}
       </label>
       <input
+        id={inputId}
         type={type}
         value={value}
         placeholder={placeholder}
@@ -975,7 +988,7 @@ function LuxField({ label, field, value, error, placeholder, type = "text", onCh
           error ? "border-blood/60" : "border-white/[0.08]"
         }`}
       />
-      {error && <p className="mt-1.5 text-xs text-blood/80">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-blood" role="alert">{error}</p>}
     </div>
   )
 }
