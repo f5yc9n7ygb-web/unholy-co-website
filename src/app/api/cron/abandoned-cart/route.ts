@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
-  const tableName = "Abandoned Carts"
+  const tableName = "Orders"
   const now = new Date()
 
   let email1Sent = 0

@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
         if (ordersBaseId) {
           const cartRecords = await queryAirtableRecords({
             baseId: ordersBaseId,
-            tableName: "Abandoned Carts",
+            tableName: "Orders",
             filterByFormula: `{Razorpay Order ID} = "${escapeAirtableValue(failedPayment.order_id)}"`,
             maxRecords: 1,
           }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
             // Update cart status
             updateAirtableRecord({
               baseId: ordersBaseId,
-              tableName: "Abandoned Carts",
+              tableName: "Orders",
               recordId: cart.id,
               fields: {
                 Status: "payment_failed",
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     // Look up the abandoned cart record to get order details
     const cartRecords = await queryAirtableRecords({
       baseId: ordersBaseId,
-      tableName: "Abandoned Carts",
+      tableName: "Orders",
       filterByFormula: `{Razorpay Order ID} = "${escapeAirtableValue(orderId)}"`,
       maxRecords: 1,
     })
@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
     const backgroundTasks = [
       updateAirtableRecord({
         baseId: ordersBaseId,
-        tableName: "Abandoned Carts",
+        tableName: "Orders",
         recordId: cart.id,
         fields: { Status: "converted", "Converted At": new Date().toISOString() },
       }),

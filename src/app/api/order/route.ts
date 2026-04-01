@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
       ...(discountAmount ? { "Discount Amount": discountAmount } : {}),
       "Status": "pending",
       "Created At": new Date().toISOString(),
-    }, { baseId: ordersBaseId, tableName: "Abandoned Carts" }).catch((err) =>
+    }, { baseId: ordersBaseId, tableName: "Orders" }).catch((err) =>
       console.error("Abandoned cart save failed:", err)
     )
 

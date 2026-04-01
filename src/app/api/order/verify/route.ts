@@ -414,7 +414,7 @@ async function backfillExistingPaymentRecord(options: {
 async function markAbandonedCartConverted(ordersBaseId: string, orderId: string) {
   const records = await queryAirtableRecords({
     baseId: ordersBaseId,
-    tableName: "Abandoned Carts",
+    tableName: "Orders",
     filterByFormula: `{Razorpay Order ID} = "${escapeAirtableValue(orderId)}"`,
     maxRecords: 1,
   })
@@ -425,7 +425,7 @@ async function markAbandonedCartConverted(ordersBaseId: string, orderId: string)
 
   await updateAirtableRecord({
     baseId: ordersBaseId,
-    tableName: "Abandoned Carts",
+    tableName: "Orders",
     recordId: records[0]!.id,
     fields: { "Status": "converted", "Converted At": new Date().toISOString() },
   })

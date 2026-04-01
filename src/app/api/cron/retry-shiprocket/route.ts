@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       // Look up the Abandoned Cart to get individual shipping address fields
       const cartRecords = await queryAirtableRecords({
         baseId: ordersBaseId,
-        tableName: "Abandoned Carts",
+        tableName: "Orders",
         filterByFormula: `{Razorpay Order ID} = "${escapeAirtableValue(orderId)}"`,
         maxRecords: 1,
       }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
