@@ -71,10 +71,13 @@ function formatDate(dateStr: string): string {
 
 export function TrackClient({ initialQuery }: { initialQuery: string }) {
   const [query, setQuery] = useState(initialQuery)
+  const [orderIdHint, setOrderIdHint] = useState("")
   const [state, setState] = useState<TrackState>("idle")
   const [orders, setOrders] = useState<Order[]>([])
   const [error, setError] = useState("")
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
+
+  const isEmail = query.trim().includes("@")
 
   const handleTrack = useCallback(async (searchQuery?: string) => {
     const q = (searchQuery ?? query).trim()
@@ -87,7 +90,7 @@ export function TrackClient({ initialQuery }: { initialQuery: string }) {
       const res = await fetch("/api/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q }),
+        body: JSON.stringify({ query: q, orderId: orderIdHint.trim() || undefined }),
       })
 
       const data = await res.json()
@@ -152,18 +155,19 @@ export function TrackClient({ initialQuery }: { initialQuery: string }) {
               e.preventDefault()
               handleTrack()
             }}
-            className="flex gap-3"
+            className="flex flex-col gap-3"
           >
+            <div className="flex gap-3">
             <input
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => { setQuery(e.target.value); setOrderIdHint("") }}
               placeholder="Order ID or email address"
               className="flex-1 rounded-lg border border-white/[0.08] bg-black/50 px-4 py-3.5 text-sm text-offwhite placeholder:text-bone/25 outline-none transition-colors focus:border-blood/40 focus:ring-1 focus:ring-blood/20"
             />
             <button
               type="submit"
-              disabled={state === "loading" || !query.trim()}
+              disabled={state === "loading" || !query.trim() || (isEmail && !orderIdHint.trim())}
               className="rounded-lg bg-blood px-6 py-3.5 text-sm font-semibold uppercase tracking-wider text-white transition-all hover:bg-blood/90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {state === "loading" ? (
@@ -172,6 +176,16 @@ export function TrackClient({ initialQuery }: { initialQuery: string }) {
                 "Track"
               )}
             </button>
+            </div>
+            {isEmail && (
+              <input
+                type="text"
+                value={orderIdHint}
+                onChange={(e) => setOrderIdHint(e.target.value)}
+                placeholder="Order ID (from your confirmation email)"
+                className="w-full rounded-lg border border-white/[0.08] bg-black/50 px-4 py-3.5 text-sm text-offwhite placeholder:text-bone/25 outline-none transition-colors focus:border-blood/40 focus:ring-1 focus:ring-blood/20"
+              />
+            )}
           </form>
         </motion.div>
 
