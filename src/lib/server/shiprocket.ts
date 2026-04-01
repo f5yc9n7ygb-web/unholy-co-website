@@ -353,7 +353,10 @@ export async function getShiprocketOrderDetails(
     throw new Error(`Shiprocket order fetch failed (${response.status}): ${text}`)
   }
 
-  const data = (await response.json()) as {
+  const raw = await response.json()
+  console.log(`Shiprocket order ${shiprocketOrderId} response:`, JSON.stringify(raw).slice(0, 2000))
+
+  const data = raw as {
     data?: {
       status: string
       shipments?: Array<{
