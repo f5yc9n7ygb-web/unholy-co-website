@@ -212,7 +212,10 @@ export async function createShiprocketOrder(
         body: JSON.stringify({ shipment_id: orderData.shipment_id }),
       })
 
-      if (courierResponse.ok) {
+      if (!courierResponse.ok) {
+        const errText = await courierResponse.text()
+        console.error(`Shiprocket AWB assign HTTP error (${courierResponse.status}):`, errText)
+      } else if (courierResponse.ok) {
         const courierData = (await courierResponse.json()) as {
           response?: {
             data?: {
@@ -220,7 +223,11 @@ export async function createShiprocketOrder(
               courier_name?: string
             }
           }
+          awb_assign_status?: number
+          response_message?: string
         }
+        // Log the full response so we can diagnose assignment failures
+        console.log("Shiprocket AWB assign response:", JSON.stringify(courierData))
         awbCode = courierData.response?.data?.awb_code || null
         courierName = courierData.response?.data?.courier_name || null
 
@@ -245,7 +252,7 @@ export async function createShiprocketOrder(
       }
     } catch (err) {
       // AWB assignment can be retried later — don't fail the order
-      console.warn("Shiprocket AWB assignment failed (will retry):", err)
+      console.error("Shiprocket AWB assignment failed (will retry):", err)
     }
   }
 
