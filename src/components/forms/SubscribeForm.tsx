@@ -13,6 +13,7 @@ type SubscribeFormProps = {
   buttonClassName?: string
   statusClassName?: string
   successMessage?: string
+  onSuccess?: () => void
 }
 
 type Status =
@@ -31,6 +32,7 @@ export function SubscribeForm({
   buttonClassName,
   statusClassName,
   successMessage = "You’re in. Watch your inbox for the next ritual.",
+  onSuccess,
 }: SubscribeFormProps) {
   const [email, setEmail] = useState("")
   const [company, setCompany] = useState("")
@@ -70,6 +72,7 @@ export function SubscribeForm({
         state: "success",
         message: "Check your inbox and confirm your email to finish subscribing.",
       })
+      onSuccess?.()
     } catch (error: any) {
       setStatus({
         state: "error",

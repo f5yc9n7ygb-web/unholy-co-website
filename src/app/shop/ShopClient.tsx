@@ -268,6 +268,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
                 onRemovePromo={() => setAppliedPromo(null)}
                 onBack={() => go("shipping")}
                 onChangeProduct={() => go("select")}
+                onUpgradeProduct={(pack) => { setSelected(pack); setAppliedPromo(null); }}
                 onChangeShipping={() => go("shipping")}
                 onPay={onPay}
               />
@@ -440,10 +441,18 @@ function SelectStep({ packs, selected, onSelect, onContinue }: {
                   {pack.title}
                 </h3>
 
-                {/* Qty */}
-                <p className="mt-2 text-[11px] uppercase tracking-[0.35em] text-bone/35">
-                  {pack.qty} × BloodThirst 500ml
-                </p>
+                {/* Qty & Scarcity */}
+                <div className="mt-2 space-y-2">
+                  <p className="text-[11px] uppercase tracking-[0.35em] text-bone/35">
+                    {pack.qty} × BloodThirst 500ml
+                  </p>
+                  {isFeatured && (
+                    <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.2em] text-blood/80 animate-pulse-slow">
+                      <span className="h-1 w-1 rounded-full bg-blood" />
+                      Limited Batch Remaining
+                    </div>
+                  )}
+                </div>
 
                 {/* Divider */}
                 <div className={`my-5 h-px transition-colors duration-500 ${isActive ? "bg-blood/20" : "bg-white/[0.05]"}`} />
@@ -470,6 +479,17 @@ function SelectStep({ packs, selected, onSelect, onContinue }: {
                   </div>
                   <p className="mt-1 text-[10px] uppercase tracking-wider text-bone/30">Incl. taxes · Free shipping</p>
                 </div>
+
+                {/* Subscribe & Save Visual Anchor (UI only for now) */}
+                {pack.qty >= 12 && (
+                  <div className="mt-4 rounded-lg border border-blood/20 bg-blood/5 flex items-center justify-between p-3 transition-colors hover:border-blood/40 hover:bg-blood/10">
+                    <div className="text-left">
+                      <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-blood">Subscribe & Save 15%</span>
+                      <span className="block text-[9px] uppercase tracking-wider text-bone/40 mt-[2px]">Never run dry. Cancel anytime.</span>
+                    </div>
+                    <div className="flex h-4 w-4 items-center justify-center rounded-sm border border-blood/40 bg-black" />
+                  </div>
+                )}
 
                 {/* Select indicator */}
                 <div className={`mt-5 flex items-center gap-2.5 text-[11px] uppercase tracking-[0.2em] transition-all duration-300 ${
@@ -687,7 +707,7 @@ function ShippingStep({ selected, form, errors, onChange, onBlur, onBack, onNext
 }
 
 /* ─── Step 3: Review & Pay ─── */
-function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPromo, onRemovePromo, onBack, onChangeProduct, onChangeShipping, onPay }: {
+function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPromo, onRemovePromo, onBack, onChangeProduct, onUpgradeProduct, onChangeShipping, onPay }: {
   selected: Pack
   form: ShippingForm
   loading: boolean
@@ -697,12 +717,19 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
   onRemovePromo: () => void
   onBack: () => void
   onChangeProduct: () => void
+  onUpgradeProduct: (pack: Pack) => void
   onChangeShipping: () => void
   onPay: () => void
 }) {
   const [promoInput, setPromoInput] = useState("")
   const [promoLoading, setPromoLoading] = useState(false)
   const [promoError, setPromoError] = useState<string | null>(null)
+
+  const nextPack = selected.id === "pack6" 
+    ? PACKS.find((p) => p.id === "pack12") 
+    : selected.id === "pack12" 
+      ? PACKS.find((p) => p.id === "pack24") 
+      : null;
 
   const applyPromo = async () => {
     if (!promoInput.trim()) return
@@ -864,6 +891,25 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
                 {promoError && (
                   <p className="mt-1.5 text-[11px] text-blood/80">{promoError}</p>
                 )}
+              </div>
+            )}
+
+            {nextPack && (
+              <div className="mt-5 rounded-xl border border-blood/50 bg-blood/10 p-4 transition-all hover:border-blood hover:bg-blood/20">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-center sm:text-left">
+                    <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-blood mb-1 animate-pulse-slow">One-Time Offer</span>
+                    <p className="text-sm font-semibold text-offwhite">Upgrade to {nextPack.title} ({nextPack.qty} cans)</p>
+                    <p className="text-[10px] mt-1 text-bone/60">Best value. Add it for just ₹{(nextPack.price - selected.price).toLocaleString("en-IN")} more.</p>
+                  </div>
+                  <button 
+                    onClick={() => onUpgradeProduct(nextPack)} 
+                    disabled={loading}
+                    className="btn btn-primary px-5 py-2.5 text-[11px] w-full sm:w-auto shadow-[0_0_20px_rgba(176,0,32,0.3)]"
+                  >
+                    Upgrade
+                  </button>
+                </div>
               </div>
             )}
 

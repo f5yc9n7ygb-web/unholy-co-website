@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation"
 import { ReactNode } from "react"
 import { Header } from "./Header"
 import { Footer } from "./Footer"
+import { InitiationPopup } from "@/components/ux/InitiationPopup"
 
 // Routes that render without the site header + footer (client-side navigation)
 const STANDALONE = ["/teaser"]
@@ -34,6 +35,7 @@ export function SiteChrome({ children, isTeaserDomain = false }: SiteChromeProps
         {children}
       </main>
       {!standalone && <Footer />}
+      {!standalone && <InitiationPopup />}
     </>
   )
 }

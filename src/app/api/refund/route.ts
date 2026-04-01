@@ -141,32 +141,48 @@ export async function POST(request: NextRequest) {
     // Send confirmation to customer
     const siteUrl = process.env.PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://theunholy.co"
 
-    sendMailjetEmail({
-      to: email,
-      subject: "Refund request received — UNHOLY CO.",
-      html: buildRefundRequestHtml({
-        customerName: customerName.split(" ")[0] || "Customer",
-        orderId,
-        pack,
-        reason,
-        trackUrl: `${siteUrl}/track?order=${encodeURIComponent(orderId)}`,
-      }),
-      text: buildRefundRequestText({
-        customerName: customerName.split(" ")[0] || "Customer",
-        orderId,
-        pack,
-        reason,
-        trackUrl: `${siteUrl}/track?order=${encodeURIComponent(orderId)}`,
-      }),
-    }).catch((err) => console.error("Refund confirmation email failed:", err))
+    const notificationRecipients = (process.env.CONTACT_FORWARD_EMAIL || "rituals@theunholy.co")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
 
-    // Notify team
-    const forwardEmail = process.env.CONTACT_FORWARD_EMAIL || "rituals@theunholy.co"
-    sendMailjetEmail({
-      to: forwardEmail,
-      subject: `Refund request: ${orderId} — ${reason}`,
-      text: `Refund request received:\n\nOrder: ${orderId}\nCustomer: ${customerName} (${email})\nPack: ${pack} (${quantity} cans)\nAmount: ₹${amount}\nReason: ${reason}\nDetails: ${details || "N/A"}\n\nReview in Airtable.`,
-    }).catch((err) => console.error("Refund team notification failed:", err))
+    const emailResults = await Promise.allSettled([
+      sendMailjetEmail({
+        to: email,
+        subject: "Refund request received — UNHOLY CO.",
+        html: buildRefundRequestHtml({
+          customerName: customerName.split(" ")[0] || "Customer",
+          orderId,
+          pack,
+          reason,
+          trackUrl: `${siteUrl}/track?order=${encodeURIComponent(orderId)}`,
+        }),
+        text: buildRefundRequestText({
+          customerName: customerName.split(" ")[0] || "Customer",
+          orderId,
+          pack,
+          reason,
+          trackUrl: `${siteUrl}/track?order=${encodeURIComponent(orderId)}`,
+        }),
+      }),
+      notificationRecipients.length
+        ? sendMailjetEmail({
+            to: notificationRecipients,
+            subject: `Refund request: ${orderId} — ${reason}`,
+            text: `Refund request received:\n\nOrder: ${orderId}\nCustomer: ${customerName} (${email})\nPack: ${pack} (${quantity} cans)\nAmount: ₹${amount}\nReason: ${reason}\nDetails: ${details || "N/A"}\n\nReview in Airtable.`,
+          })
+        : Promise.resolve(),
+    ])
+
+    if (emailResults[0].status === "rejected") {
+      console.error("Refund confirmation email failed:", emailResults[0].reason)
+    }
+
+    if (!notificationRecipients.length) {
+      console.warn("CONTACT_FORWARD_EMAIL is not configured; skipping refund notification email.")
+    } else if (emailResults[1].status === "rejected") {
+      console.error("Refund team notification failed:", emailResults[1].reason)
+    }
 
     return NextResponse.json({ ok: true })
   } catch (error: any) {

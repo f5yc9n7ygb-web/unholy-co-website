@@ -4,6 +4,7 @@ import HomeManifesto from "@/components/home/Manifesto"
 import HomeRitual from "@/components/home/HorizontalRitual"
 import HomeCTA from "@/components/home/CTA"
 import { Marquee } from "@/components/ux/Marquee"
+import { InteractiveQuiz } from "@/components/ux/InteractiveQuiz"
 
 export const revalidate = 60
 
@@ -37,6 +38,11 @@ export default function HomePage() {
       <HomeShowcase />
       <HomeManifesto />
       <HomeRitual />
+      <section className="relative overflow-hidden bg-[#050505] py-20 md:py-32 border-t border-white/[0.04]">
+        <div className="container px-4 sm:px-6">
+          <InteractiveQuiz />
+        </div>
+      </section>
       <HomeCTA />
     </>
   )

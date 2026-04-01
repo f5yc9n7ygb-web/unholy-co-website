@@ -57,7 +57,14 @@ export function Header() {
 
   return (
     <>
-      <header className={`fixed top-0 left-0 right-0 z-[120] transition backdrop-blur ${scrolled ? "bg-black/70" : "bg-black/40"}`}>
+      <header className={`fixed top-0 left-0 right-0 z-[120] transition backdrop-blur flex flex-col ${scrolled ? "bg-black/70" : "bg-black/40"}`}>
+        {/* Sticky Promo Bar */}
+        <div className={`w-full overflow-hidden transition-all duration-300 ${scrolled ? "h-0 opacity-0" : "h-[28px] md:h-[32px] opacity-100"}`}>
+          <div className="flex h-full w-full items-center justify-center bg-blood text-white px-4 text-center text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] relative z-[130] shadow-[0_0_15px_rgba(176,0,32,0.6)]">
+            Acolyte Access: 10% off your first ritual with code CULT10
+          </div>
+        </div>
+        
         <div className="container flex items-center justify-between py-4">
           <Link href="/" className="relative z-50 font-cinzel text-xl font-semibold uppercase tracking-[0.08em]">
             <span className="text-bone">UNHOLY</span> <span className="text-blood">CO</span>
