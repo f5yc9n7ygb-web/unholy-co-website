@@ -320,3 +320,59 @@ export async function trackShipmentByOrderId(
 
   return trackShipmentByAwb(awb)
 }
+
+/* ─── Fetch Order Details ───────────────────────────────────────────────────── */
+
+export type ShiprocketOrderDetails = {
+  awbCode: string | null
+  courierName: string | null
+  status: string
+  shipmentId: number | null
+}
+
+/**
+ * Fetches order details from Shiprocket by their internal order ID.
+ * Returns AWB, courier, and status without needing the AWB first.
+ */
+export async function getShiprocketOrderDetails(
+  shiprocketOrderId: number
+): Promise<ShiprocketOrderDetails | null> {
+  if (!hasShiprocketConfig()) return null
+
+  const kv = await getKVNamespace()
+  const headers = await authHeaders(kv)
+
+  const response = await fetch(
+    `${API_BASE}/orders/show/${shiprocketOrderId}`,
+    { headers, cache: "no-store" }
+  )
+
+  if (!response.ok) {
+    if (response.status === 404) return null
+    const text = await response.text()
+    throw new Error(`Shiprocket order fetch failed (${response.status}): ${text}`)
+  }
+
+  const data = (await response.json()) as {
+    data?: {
+      status: string
+      shipments?: Array<{
+        id: number
+        awb_code: string
+        courier_name: string
+        status: string
+      }>
+    }
+  }
+
+  const order = data.data
+  if (!order) return null
+
+  const shipment = order.shipments?.[0]
+  return {
+    awbCode: shipment?.awb_code || null,
+    courierName: shipment?.courier_name || null,
+    status: shipment?.status || order.status || "NEW",
+    shipmentId: shipment?.id || null,
+  }
+}
