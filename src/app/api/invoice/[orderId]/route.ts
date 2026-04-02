@@ -63,6 +63,7 @@ export async function GET(
       timestamp: String(fields["Timestamp"] || new Date().toISOString()),
       promoCode: String(fields["Promo Code"] || "") || undefined,
       discountAmount: Number(fields["Discount Amount"] || 0) || undefined,
+      buyerGstNumber: String(fields["GST Number"] || "") || undefined,
       invoiceSeq,
     })
 

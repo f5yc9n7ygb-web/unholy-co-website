@@ -20,6 +20,8 @@ export type InvoiceData = {
   promoCode?: string
   /** Discount amount (already subtracted from `amount`) */
   discountAmount?: number
+  /** Buyer GSTIN — present for B2B orders */
+  buyerGstNumber?: string
   /** Sequential invoice number within the financial year */
   invoiceSeq?: number
 }
@@ -69,7 +71,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     orderId, paymentId, pack, quantity, amount,
     customerName, customerEmail, customerPhone,
     shippingAddress, shippingCity, shippingState, shippingPincode,
-    timestamp, promoCode, discountAmount,
+    timestamp, promoCode, discountAmount, buyerGstNumber,
   } = data
 
   const basePrice = getBasePrice(amount)
@@ -194,6 +196,14 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   if (shippingState && buyerStateCode) {
     page.drawText(`State: ${shippingState} (${buyerStateCode})`, {
       x: leftMargin, y, size: 9, font: fontRegular, color: grey,
+    })
+    y -= 14
+  }
+
+  // Buyer GSTIN (Rule 46(d) — mandatory for B2B invoices)
+  if (buyerGstNumber) {
+    page.drawText(`GSTIN: ${buyerGstNumber}`, {
+      x: leftMargin, y, size: 9, font: fontBold, color: black,
     })
     y -= 14
   }

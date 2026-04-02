@@ -59,7 +59,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   const [payError, setPayError] = useState<string | null>(null)
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null)
   const [form, setForm] = useState<ShippingForm>({
-    name: "", email: "", phone: "", address: "", city: "", pincode: "", state: "",
+    name: "", email: "", phone: "", address: "", city: "", pincode: "", state: "", gstNumber: "",
   })
   const [errors, setErrors] = useState<FormErrors>({})
   const [touched, setTouched] = useState<Set<string>>(new Set())
@@ -626,6 +626,19 @@ function ShippingStep({ selected, form, errors, onChange, onBlur, onBack, onNext
             </div>
           </div>
 
+          {/* GST number — optional, for business buyers */}
+          <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3.5">
+            <p className="mb-2.5 text-[10px] uppercase tracking-[0.2em] text-bone/35">For Business / GST Invoice (Optional)</p>
+            <LuxField
+              label="GST Number"
+              field="gstNumber"
+              value={form.gstNumber ?? ""}
+              placeholder="22AAAAA0000A1Z5"
+              onChange={onChange}
+              onBlur={onBlur}
+            />
+          </div>
+
           <div className="flex gap-3 pt-3">
             <button onClick={onBack} className="btn btn-ghost px-5 text-sm">← Back</button>
             <motion.button
@@ -817,6 +830,9 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
               <p>{form.address}</p>
               <p>{form.city}, {form.state} {form.pincode}</p>
               <p className="text-bone/45">{form.email} · {form.phone}</p>
+              {form.gstNumber && (
+                <p className="text-bone/45">GST: {form.gstNumber}</p>
+              )}
             </div>
           </div>
         </div>
@@ -837,27 +853,44 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
             <p className="mb-6 text-[10px] uppercase tracking-[0.28em] text-bone/40">Payment Summary</p>
 
             <div className="space-y-3.5 text-sm">
-              <div className="flex justify-between text-bone/55">
-                <span>{selected.title} ({selected.qty} cans)</span>
-                <span className="text-offwhite">₹{getBasePrice(selected.price).toLocaleString("en-IN")}</span>
-              </div>
-              <div className="flex justify-between text-bone/55">
-                <span>GST (5%)</span>
-                <span className="text-offwhite/60">₹{getGstAmount(selected.price).toLocaleString("en-IN")}</span>
-              </div>
+              {appliedPromo ? (
+                <>
+                  <div className="flex justify-between text-bone/55">
+                    <span>{selected.title} ({selected.qty} cans)</span>
+                    <span className="text-offwhite">₹{selected.price.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-green-400">
+                    <span className="flex items-center gap-2">
+                      Discount ({appliedPromo.code})
+                      <button onClick={onRemovePromo} className="text-[10px] text-bone/30 hover:text-blood transition-colors">✕</button>
+                    </span>
+                    <span>−₹{appliedPromo.discountAmount.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-bone/55">
+                    <span>Subtotal (excl. GST)</span>
+                    <span className="text-offwhite">₹{getBasePrice(effectiveTotal).toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-bone/55">
+                    <span>GST (5%)</span>
+                    <span className="text-offwhite/60">₹{getGstAmount(effectiveTotal).toLocaleString("en-IN")}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between text-bone/55">
+                    <span>{selected.title} ({selected.qty} cans)</span>
+                    <span className="text-offwhite">₹{getBasePrice(selected.price).toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-bone/55">
+                    <span>GST (5%)</span>
+                    <span className="text-offwhite/60">₹{getGstAmount(selected.price).toLocaleString("en-IN")}</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-bone/55">
                 <span>Shipping</span>
                 <span className="text-xs font-medium text-green-400">FREE</span>
               </div>
-              {appliedPromo && (
-                <div className="flex justify-between text-green-400">
-                  <span className="flex items-center gap-2">
-                    Discount ({appliedPromo.code})
-                    <button onClick={onRemovePromo} className="text-[10px] text-bone/30 hover:text-blood transition-colors">✕</button>
-                  </span>
-                  <span>−₹{appliedPromo.discountAmount.toLocaleString("en-IN")}</span>
-                </div>
-              )}
             </div>
 
             {/* Promo code input */}

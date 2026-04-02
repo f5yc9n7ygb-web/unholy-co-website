@@ -6,4 +6,5 @@ export type ShippingForm = {
   city: string
   pincode: string
   state: string
+  gstNumber?: string
 }

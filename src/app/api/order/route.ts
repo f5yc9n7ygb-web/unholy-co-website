@@ -198,6 +198,7 @@ export async function POST(request: NextRequest) {
       "Full Shipping Address": fullAddress,
       ...(promoCode ? { "Promo Code": promoCode } : {}),
       ...(discountAmount ? { "Discount Amount": discountAmount } : {}),
+      ...(shipping.gstNumber ? { "GST Number": shipping.gstNumber } : {}),
       "Status": "pending",
       "Created At": new Date().toISOString(),
     }, { baseId: ordersBaseId, tableName: "Orders" }).catch((err) =>
@@ -226,6 +227,7 @@ function getRazorpayCredentials() {
 }
 
 function normalizeShipping(shipping?: ShippingForm): ShippingForm {
+  const gstNumber = sanitizeText(shipping?.gstNumber, 20).toUpperCase()
   return {
     name: sanitizeText(shipping?.name, 80),
     email: sanitizeText(shipping?.email, 120).toLowerCase(),
@@ -234,6 +236,7 @@ function normalizeShipping(shipping?: ShippingForm): ShippingForm {
     city: sanitizeText(shipping?.city, 80),
     pincode: sanitizeText(shipping?.pincode, 12),
     state: sanitizeText(shipping?.state, 80),
+    ...(gstNumber ? { gstNumber } : {}),
   }
 }
 
