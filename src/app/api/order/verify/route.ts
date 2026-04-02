@@ -413,7 +413,7 @@ async function markAbandonedCartConverted(ordersBaseId: string, orderId: string)
     baseId: ordersBaseId,
     tableName: "Orders",
     recordId: records[0]!.id,
-    fields: { "Status": "converted", "Converted At": new Date().toISOString() },
+    fields: { "Status": "converted", "Converted At": new Date().toISOString().split("T")[0] },
   })
 }
 

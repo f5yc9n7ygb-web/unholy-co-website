@@ -275,7 +275,7 @@ async function writeRecord(baseId: string, token: string, tableName: string, fie
 function removeOptionalAirtableFields(fields: AirtableFields) {
   const optionalKeys = [
     "Type", "Source", "SubmittedAt",
-    "Promo Code", "Discount Amount", "GST Number", "GST Business Name"
+    "Promo Code", "Discount Amount", "GST Number", "GST number", "GST Business Name"
   ];
   let changed = false;
   const sanitizedEntries = Object.entries(fields).filter(([key]) => {

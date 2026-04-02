@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
           recordId: record.id,
           fields: {
             "Status": "email_1_sent",
-            "Email 1 Sent At": now.toISOString(),
+            "Email 1 Sent At": now.toISOString().split("T")[0],
           },
         })
 
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
           recordId: record.id,
           fields: {
             "Status": "email_2_sent",
-            "Email 2 Sent At": now.toISOString(),
+            "Email 2 Sent At": now.toISOString().split("T")[0],
           },
         })
 

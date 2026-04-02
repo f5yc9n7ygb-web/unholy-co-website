@@ -100,7 +100,6 @@ export async function POST(request: NextRequest) {
               recordId: cart.id,
               fields: {
                 Status: "payment_failed",
-                "Last Failure": new Date().toISOString(),
               },
             }).catch((err) => console.error("Webhook: cart failure update failed:", err))
 
@@ -221,7 +220,7 @@ export async function POST(request: NextRequest) {
         baseId: ordersBaseId,
         tableName: "Orders",
         recordId: cart.id,
-        fields: { Status: "converted", "Converted At": new Date().toISOString() },
+        fields: { Status: "converted", "Converted At": new Date().toISOString().split("T")[0] },
       }),
       decrementStock(pack.id, pack.qty),
       sendOrderConfirmationEmail({

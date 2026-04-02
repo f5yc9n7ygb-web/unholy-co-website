@@ -198,10 +198,10 @@ export async function POST(request: NextRequest) {
       "Full Shipping Address": fullAddress,
       ...(promoCode ? { "Promo Code": promoCode } : {}),
       ...(discountAmount ? { "Discount Amount": discountAmount } : {}),
-      ...(shipping.gstNumber ? { "GST Number": shipping.gstNumber } : {}),
+      ...(shipping.gstNumber ? { "GST number": shipping.gstNumber } : {}),
       ...(shipping.gstBusinessName ? { "GST Business Name": shipping.gstBusinessName } : {}),
       "Status": "pending",
-      "Created At": new Date().toISOString(),
+      "Created At": new Date().toISOString().split("T")[0],
     }, { baseId: ordersBaseId, tableName: "Orders" }).catch((err) =>
       console.error("Abandoned cart save failed:", err)
     )
