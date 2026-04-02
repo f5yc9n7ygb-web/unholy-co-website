@@ -116,6 +116,11 @@ export default function FluidCanvas({ className }: { className?: string }) {
     // Respect reduced motion
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
 
+    // Skip WebGL on touch/mobile devices — the domain-warped FBM shader is too
+    // GPU-heavy for mid-range Android, causing the homepage hero to glitch.
+    // The CSS gradient fallback on the canvas element covers these devices.
+    if (window.matchMedia("(hover: none) and (pointer: coarse)").matches) return
+
     const gl = canvas.getContext("webgl", { alpha: false, antialias: false, powerPreference: "low-power" })
     if (!gl) return
 

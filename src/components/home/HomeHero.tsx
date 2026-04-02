@@ -62,6 +62,10 @@ function BloodLetter({
 
   useEffect(() => {
     if (phase !== "complete") return
+    // Touch devices have no cursor — skip the rAF loop entirely.
+    // This eliminates 11 getBoundingClientRect() calls per frame on Android
+    // which were causing forced layout thrash and homepage glitching.
+    if (window.matchMedia("(hover: none) and (pointer: coarse)").matches) return
     let raf: number
     const loop = () => {
       const el = ref.current
@@ -234,6 +238,8 @@ export default function HomeHero() {
   const springCanTiltX = useSpring(canTiltX, { stiffness: 70, damping: 18 })
 
   useEffect(() => {
+    // No cursor on touch devices — skip magnetic tracking loop entirely
+    if (window.matchMedia("(hover: none) and (pointer: coarse)").matches) return
     let raf: number
     const loop = () => {
       const scroll = scrollYProgress.get()

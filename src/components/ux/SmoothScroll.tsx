@@ -11,6 +11,13 @@ import Lenis from "lenis"
  */
 export default function SmoothScroll() {
   useEffect(() => {
+    // Lenis smooth scroll is for mouse/trackpad only.
+    // On touch devices (Android/iOS) native scroll physics are already smooth
+    // and Lenis creates a desync with Framer Motion's useScroll — causing
+    // scroll-driven animations (like the 3D can) to glitch.
+    const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches
+    if (isTouch) return
+
     const lenis = new Lenis({
       duration: 1.1,     // smoothness
       smoothWheel: true  // trackpad/mouse wheel

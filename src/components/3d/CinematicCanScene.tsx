@@ -208,10 +208,15 @@ function CameraRig({
 }) {
   const { camera } = useThree()
   const currentLookAt = useRef(new THREE.Vector3(0, 0, 0))
+  // Smoothed progress prevents the can from glitching on Android fling scrolls
+  // where raw scrollYProgress can jump several keyframes in a single frame.
+  const smoothedProgress = useRef(0)
 
   useFrame((_, rawDelta) => {
     const delta = clampDelta(rawDelta)
-    const p = scrollProgress.current ?? 0
+    const raw = scrollProgress.current ?? 0
+    smoothedProgress.current = THREE.MathUtils.lerp(smoothedProgress.current, raw, 1 - Math.exp(-12 * delta))
+    const p = smoothedProgress.current
     const kf = interpolateKeyframes(p, activeKeyframes)
     const mouse = mouseRef.current ?? { x: 0, y: 0 }
 
@@ -250,11 +255,14 @@ function CanGroup({
   const currentX = useRef(0)
   const currentY = useRef(0)
   const currentScale = useRef(1)
+  const smoothedProgress = useRef(0)
 
   useFrame((_, rawDelta) => {
     if (!groupRef.current) return
     const delta = clampDelta(rawDelta)
-    const p = scrollProgress.current ?? 0
+    const raw = scrollProgress.current ?? 0
+    smoothedProgress.current = THREE.MathUtils.lerp(smoothedProgress.current, raw, 1 - Math.exp(-12 * delta))
+    const p = smoothedProgress.current
     const kf = interpolateKeyframes(p, activeKeyframes)
 
     // Rotation — slightly faster damping so it converges on target
