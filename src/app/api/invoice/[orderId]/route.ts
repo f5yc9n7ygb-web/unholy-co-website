@@ -64,6 +64,7 @@ export async function GET(
       promoCode: String(fields["Promo Code"] || "") || undefined,
       discountAmount: Number(fields["Discount Amount"] || 0) || undefined,
       buyerGstNumber: String(fields["GST Number"] || "") || undefined,
+      buyerBusinessName: String(fields["GST Business Name"] || "") || undefined,
       invoiceSeq,
     })
 

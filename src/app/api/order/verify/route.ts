@@ -181,6 +181,7 @@ export async function POST(request: NextRequest) {
       ...(orderSession.promoCode ? { "Promo Code": orderSession.promoCode } : {}),
       ...(orderSession.discountAmount ? { "Discount Amount": orderSession.discountAmount } : {}),
       ...(orderSession.shipping.gstNumber ? { "GST Number": orderSession.shipping.gstNumber } : {}),
+      ...(orderSession.shipping.gstBusinessName ? { "GST Business Name": orderSession.shipping.gstBusinessName } : {}),
     }, { baseId: ordersBaseId, tableName: "Payments" })
 
     // Await all post-order background tasks so they don't get killed by the Edge runtime immediately

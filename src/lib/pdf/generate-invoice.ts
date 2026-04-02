@@ -22,6 +22,8 @@ export type InvoiceData = {
   discountAmount?: number
   /** Buyer GSTIN — present for B2B orders */
   buyerGstNumber?: string
+  /** Buyer's registered business/trade name */
+  buyerBusinessName?: string
   /** Sequential invoice number within the financial year */
   invoiceSeq?: number
 }
@@ -71,7 +73,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     orderId, paymentId, pack, quantity, amount,
     customerName, customerEmail, customerPhone,
     shippingAddress, shippingCity, shippingState, shippingPincode,
-    timestamp, promoCode, discountAmount, buyerGstNumber,
+    timestamp, promoCode, discountAmount, buyerGstNumber, buyerBusinessName,
   } = data
 
   const basePrice = getBasePrice(amount)
@@ -173,10 +175,19 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   y -= 10
   page.drawText("BILL TO / SHIP TO", { x: leftMargin, y, size: 9, font: fontBold, color: bloodRed })
   y -= 16
-  page.drawText(customerName || "Customer", {
-    x: leftMargin, y, size: 10, font: fontBold, color: black,
-  })
-  y -= 14
+  if (buyerBusinessName) {
+    page.drawText(buyerBusinessName, {
+      x: leftMargin, y, size: 10, font: fontBold, color: black,
+    })
+    y -= 14
+    page.drawText(`c/o ${customerName}`, { x: leftMargin, y, size: 9, font: fontRegular, color: grey })
+    y -= 14
+  } else {
+    page.drawText(customerName || "Customer", {
+      x: leftMargin, y, size: 10, font: fontBold, color: black,
+    })
+    y -= 14
+  }
   page.drawText(customerEmail, { x: leftMargin, y, size: 9, font: fontRegular, color: grey })
   if (customerPhone) {
     y -= 14

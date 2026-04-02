@@ -199,6 +199,7 @@ export async function POST(request: NextRequest) {
       ...(promoCode ? { "Promo Code": promoCode } : {}),
       ...(discountAmount ? { "Discount Amount": discountAmount } : {}),
       ...(shipping.gstNumber ? { "GST Number": shipping.gstNumber } : {}),
+      ...(shipping.gstBusinessName ? { "GST Business Name": shipping.gstBusinessName } : {}),
       "Status": "pending",
       "Created At": new Date().toISOString(),
     }, { baseId: ordersBaseId, tableName: "Orders" }).catch((err) =>
@@ -237,6 +238,7 @@ function normalizeShipping(shipping?: ShippingForm): ShippingForm {
     pincode: sanitizeText(shipping?.pincode, 12),
     state: sanitizeText(shipping?.state, 80),
     ...(gstNumber ? { gstNumber } : {}),
+    ...(shipping?.gstBusinessName ? { gstBusinessName: sanitizeText(shipping.gstBusinessName, 120) } : {}),
   }
 }
 

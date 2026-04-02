@@ -11,6 +11,12 @@ import { usePageTransition } from "@/context/TransitionContext"
 type FormErrors = Partial<Record<keyof ShippingForm, string>>
 type Step = "select" | "shipping" | "review"
 
+/** Supplier is in UP — if buyer is also UP it's intra-state (CGST+SGST), else IGST */
+const SUPPLIER_STATE = "Uttar Pradesh"
+function isInterstate(buyerState: string): boolean {
+  return !!buyerState && buyerState !== SUPPLIER_STATE
+}
+
 type AppliedPromo = {
   code: string
   discountType: "percentage" | "flat"
@@ -627,17 +633,12 @@ function ShippingStep({ selected, form, errors, onChange, onBlur, onBack, onNext
           </div>
 
           {/* GST number — optional, for business buyers */}
-          <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3.5">
-            <p className="mb-2.5 text-[10px] uppercase tracking-[0.2em] text-bone/35">For Business / GST Invoice (Optional)</p>
-            <LuxField
-              label="GST Number"
-              field="gstNumber"
-              value={form.gstNumber ?? ""}
-              placeholder="22AAAAA0000A1Z5"
-              onChange={onChange}
-              onBlur={onBlur}
-            />
-          </div>
+          <GstLookupField
+            value={form.gstNumber ?? ""}
+            businessName={form.gstBusinessName ?? ""}
+            onChange={onChange}
+            onBlur={onBlur}
+          />
 
           <div className="flex gap-3 pt-3">
             <button onClick={onBack} className="btn btn-ghost px-5 text-sm">← Back</button>
@@ -684,10 +685,7 @@ function ShippingStep({ selected, form, errors, onChange, onBlur, onBack, onNext
                   <span>Subtotal</span>
                   <span className="text-offwhite">₹{getBasePrice(selected.price).toLocaleString("en-IN")}</span>
                 </div>
-                <div className="flex justify-between text-bone/55">
-                  <span>GST (5%)</span>
-                  <span className="text-offwhite/60">₹{getGstAmount(selected.price).toLocaleString("en-IN")}</span>
-                </div>
+                <GstRows amount={selected.price} buyerState={form.state} />
                 <div className="flex justify-between text-bone/55">
                   <span>Shipping</span>
                   <span className="text-xs font-medium text-green-400">FREE</span>
@@ -831,7 +829,10 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
               <p>{form.city}, {form.state} {form.pincode}</p>
               <p className="text-bone/45">{form.email} · {form.phone}</p>
               {form.gstNumber && (
-                <p className="text-bone/45">GST: {form.gstNumber}</p>
+                <p className="text-bone/45">
+                  GST: {form.gstNumber}
+                  {form.gstBusinessName && <span className="text-bone/30"> — {form.gstBusinessName}</span>}
+                </p>
               )}
             </div>
           </div>
@@ -870,10 +871,7 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
                     <span>Subtotal (excl. GST)</span>
                     <span className="text-offwhite">₹{getBasePrice(effectiveTotal).toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between text-bone/55">
-                    <span>GST (5%)</span>
-                    <span className="text-offwhite/60">₹{getGstAmount(effectiveTotal).toLocaleString("en-IN")}</span>
-                  </div>
+                  <GstRows amount={effectiveTotal} buyerState={form.state} />
                 </>
               ) : (
                 <>
@@ -881,10 +879,7 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
                     <span>{selected.title} ({selected.qty} cans)</span>
                     <span className="text-offwhite">₹{getBasePrice(selected.price).toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between text-bone/55">
-                    <span>GST (5%)</span>
-                    <span className="text-offwhite/60">₹{getGstAmount(selected.price).toLocaleString("en-IN")}</span>
-                  </div>
+                  <GstRows amount={selected.price} buyerState={form.state} />
                 </>
               )}
               <div className="flex justify-between text-bone/55">
@@ -1026,6 +1021,126 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
 
       <div className="mt-8 flex justify-center">
         <button onClick={onBack} className="btn btn-ghost text-sm">← Back to shipping</button>
+      </div>
+    </div>
+  )
+}
+
+/* ─── GST Tax Rows ─── */
+function GstRows({ amount, buyerState }: { amount: number; buyerState: string }) {
+  const gst = getGstAmount(amount)
+  if (isInterstate(buyerState)) {
+    return (
+      <div className="flex justify-between text-bone/55">
+        <span>IGST (5%)</span>
+        <span className="text-offwhite/60">₹{gst.toLocaleString("en-IN")}</span>
+      </div>
+    )
+  }
+  const half = Math.round(gst / 2)
+  return (
+    <>
+      <div className="flex justify-between text-bone/55">
+        <span>CGST (2.5%)</span>
+        <span className="text-offwhite/60">₹{half.toLocaleString("en-IN")}</span>
+      </div>
+      <div className="flex justify-between text-bone/55">
+        <span>SGST (2.5%)</span>
+        <span className="text-offwhite/60">₹{(gst - half).toLocaleString("en-IN")}</span>
+      </div>
+    </>
+  )
+}
+
+/* ─── GST Lookup Field ─── */
+const GSTIN_REGEX = /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/
+
+function GstLookupField({ value, businessName, onChange, onBlur }: {
+  value: string
+  businessName: string
+  onChange: (f: keyof ShippingForm, v: string) => void
+  onBlur: (f: keyof ShippingForm) => void
+}) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [lastLookedUp, setLastLookedUp] = useState("")
+
+  const lookup = async (gstin: string) => {
+    if (!GSTIN_REGEX.test(gstin) || gstin === lastLookedUp) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/gst/verify?gstin=${encodeURIComponent(gstin)}`)
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        setError(data?.error || "Could not verify GSTIN.")
+        onChange("gstBusinessName", "")
+      } else {
+        const name = data.tradeName || data.legalName || ""
+        onChange("gstBusinessName", name)
+        if (data.status && data.status !== "Active") {
+          setError(`GSTIN status: ${data.status}`)
+        }
+      }
+      setLastLookedUp(gstin)
+    } catch {
+      setError("Unable to verify GSTIN right now.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleChange = (f: keyof ShippingForm, v: string) => {
+    const upper = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15)
+    onChange("gstNumber", upper)
+    // Clear business name when input changes
+    if (upper !== lastLookedUp) {
+      onChange("gstBusinessName", "")
+      setError(null)
+    }
+  }
+
+  const handleBlur = () => {
+    onBlur("gstNumber")
+    if (value && GSTIN_REGEX.test(value)) {
+      lookup(value)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3.5">
+      <p className="mb-2.5 text-[10px] uppercase tracking-[0.2em] text-bone/35">For Business / GST Invoice (Optional)</p>
+      <div>
+        <label htmlFor="field-gstNumber" className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-bone/45">
+          GST Number
+        </label>
+        <div className="relative">
+          <input
+            id="field-gstNumber"
+            type="text"
+            value={value}
+            placeholder="22AAAAA0000A1Z5"
+            onChange={(e) => handleChange("gstNumber", e.target.value)}
+            onBlur={handleBlur}
+            className={`w-full rounded-xl border bg-black/50 px-4 py-3 text-sm text-offwhite placeholder:text-bone/20 outline-none transition-all duration-200 focus:border-blood/60 focus:ring-1 focus:ring-blood/20 ${
+              error ? "border-blood/60" : "border-white/[0.08]"
+            }`}
+          />
+          {loading && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-bone/20 border-t-blood" />
+            </div>
+          )}
+        </div>
+        {error && <p className="mt-1.5 text-[11px] text-blood/80">{error}</p>}
+        {businessName && !error && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg bg-green-500/5 border border-green-500/10 px-3 py-2">
+            <svg className="h-3.5 w-3.5 shrink-0 text-green-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M3 8.5l3.5 3.5 6.5-7" />
+            </svg>
+            <span className="text-[12px] text-green-400/90">{businessName}</span>
+          </div>
+        )}
       </div>
     </div>
   )
