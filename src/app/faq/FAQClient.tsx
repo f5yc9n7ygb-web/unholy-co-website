@@ -79,7 +79,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "Can I change my shipping address after placing an order?",
         answer:
-          "If your order hasn't been dispatched yet, reach out to us immediately via the contact page or WhatsApp. Once dispatched, address changes aren't possible.",
+          "If your order hasn't been dispatched yet, reach out to us immediately via the contact page. Once dispatched, address changes aren't possible.",
       },
     ],
   },
@@ -306,21 +306,12 @@ export function FAQClient() {
             We&apos;re here to help.
           </h2>
           <p className="mx-auto mt-3 max-w-sm text-sm text-bone/40">
-            Reach out via the contact page or WhatsApp and we&apos;ll respond
-            within 24 hours.
+            Reach out via the contact page and we&apos;ll respond within 24 hours.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <TransitionLink href="/contact" className="btn btn-primary px-6 py-3 text-sm">
               Contact Us
             </TransitionLink>
-            <a
-              href="https://wa.me/919870066131"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-ghost px-6 py-3 text-sm"
-            >
-              WhatsApp
-            </a>
           </div>
         </motion.div>
       </div>

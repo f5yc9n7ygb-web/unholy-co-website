@@ -150,8 +150,7 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
             <td style="padding:0 32px 40px; text-align:center;">
               <div style="height:1px; background:${border}; margin-bottom:24px;"></div>
               <div style="font-size:11px; color:${textDim}; line-height:1.7;">
-                Questions? Contact us at <a href="mailto:rituals@theunholy.co" style="color:${textMuted}; text-decoration:none;">rituals@theunholy.co</a><br>
-                or on WhatsApp: <a href="https://wa.me/919870066131" style="color:${textMuted}; text-decoration:none;">+91 98700 66131</a><br><br>
+                Questions? Contact us at <a href="mailto:rituals@theunholy.co" style="color:${textMuted}; text-decoration:none;">rituals@theunholy.co</a><br><br>
                 <span style="color:${textDim};">UNHOLY CO. · Himalayan mineral water for the counterculture.<br>
                 © ${new Date().getFullYear()} UNHOLY CO. All rights reserved.</span>
               </div>
@@ -200,7 +199,7 @@ https://theunholy.co/track?order=${o.orderId}
 DOWNLOAD GST INVOICE
 https://theunholy.co/api/invoice/${o.orderId}
 
-Questions? rituals@theunholy.co or WhatsApp +91 98700 66131
+Questions? rituals@theunholy.co
 
 UNHOLY CO. — Himalayan mineral water for the counterculture.
 `

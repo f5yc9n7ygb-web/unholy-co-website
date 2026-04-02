@@ -109,14 +109,7 @@ export function Footer() {
             >
               Refunds &amp; Returns
             </TransitionLink>
-            <a
-              href="https://wa.me/919870066131"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block text-sm text-offwhite/40 transition-colors hover:text-blood"
-            >
-              WhatsApp Support
-            </a>
+
             <p className="pt-1 text-xs text-offwhite/25">
               We reply fast after midnight.
             </p>

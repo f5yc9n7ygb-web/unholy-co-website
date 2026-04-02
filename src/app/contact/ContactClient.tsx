@@ -18,7 +18,6 @@ const placeholders: Record<InquiryType, string> = {
 
 const contactChannels = [
   { label: "Email", value: "rituals@theunholy.co", href: "mailto:rituals@theunholy.co" },
-  { label: "WhatsApp", value: "+91 98700 66131", href: "https://wa.me/919870066131" },
   { label: "Press", value: "press@theunholy.co", href: "mailto:press@theunholy.co" },
 ]
 
@@ -134,7 +133,7 @@ export function ContactClient() {
             <div className="mt-10 space-y-1">
               <p className="text-[10px] uppercase tracking-[0.35em] text-bone/25 mb-3">Hours</p>
               <p className="text-sm text-bone/40">Mon – Sat · 11:00 to 20:00 IST</p>
-              <p className="text-sm text-bone/25">Urgent? Use WhatsApp above.</p>
+              <p className="text-sm text-bone/25">We reply within 24 hours.</p>
             </div>
           </motion.div>
 

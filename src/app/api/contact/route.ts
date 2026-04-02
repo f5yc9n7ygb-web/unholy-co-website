@@ -150,7 +150,7 @@ async function sendAutoResponse(name: string, email: string) {
         We've received your message. Someone from the coven will get back to you within 24 hours.
       </p>
       <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #C9C9C9;">
-        If it's urgent, hit us on WhatsApp at <a href="https://wa.me/919870066131" style="color: #B00020; text-decoration: underline;">+91 98700 66131</a>.
+        For urgent matters, email us directly at <a href="mailto:rituals@theunholy.co" style="color: #B00020; text-decoration: underline;">rituals@theunholy.co</a>.
       </p>
       <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(176,0,32,0.2); text-align: center;">
         <p style="margin: 0; font-size: 11px; letter-spacing: 0.2em; color: rgba(201,201,201,0.3);">
@@ -160,7 +160,7 @@ async function sendAutoResponse(name: string, email: string) {
     </div>
   `
 
-  const text = `Hey ${firstName},\n\nWe've received your message. Someone from the coven will get back to you within 24 hours.\n\nIf it's urgent, hit us on WhatsApp at +91 98700 66131.\n\n— UNHOLY CO.`
+  const text = `Hey ${firstName},\n\nWe've received your message. Someone from the coven will get back to you within 24 hours.\n\nFor urgent matters, email us directly at rituals@theunholy.co.\n\n— UNHOLY CO.`
 
   await sendMailjetEmail({
     to: email,
