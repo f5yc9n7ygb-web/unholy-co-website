@@ -29,7 +29,7 @@ const productSchema = {
     name: 'UNHOLY CO.',
   },
   description: 'Natural Himalayan mineral water at 11,000 feet. Zero sugar, zero plastic. Sealed in obsidian-black aluminum.',
-  image: 'https://theunholy.co/can.png',
+  image: 'https://theunholy.co/can.webp',
   url: 'https://theunholy.co/bloodthirst',
   offers: {
     '@type': 'AggregateOffer',
@@ -42,10 +42,6 @@ const productSchema = {
 export default function BloodThirstPage() {
   return (
     <>
-      {/* Preload heavy 3D assets so they download in parallel with JS bundle */}
-      <link rel="preload" href="/bloodthirst.glb" as="fetch" crossOrigin="anonymous" />
-      <link rel="preload" href="/bloodthirst-texture.webp" as="fetch" crossOrigin="anonymous" />
-      <link rel="preload" href="/env.hdr" as="fetch" crossOrigin="anonymous" />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
