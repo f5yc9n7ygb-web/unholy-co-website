@@ -363,8 +363,8 @@ export function CinematicCanScene({ scrollProgress, isMobile = false }: Cinemati
         {/* Ambient — enough to lift shadow detail without washing out */}
         <ambientLight intensity={0.4} color="#1a1a2e" />
 
-        {/* HDR environment for metallic reflections — preloaded in page.tsx */}
-        <Environment files="/env.hdr" background={false} />
+        {/* HDR environment for metallic reflections */}
+        <Environment preset="studio" background={false} />
 
         <CanGroup scrollProgress={scrollProgress} activeKeyframes={activeKeyframes} />
       </Canvas>
