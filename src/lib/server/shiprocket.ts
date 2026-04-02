@@ -45,7 +45,10 @@ async function getAuthToken(kv?: KVNamespace | null): Promise<string> {
   // Fetch new token
   const response = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "User-Agent": "UnholyCo/1.0 (Integration/API)"
+    },
     body: JSON.stringify({
       email: process.env.SHIPROCKET_EMAIL,
       password: process.env.SHIPROCKET_PASSWORD,
@@ -75,6 +78,7 @@ async function authHeaders(kv?: KVNamespace | null): Promise<Record<string, stri
   const token = await getAuthToken(kv)
   return {
     "Content-Type": "application/json",
+    "User-Agent": "UnholyCo/1.0 (Integration/API)",
     Authorization: `Bearer ${token}`,
   }
 }
