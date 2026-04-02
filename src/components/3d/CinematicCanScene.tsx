@@ -364,7 +364,7 @@ export function CinematicCanScene({ scrollProgress, isMobile = false }: Cinemati
         <ambientLight intensity={0.4} color="#1a1a2e" />
 
         {/* HDR environment for metallic reflections */}
-        <Environment preset="studio" background={false} />
+        <Environment files="/env.hdr" background={false} />
 
         <CanGroup scrollProgress={scrollProgress} activeKeyframes={activeKeyframes} />
       </Canvas>

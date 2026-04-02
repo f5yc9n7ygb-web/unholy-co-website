@@ -51,7 +51,7 @@ const nextConfig = {
               "form-action 'self' https://api.razorpay.com",
               // Allow outbound connections to PostHog (analytics) and Sentry (error tracking)
               // Sentry EU region uses *.ingest.de.sentry.io (multi-level subdomain, needs explicit rule)
-              "connect-src 'self' https://*.posthog.com https://eu.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://api.razorpay.com https://raw.githack.com",
+              "connect-src 'self' https://*.posthog.com https://eu.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://api.razorpay.com",
               "upgrade-insecure-requests",
             ].join("; "),
           },
