@@ -197,8 +197,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, message: "Already converted" })
     }
 
-    // Save to Payments table
-    await saveRecordToAirtable(
+    const { id: paymentRecordId } = await saveRecordToAirtable(
       {
         "Payment ID": paymentId,
         "Order ID": orderId,
@@ -261,48 +260,32 @@ export async function POST(request: NextRequest) {
           weight: pack.qty * 0.5,
         }).then(async (result) => {
           if (result) {
-            const paymentRecords = await queryAirtableRecords({
+            await updateAirtableRecord({
               baseId: ordersBaseId,
               tableName: "Payments",
-              filterByFormula: `{Order ID} = "${escapeAirtableValue(orderId)}"`,
-              maxRecords: 1,
-            })
-            if (paymentRecords.length > 0) {
-              await updateAirtableRecord({
-                baseId: ordersBaseId,
-                tableName: "Payments",
-                recordId: paymentRecords[0]!.id,
-                fields: {
-                  "Shiprocket Order ID": result.orderId,
-                  "Shipment ID": result.shipmentId,
-                  "AWB Code": result.awbCode || "",
-                  "Courier Name": result.courierName || "",
-                  "Shipping Status": result.pickupRequested
-                    ? "Pickup Requested"
-                    : result.awbCode
-                      ? "AWB Assigned"
-                      : "Processing",
-                },
-              })
-            }
+              recordId: paymentRecordId,
+              fields: {
+                "Shiprocket Order ID": result.orderId,
+                "Shipment ID": result.shipmentId,
+                "AWB Code": result.awbCode || "",
+                "Courier Name": result.courierName || "",
+                "Shipping Status": result.pickupRequested
+                  ? "Pickup Requested"
+                  : result.awbCode
+                    ? "AWB Assigned"
+                    : "Processing",
+              },
+            }).catch((err) => console.error("Webhook: Failed to update status on success:", err))
           }
         }).catch(async (err) => {
           console.error("Webhook: Shiprocket order creation failed:", err)
           logErrorToAirtable(`Shiprocket Failed (Order: ${orderId})`, err).catch(() => {})
-          const failedRecords = await queryAirtableRecords({
+          await updateAirtableRecord({
             baseId: ordersBaseId,
             tableName: "Payments",
-            filterByFormula: `{Order ID} = "${escapeAirtableValue(orderId)}"`,
-            maxRecords: 1,
-          }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
-          if (failedRecords.length > 0) {
-            await updateAirtableRecord({
-              baseId: ordersBaseId,
-              tableName: "Payments",
-              recordId: failedRecords[0]!.id,
-              fields: { "Shipping Status": "Shiprocket Failed" },
-            }).catch(() => {})
-          }
+            recordId: paymentRecordId,
+            fields: { "Shipping Status": "Shiprocket Failed" },
+          }).catch((err) => console.error("Webhook: Failed to update status on error:", err))
         })
       )
     } else {

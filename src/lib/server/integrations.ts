@@ -49,14 +49,14 @@ function hasMailjetConfig() {
 export async function saveRecordToAirtable(
   fields: AirtableFields,
   options: AirtableOptions = {}
-): Promise<void> {
+): Promise<{ id: string }> {
   const baseId = options.baseId || getRequiredEnv("AIRTABLE_BASE_ID");
   const token = getRequiredEnv("AIRTABLE_TOKEN");
   const tableName = options.tableName || defaultTableName;
 
   const primaryAttempt = await writeRecord(baseId, token, tableName, fields);
   if (primaryAttempt.ok) {
-    return;
+    return { id: primaryAttempt.id };
   }
 
   const sanitizedFields = removeOptionalAirtableFields(fields);
@@ -64,7 +64,7 @@ export async function saveRecordToAirtable(
     const retryAttempt = await writeRecord(baseId, token, tableName, sanitizedFields);
     if (retryAttempt.ok) {
       console.warn("Airtable write succeeded after stripping optional fields.");
-      return;
+      return { id: retryAttempt.id };
     }
   }
 
@@ -260,7 +260,8 @@ async function writeRecord(baseId: string, token: string, tableName: string, fie
   );
 
   if (response.ok) {
-    return { ok: true as const };
+    const data = await response.json();
+    return { ok: true as const, id: data.records[0].id as string };
   }
 
   const message = await response.text();
