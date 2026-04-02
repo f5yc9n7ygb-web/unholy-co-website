@@ -112,7 +112,7 @@ export function TrackClient({ initialQuery }: { initialQuery: string }) {
       setError("Something went wrong. Please try again.")
       setOrders([])
     }
-  }, [query])
+  }, [query, orderIdHint])
 
   // Auto-search if initialQuery is provided
   useEffect(() => {

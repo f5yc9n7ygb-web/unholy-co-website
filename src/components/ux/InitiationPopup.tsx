@@ -94,7 +94,7 @@ export function InitiationPopup() {
               </h2>
               
               <p className="mb-8 text-sm leading-relaxed text-bone/60">
-                Window shopping is for mortals. Join the cult, seal the pact, and we'll grant you <strong className="text-offwhite">10% off</strong> your first ritual with code <strong className="text-blood">CULT10</strong>.
+                Window shopping is for mortals. Join the cult, seal the pact, and we&apos;ll grant you <strong className="text-offwhite">10% off</strong> your first ritual with code <strong className="text-blood">CULT10</strong>.
               </p>
 
               {!hasYielded ? (
