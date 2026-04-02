@@ -21,6 +21,19 @@ const nextConfig = {
   },
   async headers() {
     return [
+      // Aggressive caching for large immutable 3D/media assets
+      {
+        source: '/:path*.glb',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
+      {
+        source: '/:path*.hdr',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
+      {
+        source: '/:path*.webp',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=604800, stale-while-revalidate=86400' }],
+      },
       {
         source: '/:path*',
         headers: [
