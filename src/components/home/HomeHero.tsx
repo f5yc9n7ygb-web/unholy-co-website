@@ -388,10 +388,10 @@ export default function HomeHero() {
                   }}
                 >
                   <Image
-                    src="/can.png"
+                    src="/can.webp"
                     alt="BLOODTHIRST by UNHOLY CO."
-                    width={260}
-                    height={450}
+                    width={310}
+                    height={535}
                     className="drop-shadow-[0_0_120px_rgba(176,0,32,0.55)]"
                     priority
                   />

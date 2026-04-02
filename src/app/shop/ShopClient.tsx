@@ -54,7 +54,7 @@ const STEPS: Step[] = ["select", "shipping", "review"]
 export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   const { navigate } = usePageTransition()
   const [step, setStep] = useState<Step>("select")
-  const [selected, setSelected] = useState<Pack>(PACKS[1])
+  const [selected, setSelected] = useState<Pack>(PACKS[0])
   const [loading, setLoading] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null)
@@ -371,7 +371,7 @@ function SelectStep({ packs, selected, onSelect, onContinue }: {
             transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
           >
             <Image
-              src="/can.png"
+              src="/can.webp"
               alt="BloodThirst"
               width={120}
               height={210}
@@ -387,6 +387,7 @@ function SelectStep({ packs, selected, onSelect, onContinue }: {
           const isActive = selected.id === pack.id
           const num = `0${i + 1}`
           const isFeatured = !!pack.tag
+          const showLimitedBatch = pack.id === "pack6" || isFeatured
 
           return (
             <motion.button
@@ -446,7 +447,7 @@ function SelectStep({ packs, selected, onSelect, onContinue }: {
                   <p className="text-[11px] uppercase tracking-[0.35em] text-bone/35">
                     {pack.qty} × BloodThirst 500ml
                   </p>
-                  {isFeatured && (
+                  {showLimitedBatch && (
                     <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.2em] text-blood/80 animate-pulse-slow">
                       <span className="h-1 w-1 rounded-full bg-blood" />
                       Limited Batch Remaining
@@ -480,16 +481,7 @@ function SelectStep({ packs, selected, onSelect, onContinue }: {
                   <p className="mt-1 text-[10px] uppercase tracking-wider text-bone/30">Incl. taxes · Free shipping</p>
                 </div>
 
-                {/* Subscribe & Save Visual Anchor (UI only for now) */}
-                {pack.qty >= 12 && (
-                  <div className="mt-4 rounded-lg border border-blood/20 bg-blood/5 flex items-center justify-between p-3 transition-colors hover:border-blood/40 hover:bg-blood/10">
-                    <div className="text-left">
-                      <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-blood">Subscribe & Save 15%</span>
-                      <span className="block text-[9px] uppercase tracking-wider text-bone/40 mt-[2px]">Never run dry. Cancel anytime.</span>
-                    </div>
-                    <div className="flex h-4 w-4 items-center justify-center rounded-sm border border-blood/40 bg-black" />
-                  </div>
-                )}
+                {/* Subscribe & Save is intentionally hidden until subscriptions launch. */}
 
                 {/* Select indicator */}
                 <div className={`mt-5 flex items-center gap-2.5 text-[11px] uppercase tracking-[0.2em] transition-all duration-300 ${
@@ -526,7 +518,7 @@ function SelectStep({ packs, selected, onSelect, onContinue }: {
               transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
             >
               <Image
-                src="/can.png"
+                src="/can.webp"
                 alt="BloodThirst"
                 width={40}
                 height={70}
@@ -657,7 +649,7 @@ function ShippingStep({ selected, form, errors, onChange, onBlur, onBack, onNext
             <div className="relative flex h-32 items-center justify-center overflow-hidden bg-gradient-to-b from-blood/10 to-transparent">
               <div className="absolute bottom-0 left-1/2 h-10 w-32 -translate-x-1/2 rounded-full bg-blood/20 blur-2xl" />
               <Image
-                src="/can.png"
+                src="/can.webp"
                 alt="BloodThirst"
                 width={70}
                 height={122}
@@ -796,7 +788,7 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
             <div className="flex items-center gap-5 p-5">
               <div className="relative h-24 w-16 shrink-0 overflow-hidden rounded-xl bg-black/50 p-2">
                 <div className="absolute inset-0 bg-gradient-to-b from-blood/15 to-transparent" />
-                <Image src="/can.png" alt="BloodThirst" fill className="object-contain drop-shadow-[0_4px_16px_rgba(176,0,32,0.3)]" />
+                <Image src="/can.webp" alt="BloodThirst" fill className="object-contain drop-shadow-[0_4px_16px_rgba(176,0,32,0.3)]" />
               </div>
               <div>
                 <p className="font-cinzel text-lg font-bold text-offwhite">{selected.title}</p>

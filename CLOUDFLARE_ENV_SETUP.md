@@ -2,12 +2,12 @@
 
 ## 🚨 CRITICAL: Why Your Site Shows a Blank Page
 
-Your deployment succeeds, but the site shows `ERR_HTTP_RESPONSE_CODE_FAILURE` because:
+Your deployment succeeds, but the site can still break because:
 
-1. **The Problem**: Environment variables were added to `wrangler.toml` in the `[vars]` section
+1. **The Problem**: Required environment variables were added only to `wrangler.toml`, or production URLs still pointed at a preview host
 2. **Why It Fails**: The `[vars]` section defines **runtime bindings** for Cloudflare Workers, NOT build-time environment variables
-3. **What Happens**: Next.js `NEXT_PUBLIC_*` variables must be available **during the build process** to be inlined into the client JavaScript bundle
-4. **The Result**: Variables are `undefined` in the built code → forms break → worker crashes → blank page
+3. **What Happens**: `NEXT_PUBLIC_*` variables must exist **during the build**, and `PUBLIC_SITE_URL` must match the hostname you want emails and server-generated links to use
+4. **The Result**: The built code can miss required values or generate links for the wrong host
 
 ## ✅ The Correct Way: Cloudflare Pages Dashboard
 
@@ -34,16 +34,16 @@ Add the following variables for **Production** environment:
 
 **Variable Name** | **Value** | **Notes**
 --- | --- | ---
-`NEXT_PUBLIC_WORKER_ENDPOINT` | `https://unholy-co-website.pages.dev/api/contact` | Contact form endpoint
-`NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT` | `https://unholy-co-website.pages.dev/api/subscribe` | Newsletter subscription endpoint
-`NEXT_PUBLIC_WORKER_ORDER_ENDPOINT` | `https://unholy-co-website.pages.dev/api/order` | Shop order endpoint
+`PUBLIC_SITE_URL` | `https://theunholy.co` | Canonical production hostname for emails and server-generated links
 `NEXT_PUBLIC_RAZORPAY_KEY_ID` | `rzp_test_AbCdEf12345678` | Your Razorpay public key (test or live)
 
 **Important Notes:**
 - Click **"Add variable"** for each one
 - Make sure to select **"Production"** environment (and optionally **"Preview"** for branch deployments)
-- These are PUBLIC variables (visible in browser source code) - never put secrets here
-- Replace the example values with your actual endpoints and keys
+- `PUBLIC_SITE_URL` should be your custom production domain
+- Forms and checkout now use same-origin API routes (`/api/contact`, `/api/subscribe`, `/api/order`), so you do **not** need `NEXT_PUBLIC_WORKER_*` endpoint variables anymore
+- `NEXT_PUBLIC_RAZORPAY_KEY_ID` is PUBLIC and visible in browser source code; never put secrets in `NEXT_PUBLIC_*`
+- For Preview deployments, set `PUBLIC_SITE_URL` to that preview hostname if you want confirmation emails and server-generated links to stay on preview
 
 #### 4. Save and Deploy
 
@@ -57,7 +57,7 @@ Add the following variables for **Production** environment:
 
 After the new deployment completes:
 
-1. Visit your site: `https://unholy-co-website.pages.dev`
+1. Visit your deployed site on the hostname you are verifying
 2. The page should load normally (no blank page)
 3. Open browser DevTools (F12) → Console
 4. You should see NO `ERR_HTTP_RESPONSE_CODE_FAILURE` errors
@@ -67,7 +67,7 @@ After the new deployment completes:
 
 1. Right-click on any form → **View Page Source**
 2. Search for `action=`
-3. You should see: `action="https://unholy-co-website.pages.dev/api/contact"` (not `action="undefined"` or `action="#"`)
+3. You should see same-origin form actions like `action="/api/contact"`, not a hardcoded preview hostname
 
 ## 📚 Understanding the Difference
 
@@ -98,8 +98,8 @@ When Cloudflare Pages builds your site:
 
 ```bash
 # 1. Environment variables from dashboard are loaded into process.env
-export NEXT_PUBLIC_WORKER_ENDPOINT="https://..."
-export NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT="https://..."
+export PUBLIC_SITE_URL="https://theunholy.co"
+export NEXT_PUBLIC_RAZORPAY_KEY_ID="rzp_live_xxxxx"
 # ... etc
 
 # 2. npm run cf:bundle executes
@@ -107,7 +107,8 @@ npm run cf:bundle
 
 # 3. Next.js build reads process.env and inlines NEXT_PUBLIC_* values
 next build
-# Output: JavaScript files with hardcoded endpoint URLs
+# Output: JavaScript files with the correct public key and runtime code that
+# uses same-origin API routes for form submissions
 
 # 4. OpenNext packages the build for Cloudflare Workers
 npx @opennextjs/cloudflare build
@@ -123,9 +124,7 @@ For local development, create a `.env.local` file:
 
 ```bash
 # .env.local (not committed to git)
-NEXT_PUBLIC_WORKER_ENDPOINT=http://localhost:8787/api/contact
-NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT=http://localhost:8787/api/subscribe
-NEXT_PUBLIC_WORKER_ORDER_ENDPOINT=http://localhost:8787/api/order
+PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_AbCdEf12345678
 ```
 

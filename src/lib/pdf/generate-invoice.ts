@@ -116,7 +116,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   })
 
   y -= 18
-  page.drawText("Cause your lever already hates you", {
+  page.drawText("Cause your liver already hates you", {
     x: leftMargin + 45, y, size: 9, font: fontRegular, color: grey,
   })
 

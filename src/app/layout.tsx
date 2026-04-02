@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import { Inter, Cinzel } from 'next/font/google'
 import './globals.css'
 import { ReactNode } from 'react'
-import { headers } from 'next/headers'
 import { SiteChrome } from '@/components/layout/SiteChrome'
 import { Preloader } from '@/components/ux/Preloader'
 import { ScrollProgress } from '@/components/ux/ScrollProgress'
@@ -97,13 +96,7 @@ const websiteSchema = {
   description: 'Gothic premium canned water. Natural Himalayan mineral water. Zero sugar, zero plastic.',
 }
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  // Read the header stamped by middleware for theunholy.co requests.
-  // This is the reliable server-side way to detect domain — usePathname()
-  // in client components returns the browser URL, not the rewritten path.
-  const headersList = await headers()
-  const isTeaserDomain = headersList.get('x-teaser-domain') === '1'
-
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${cinzel.variable}`} suppressHydrationWarning>
       <head>
@@ -122,7 +115,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <Preloader />
             <HeartbeatGlow />
             <ScrollProgress />
-            <SiteChrome isTeaserDomain={isTeaserDomain}>{children}</SiteChrome>
+            <SiteChrome>{children}</SiteChrome>
             <NoiseGrain />
           </TransitionProvider>
         </PostHogProvider>

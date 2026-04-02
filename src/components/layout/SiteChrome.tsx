@@ -11,22 +11,12 @@ const STANDALONE = ["/teaser"]
 
 interface SiteChromeProps {
   children: ReactNode
-  /**
-   * True when the request originated from theunholy.co (set by middleware).
-   * We pass this as a server-side prop because usePathname() returns the
-   * browser URL ("/"), not the rewritten path ("/teaser"), after a middleware
-   * rewrite — so we can't rely on pathname alone for domain-based routing.
-   */
-  isTeaserDomain?: boolean
 }
 
-export function SiteChrome({ children, isTeaserDomain = false }: SiteChromeProps) {
+export function SiteChrome({ children }: SiteChromeProps) {
   const pathname = usePathname()
 
-  // Standalone if: served via theunholy.co (domain flag) OR direct /teaser URL
-  const standalone =
-    isTeaserDomain ||
-    STANDALONE.some((r) => pathname === r || pathname.startsWith(r + "/"))
+  const standalone = STANDALONE.some((r) => pathname === r || pathname.startsWith(r + "/"))
 
   return (
     <>

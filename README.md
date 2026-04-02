@@ -78,11 +78,10 @@ If you see a blank page with `ERR_HTTP_RESPONSE_CODE_FAILURE` after deployment, 
     -   Go to Settings → Environment variables.
     -   Add these variables for the **Production** environment:
         ```
-        NEXT_PUBLIC_WORKER_ENDPOINT=https://your-domain.pages.dev/api/contact
-        NEXT_PUBLIC_WORKER_SUBSCRIBE_ENDPOINT=https://your-domain.pages.dev/api/subscribe
-        NEXT_PUBLIC_WORKER_ORDER_ENDPOINT=https://your-domain.pages.dev/api/order
+        PUBLIC_SITE_URL=https://theunholy.co
         NEXT_PUBLIC_RAZORPAY_KEY_ID=your_razorpay_public_key
         ```
+    -   Forms and checkout now use same-origin Next.js API routes (`/api/contact`, `/api/subscribe`, `/api/order`), so you do not need `NEXT_PUBLIC_WORKER_*` endpoint variables.
     -   Add the **server-side secrets** (not prefixed with `NEXT_PUBLIC_`) so the APIs can talk to Airtable/Mailjet/Razorpay:
         ```
         AIRTABLE_BASE_ID=appXXXXXXXXXXXXXX

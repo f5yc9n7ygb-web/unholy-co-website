@@ -95,7 +95,7 @@ export default function HomeShowcase() {
           <TiltCard className="glass-panel group relative flex h-[350px] items-center justify-center overflow-hidden sm:h-[400px] md:h-full">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(176,0,32,0.12),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
             <Image
-              src="/can.png"
+              src="/can.webp"
               alt="BLOODTHIRST"
               width={200}
               height={360}

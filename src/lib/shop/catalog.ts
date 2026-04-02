@@ -10,15 +10,6 @@ export type Pack = {
 
 export const PACKS: Pack[] = [
   {
-    id: "pack-test",
-    title: "Test Pack",
-    qty: 1,
-    price: 1,
-    perCan: 1,
-    blurb: "₹1 test pack — remove before going live.",
-    tag: "TEST",
-  },
-  {
     id: "pack6",
     title: "Starter Ritual",
     qty: 6,

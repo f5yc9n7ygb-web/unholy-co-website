@@ -167,7 +167,7 @@ export default function TeaserClient() {
             transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
           >
             <Image
-              src="/can.png"
+              src="/can.webp"
               alt="BLOODTHIRST — coming soon"
               width={340}
               height={580}
