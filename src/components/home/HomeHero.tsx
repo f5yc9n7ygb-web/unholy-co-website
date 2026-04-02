@@ -113,13 +113,10 @@ function BloodLetter({
     [sweep, 0.04 + sweep, 0.12 + sweep],
     ["rgba(246,246,246,0.95)", "rgba(176,0,32,0.88)", "rgba(176,0,32,1.0)"]
   )
-  const letterGlow = useTransform(
+  const glowOpacityValue = useTransform(
     scrollYProgress,
     [sweep, 0.08 + sweep],
-    [
-      "0 0 0px rgba(176,0,32,0)",
-      "0 0 60px rgba(176,0,32,0.7), 0 0 120px rgba(176,0,32,0.25)",
-    ]
+    [0, 1]
   )
 
   const showText = phase === "text" || phase === "complete"
@@ -138,7 +135,7 @@ function BloodLetter({
     >
       <motion.span
         ref={ref}
-        className="inline-block will-change-transform"
+        className="inline-block relative will-change-transform"
         style={{
           x: combinedX,
           y: combinedY,
@@ -147,11 +144,21 @@ function BloodLetter({
           rotateZ: explodeRZ,
           scale: explodeScale,
           color: letterColor,
-          textShadow: letterGlow,
           transformPerspective: 800,
         }}
       >
-        {letter}
+        <motion.span
+          className="absolute inset-0 z-[-1] pointer-events-none select-none"
+          style={{
+            opacity: glowOpacityValue,
+            textShadow: "0 0 60px rgba(176,0,32,0.7), 0 0 120px rgba(176,0,32,0.25)",
+            color: "transparent",
+          }}
+          aria-hidden="true"
+        >
+          {letter}
+        </motion.span>
+        <span className="relative z-10">{letter}</span>
       </motion.span>
     </motion.span>
   )
@@ -311,38 +318,48 @@ export default function HomeHero() {
 
         {/* ── Layer 1: Blood Rift ── */}
         <motion.div
-          className="pointer-events-none absolute left-1/2 top-1/2 z-[5] h-[2px] -translate-x-1/2 -translate-y-1/2"
-          initial={{ width: 0, opacity: 0 }}
+          className="pointer-events-none absolute left-1/2 top-1/2 z-[5] h-[2px] w-[120%] -translate-x-1/2 -translate-y-1/2"
+          initial={{ scaleX: 0, opacity: 0 }}
           animate={
             phase === "rift"
-              ? { width: "120%", opacity: 1 }
+              ? { scaleX: 1, opacity: 1 }
               : phase === "idle"
-                ? { width: 0, opacity: 0 }
-                : { width: "120%", opacity: 0 }
+                ? { scaleX: 0, opacity: 0 }
+                : { scaleX: 1, opacity: 0 }
           }
           transition={
             phase === "rift"
               ? {
-                  width: { duration: 0.5, ease: [0.16, 1, 0.3, 1] },
+                  scaleX: { duration: 0.5, ease: [0.16, 1, 0.3, 1] },
                   opacity: { duration: 0.12 },
                 }
               : { opacity: { duration: 0.8, delay: 0.3 } }
           }
-          style={{
-            background:
-              "linear-gradient(90deg, transparent 0%, #B00020 20%, rgba(255,255,255,0.9) 50%, #B00020 80%, transparent 100%)",
-            boxShadow:
-              "0 0 40px rgba(176,0,32,0.9), 0 0 80px rgba(176,0,32,0.5), 0 0 160px rgba(176,0,32,0.25)",
-          }}
-        />
+        >
+          <div
+            className="h-full w-full"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent 0%, #B00020 20%, rgba(255,255,255,0.9) 50%, #B00020 80%, transparent 100%)",
+              boxShadow:
+                "0 0 40px rgba(176,0,32,0.9), 0 0 80px rgba(176,0,32,0.5), 0 0 160px rgba(176,0,32,0.25)",
+            }}
+          />
+        </motion.div>
 
         {/* ── Layer 2: Blood glow orbs ── */}
         <motion.div
           className="pointer-events-none absolute inset-0"
           style={{ opacity: glowOpacity, scale: glowScale }}
         >
-          <div className="absolute left-1/2 top-1/2 h-[700px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blood/30 blur-[180px]" />
-          <div className="absolute left-[40%] top-[60%] h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blood/15 blur-[120px]" />
+          <div 
+            className="absolute left-1/2 top-1/2 h-[1000px] w-[1000px] -translate-x-1/2 -translate-y-1/2" 
+            style={{ background: "radial-gradient(circle, rgba(176,0,32,0.2) 0%, transparent 60%)" }} 
+          />
+          <div 
+            className="absolute left-[40%] top-[60%] h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2" 
+            style={{ background: "radial-gradient(circle, rgba(176,0,32,0.1) 0%, transparent 60%)" }} 
+          />
         </motion.div>
 
         {/* Blood burst */}
@@ -350,7 +367,10 @@ export default function HomeHero() {
           className="pointer-events-none absolute inset-0 flex items-center justify-center"
           style={{ opacity: burstOpacity, scale: burstScale }}
         >
-          <div className="h-[520px] w-[520px] rounded-full bg-blood/18 blur-[150px]" />
+          <div 
+            className="h-[800px] w-[800px]" 
+            style={{ background: "radial-gradient(circle, rgba(176,0,32,0.12) 0%, transparent 60%)" }} 
+          />
         </motion.div>
 
         {/* ── Layer 3: Shake wrapper → 3D tilt wrapper → Content ── */}
