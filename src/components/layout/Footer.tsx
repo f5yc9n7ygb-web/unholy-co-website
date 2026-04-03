@@ -1,4 +1,5 @@
 import { TransitionLink } from "@/components/ux/TransitionLink"
+import { COMPANY_SUPPORT_EMAIL } from "@/lib/site/company"
 import { Instagram, Mail } from "lucide-react"
 
 const NAV_LINKS = [
@@ -61,7 +62,7 @@ export function Footer() {
               <Instagram size={15} />
             </a>
             <a
-              href="mailto:rituals@theunholy.co"
+              href={`mailto:${COMPANY_SUPPORT_EMAIL}`}
               aria-label="Email"
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-ash/50 text-bone/40 transition-all hover:border-blood/50 hover:text-blood"
             >
@@ -92,10 +93,10 @@ export function Footer() {
           <p className="text-[10px] uppercase tracking-[0.4em] text-bone/25">Ritual Support</p>
           <div className="space-y-2.5">
             <a
-              href="mailto:rituals@theunholy.co"
+              href={`mailto:${COMPANY_SUPPORT_EMAIL}`}
               className="block text-sm text-offwhite/40 transition-colors hover:text-blood"
             >
-              rituals@theunholy.co
+              {COMPANY_SUPPORT_EMAIL}
             </a>
             <TransitionLink
               href="/track"

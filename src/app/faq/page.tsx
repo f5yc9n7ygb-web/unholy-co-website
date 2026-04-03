@@ -33,7 +33,7 @@ const faqSchema = {
       name: "What is BloodThirst?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "BloodThirst is premium natural Himalayan mineral water in a matte-black aluminium can. Zero sugar, zero calories, zero plastic. Just pure, cold-forged hydration.",
+        text: "BloodThirst is UNHOLY CO.'s flagship water: natural Himalayan mineral water packed in a matte-black aluminium can for a colder, cleaner, plastic-free serve.",
       },
     },
     {
@@ -57,7 +57,15 @@ const faqSchema = {
       name: "How long does shipping take?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Orders are dispatched within 24-48 hours. Delivery typically takes 3-7 business days depending on your location within India.",
+        text: "Most orders leave within 24-48 hours. After dispatch, delivery usually takes another 3-7 business days depending on the destination within India.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can I cancel my order?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Orders can be reviewed for cancellation before dispatch. Once packed or handed to the courier, cancellation is usually no longer available except where required by law.",
       },
     },
     {
@@ -73,7 +81,7 @@ const faqSchema = {
       name: "What is your return policy?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Since BloodThirst is a consumable product, opened or delivered units are not eligible for return. If your order arrives damaged, defective, or incorrect, contact us within 48 hours for a replacement or refund.",
+        text: "Because BloodThirst is a consumable product, routine returns are not accepted after delivery. If the order arrives damaged, defective, or incorrect, contact us within 48 hours for review.",
       },
     },
     {

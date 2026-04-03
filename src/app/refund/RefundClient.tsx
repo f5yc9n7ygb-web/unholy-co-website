@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { TransitionLink } from "@/components/ux/TransitionLink"
+import { COMPANY_SUPPORT_EMAIL } from "@/lib/site/company"
 
 type FormState = "idle" | "loading" | "success" | "error"
 
@@ -90,6 +91,7 @@ export function RefundClient() {
         <motion.div {...fadeUp(0.08)} className="mt-8 rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-4 space-y-2.5">
           <p className="text-[10px] uppercase tracking-[0.4em] text-blood/60">Refund policy</p>
           <ul className="space-y-1.5 text-xs text-bone/45 leading-relaxed">
+            <li className="flex gap-2"><span className="text-blood/60 mt-0.5">✓</span><span>Cancellation requests made before dispatch can be reviewed</span></li>
             <li className="flex gap-2"><span className="text-blood/60 mt-0.5">✓</span><span>Product arrived damaged or leaking</span></li>
             <li className="flex gap-2"><span className="text-blood/60 mt-0.5">✓</span><span>Wrong item shipped</span></li>
             <li className="flex gap-2"><span className="text-blood/60 mt-0.5">✓</span><span>Defective product (seal breach, off-quality)</span></li>
@@ -97,9 +99,13 @@ export function RefundClient() {
           <div className="border-t border-white/[0.05] pt-2.5">
             <ul className="space-y-1.5 text-xs text-bone/30 leading-relaxed">
               <li className="flex gap-2"><span className="mt-0.5">✗</span><span>Change of mind or taste preference</span></li>
+              <li className="flex gap-2"><span className="mt-0.5">✗</span><span>Orders already dispatched to the courier</span></li>
               <li className="flex gap-2"><span className="mt-0.5">✗</span><span>Shipping delays (contact your courier)</span></li>
             </ul>
           </div>
+          <p className="text-[11px] leading-relaxed text-bone/30">
+            Need to cancel before dispatch? Email {COMPANY_SUPPORT_EMAIL} with your order ID immediately.
+          </p>
         </motion.div>
 
         <AnimatePresence mode="wait">
@@ -223,7 +229,7 @@ export function RefundClient() {
               {/* Policy note */}
               <p className="text-center text-[11px] text-bone/25 leading-relaxed">
                 Refunds are only issued for damaged, defective, or incorrect orders.
-                Approved refunds are processed within 5–7 business days to your original payment method.
+                Approved cancellations and refunds are processed within 5–7 business days to your original payment method.
               </p>
             </motion.form>
           )}

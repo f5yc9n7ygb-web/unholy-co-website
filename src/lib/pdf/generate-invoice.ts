@@ -1,5 +1,10 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 import { getGstAmount, getBasePrice, GST_RATE } from "@/lib/shop/catalog"
+import {
+  COMPANY_GSTIN,
+  COMPANY_LEGAL_NAME,
+  COMPANY_REGISTERED_ADDRESS_LINES,
+} from "@/lib/site/company"
 import { UHC_LOGO_BASE64 } from "./logo"
 
 export type InvoiceData = {
@@ -47,6 +52,14 @@ const STATE_CODES: Record<string, string> = {
 
 function getStateCode(state: string): string {
   return STATE_CODES[state.toLowerCase().trim()] || ""
+}
+
+function formatTaxAmount(amount: number): string {
+  const hasFraction = !Number.isInteger(amount)
+  return amount.toLocaleString("en-IN", {
+    minimumFractionDigits: hasFraction ? 2 : 0,
+    maximumFractionDigits: hasFraction ? 2 : 0,
+  })
 }
 
 /** Supplier state — Uttar Pradesh */
@@ -134,11 +147,10 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   // ── Supplier Details (Rule 46(a)) ──
   y -= 24
   const companyLines = [
-    "Unholy Beverages Pvt Ltd",
-    "C-12, Bank Colony, Krishna Nagar",
-    "Mathura, 281004",
+    COMPANY_LEGAL_NAME,
+    ...COMPANY_REGISTERED_ADDRESS_LINES,
     `State: ${SUPPLIER_STATE} (${SUPPLIER_STATE_CODE})`,
-    "GSTIN: 09AADCU8103C1ZL",
+    `GSTIN: ${COMPANY_GSTIN}`,
   ]
   for (const line of companyLines) {
     page.drawText(line, { x: leftMargin, y, size: 9, font: fontRegular, color: grey })
@@ -291,10 +303,11 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
 
   // Tax breakdown — IGST for interstate, CGST+SGST for intra-state
   if (isInterstate) {
-    totals.push([`IGST (${GST_RATE * 100}%)`, `Rs. ${gstAmount.toLocaleString("en-IN")}`])
+    totals.push([`IGST (${GST_RATE * 100}%)`, `Rs. ${formatTaxAmount(gstAmount)}`])
   } else {
-    totals.push([`CGST (${(GST_RATE * 100) / 2}%)`, `Rs. ${(gstAmount / 2).toLocaleString("en-IN")}`])
-    totals.push([`SGST (${(GST_RATE * 100) / 2}%)`, `Rs. ${(gstAmount / 2).toLocaleString("en-IN")}`])
+    const halfGst = gstAmount / 2
+    totals.push([`CGST (${(GST_RATE * 100) / 2}%)`, `Rs. ${formatTaxAmount(halfGst)}`])
+    totals.push([`SGST (${(GST_RATE * 100) / 2}%)`, `Rs. ${formatTaxAmount(halfGst)}`])
   }
 
   for (const [label, value] of totals) {

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { TransitionLink } from "@/components/ux/TransitionLink"
+import { COMPANY_LEGAL_NAME, COMPANY_SUPPORT_EMAIL } from "@/lib/site/company"
 
 type FAQItem = {
   question: string
@@ -23,7 +24,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "What is BloodThirst?",
         answer:
-          "Premium natural Himalayan mineral water in a matte-black aluminium can. Zero sugar, zero calories, zero plastic. Just pure, cold-forged hydration.",
+          "BloodThirst is UNHOLY CO.'s flagship water: natural Himalayan mineral water packed in a matte-black aluminium can for a colder, cleaner, plastic-free serve.",
       },
       {
         question: "Where does the water come from?",
@@ -33,7 +34,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "Is BloodThirst an energy drink?",
         answer:
-          "No. BloodThirst is premium mineral water — zero sugar, zero caffeine, zero additives. The name is attitude, not ingredients.",
+          "No. There is no caffeine, sugar, or stimulant blend here. The name is theatrical; the liquid is still straight mineral water.",
       },
       {
         question: "What's the shelf life?",
@@ -48,7 +49,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "What are the nutritional contents?",
         answer:
-          "Zero sugar, zero calories, zero artificial flavours. Contains naturally occurring minerals from Himalayan spring water including calcium, magnesium, and potassium.",
+          "Nothing extra has been added. You get naturally occurring minerals from the source water, including calcium, magnesium, and potassium, with zero sugar, zero calories, and no artificial flavouring.",
       },
     ],
   },
@@ -59,7 +60,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "How long does shipping take?",
         answer:
-          "Orders are dispatched within 24–48 hours. Delivery typically takes 3–7 business days depending on your location within India.",
+          "Most orders leave our side within 24–48 hours. After that, transit usually takes another 3–7 business days depending on where in India you're located.",
       },
       {
         question: "Is shipping free?",
@@ -74,12 +75,17 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "How do I track my order?",
         answer:
-          "After dispatch, you'll receive a tracking link via email. You can also track anytime at theunholy.co/track using your order ID or email address.",
+          "Once your package is booked, we send a tracking link by email. If that email is buried, you can also check status anytime at `theunholy.co/track` with your order ID or checkout email.",
       },
       {
         question: "Can I change my shipping address after placing an order?",
         answer:
-          "If your order hasn't been dispatched yet, reach out to us immediately via the contact page. Once dispatched, address changes aren't possible.",
+          "Sometimes, yes. If the order has not moved into dispatch yet, contact us immediately and we'll try to update it. Once the courier is assigned, the address is effectively locked.",
+      },
+      {
+        question: "Can I cancel my order?",
+        answer:
+          `Yes, but speed matters. Email ${COMPANY_SUPPORT_EMAIL} with your order ID as soon as possible. We can review cancellations before dispatch; once the shipment is packed or handed to the courier, cancellation is usually no longer available except where required by law.`,
       },
     ],
   },
@@ -100,12 +106,12 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "Is my payment information secure?",
         answer:
-          "Absolutely. We never store your payment details. All transactions are processed through Razorpay with bank-level 256-bit SSL encryption and PCI DSS compliance.",
+          "Yes. Checkout is handled through Razorpay, and we do not store your full payment details on our own servers.",
       },
       {
         question: "What if my payment fails?",
         answer:
-          "If money was debited but you didn't receive a confirmation, the amount is typically refunded within 5–7 business days. Contact us if it doesn't resolve.",
+          "If the transaction drops before confirmation, the order will not be completed. In cases where money was debited without a confirmed order, banks usually reverse it within 5–7 business days. If that doesn't happen, contact us and we'll investigate.",
       },
     ],
   },
@@ -116,17 +122,17 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "What is your return policy?",
         answer:
-          "Since BloodThirst is a consumable product, opened or delivered units aren't eligible for return. If your order arrives damaged, defective, or incorrect — contact us within 48 hours with photos for a replacement or refund.",
+          "Because this is a consumable product, we do not accept routine returns after delivery. The exception is when something is wrong with the order itself, such as transit damage, a defect, or the wrong item being sent.",
       },
       {
         question: "How do I request a refund?",
         answer:
-          "Reach out via the contact page or email rituals@theunholy.co with your order ID, issue description, and photos. We review all claims within 24–48 hours.",
+          `Send us your order ID, a short description of the issue, and clear photos through the contact page or by emailing ${COMPANY_SUPPORT_EMAIL}. We review claims within 24–48 hours.`,
       },
       {
         question: "How long do refunds take?",
         answer:
-          "Once approved, refunds are processed within 5–7 business days back to your original payment method.",
+          "After approval, the refund is sent back to the original payment method. Most banks and payment partners reflect it within 5–7 business days.",
       },
     ],
   },
@@ -140,9 +146,14 @@ const FAQ_SECTIONS: FAQSection[] = [
           "We're a premium beverage brand that believes hydration doesn't have to be boring. Born from the frustration of plastic waste and bland packaging, we created BloodThirst — water with a dark soul.",
       },
       {
+        question: "Who is the legal seller behind UNHOLY CO.?",
+        answer:
+          `${COMPANY_LEGAL_NAME} is the seller of record for every order placed on this website, and that name appears on invoices and legal documents.`,
+      },
+      {
         question: "How can I collaborate or partner with UNHOLY CO.?",
         answer:
-          "We're always open to collaborations with venues, events, artists, and brands that align with our ethos. Drop us a line at the contact page under 'Partnership'.",
+          "We review collaborations across venues, events, artists, and aligned brands. Use the contact page, choose 'Partnership,' and tell us what you're planning.",
       },
       {
         question: "What is Bloodverse?",

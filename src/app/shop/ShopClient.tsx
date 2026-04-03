@@ -1027,26 +1027,34 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
 }
 
 /* ─── GST Tax Rows ─── */
+function formatTaxAmount(amount: number) {
+  const hasFraction = !Number.isInteger(amount)
+  return amount.toLocaleString("en-IN", {
+    minimumFractionDigits: hasFraction ? 2 : 0,
+    maximumFractionDigits: hasFraction ? 2 : 0,
+  })
+}
+
 function GstRows({ amount, buyerState }: { amount: number; buyerState: string }) {
   const gst = getGstAmount(amount)
   if (isInterstate(buyerState)) {
     return (
       <div className="flex justify-between text-bone/55">
         <span>IGST (5%)</span>
-        <span className="text-offwhite/60">₹{gst.toLocaleString("en-IN")}</span>
+        <span className="text-offwhite/60">₹{formatTaxAmount(gst)}</span>
       </div>
     )
   }
-  const half = Math.round(gst / 2)
+  const half = gst / 2
   return (
     <>
       <div className="flex justify-between text-bone/55">
         <span>CGST (2.5%)</span>
-        <span className="text-offwhite/60">₹{half.toLocaleString("en-IN")}</span>
+        <span className="text-offwhite/60">₹{formatTaxAmount(half)}</span>
       </div>
       <div className="flex justify-between text-bone/55">
         <span>SGST (2.5%)</span>
-        <span className="text-offwhite/60">₹{(gst - half).toLocaleString("en-IN")}</span>
+        <span className="text-offwhite/60">₹{formatTaxAmount(half)}</span>
       </div>
     </>
   )

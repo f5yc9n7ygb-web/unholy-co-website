@@ -3,6 +3,13 @@
 import { FormEvent, useState } from "react"
 import { motion } from "framer-motion"
 import { TransitionLink } from "@/components/ux/TransitionLink"
+import {
+  COMPANY_GSTIN,
+  COMPANY_LEGAL_NAME,
+  COMPANY_PRESS_EMAIL,
+  COMPANY_REGISTERED_ADDRESS_LINES,
+  COMPANY_SUPPORT_EMAIL,
+} from "@/lib/site/company"
 
 /* ─── Data ─── */
 
@@ -17,8 +24,8 @@ const placeholders: Record<InquiryType, string> = {
 }
 
 const contactChannels = [
-  { label: "Email", value: "rituals@theunholy.co", href: "mailto:rituals@theunholy.co" },
-  { label: "Press", value: "press@theunholy.co", href: "mailto:press@theunholy.co" },
+  { label: "Email", value: COMPANY_SUPPORT_EMAIL, href: `mailto:${COMPANY_SUPPORT_EMAIL}` },
+  { label: "Press", value: COMPANY_PRESS_EMAIL, href: `mailto:${COMPANY_PRESS_EMAIL}` },
 ]
 
 /* ─── Types ─── */
@@ -134,6 +141,19 @@ export function ContactClient() {
               <p className="text-[10px] uppercase tracking-[0.35em] text-bone/25 mb-3">Hours</p>
               <p className="text-sm text-bone/40">Mon – Sat · 11:00 to 20:00 IST</p>
               <p className="text-sm text-bone/25">We reply within 24 hours.</p>
+            </div>
+
+            <div className="mt-10 space-y-2 border-t border-blood/[0.12] pt-6">
+              <p className="text-[10px] uppercase tracking-[0.35em] text-bone/25">
+                Seller of record
+              </p>
+              <p className="text-sm text-bone/45">{COMPANY_LEGAL_NAME}</p>
+              {COMPANY_REGISTERED_ADDRESS_LINES.map((line) => (
+                <p key={line} className="text-sm text-bone/35">
+                  {line}
+                </p>
+              ))}
+              <p className="pt-2 text-sm text-bone/35">GSTIN: {COMPANY_GSTIN}</p>
             </div>
           </motion.div>
 
