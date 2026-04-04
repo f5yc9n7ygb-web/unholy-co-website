@@ -28,6 +28,10 @@ function hasShiprocketConfig() {
   return Boolean(process.env.SHIPROCKET_EMAIL && process.env.SHIPROCKET_PASSWORD)
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 /* ─── Auth ───────────────────────────────────────────────────────────────────── */
 
 async function getAuthToken(kv?: KVNamespace | null): Promise<string> {
@@ -42,36 +46,62 @@ async function getAuthToken(kv?: KVNamespace | null): Promise<string> {
     return cachedToken.token
   }
 
-  // Fetch new token
-  const response = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
-      "User-Agent": "UnholyCo/1.0 (Integration/API)"
-    },
-    body: JSON.stringify({
-      email: process.env.SHIPROCKET_EMAIL,
-      password: process.env.SHIPROCKET_PASSWORD,
-    }),
-  })
+  let lastError: Error | null = null
 
-  if (!response.ok) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "UnholyCo/1.0 (Integration/API)",
+      },
+      body: JSON.stringify({
+        email: process.env.SHIPROCKET_EMAIL,
+        password: process.env.SHIPROCKET_PASSWORD,
+      }),
+    })
+
+    if (response.ok) {
+      const data = (await response.json()) as { token: string }
+      const token = data.token
+
+      // Cache in KV
+      if (kv) {
+        await kv.put(TOKEN_KV_KEY, token, { expirationTtl: TOKEN_TTL_SECONDS }).catch(() => {})
+      }
+
+      // Cache in memory
+      cachedToken = { token, expiresAt: Date.now() + TOKEN_TTL_SECONDS * 1000 }
+
+      return token
+    }
+
     const text = await response.text()
-    throw new Error(`Shiprocket auth failed (${response.status}): ${text}`)
+    const contentType = response.headers.get("content-type") || "unknown"
+    const isHtml403 = response.status === 403 && /<html[\s>]/i.test(text)
+    const isRetryable = isHtml403 || response.status >= 500
+
+    if (isHtml403) {
+      lastError = new Error(
+        "Shiprocket auth failed (403 HTML response). " +
+        "This usually means Shiprocket temporarily blocked the request before it reached the API, " +
+        "or less commonly that the API credentials are invalid/disabled. " +
+        `Response content-type: ${contentType}.`
+      )
+    } else {
+      lastError = new Error(`Shiprocket auth failed (${response.status}, ${contentType}): ${text}`)
+    }
+
+    if (!isRetryable || attempt === 2) {
+      throw lastError
+    }
+
+    console.warn(`Shiprocket auth attempt ${attempt} failed; retrying once.`)
+    await sleep(750)
   }
 
-  const data = (await response.json()) as { token: string }
-  const token = data.token
-
-  // Cache in KV
-  if (kv) {
-    await kv.put(TOKEN_KV_KEY, token, { expirationTtl: TOKEN_TTL_SECONDS }).catch(() => {})
-  }
-
-  // Cache in memory
-  cachedToken = { token, expiresAt: Date.now() + TOKEN_TTL_SECONDS * 1000 }
-
-  return token
+  throw lastError || new Error("Shiprocket auth failed for an unknown reason.")
 }
 
 async function authHeaders(kv?: KVNamespace | null): Promise<Record<string, string>> {

@@ -175,6 +175,10 @@ export async function POST(request: NextRequest) {
       "Customer Name": orderSession.shipping.name,
       "Customer Email": orderSession.shipping.email,
       "Customer Phone": orderSession.shipping.phone,
+      "Shipping Address": orderSession.shipping.address,
+      "Shipping City": orderSession.shipping.city,
+      "Shipping State": orderSession.shipping.state,
+      "Shipping Pincode": orderSession.shipping.pincode,
       "Full Shipping Address": fullAddress,
       "Timestamp": new Date().toISOString(),
       "Shipping Status": "Processing",
@@ -223,7 +227,14 @@ export async function POST(request: NextRequest) {
         }
       }).catch(async (err) => {
         console.error("Shiprocket order creation failed:", err)
-        logErrorToAirtable(`Shiprocket Failed (Order: ${orderId})`, err).catch(() => {})
+        logErrorToAirtable(`Shiprocket Failed (Order: ${orderId})`, err, {
+          route: "/api/order/verify",
+          service: "shiprocket",
+          stage: "create-order",
+          orderId,
+          paymentId,
+          recordId: paymentRecordId,
+        }).catch(() => {})
         await updateAirtableRecord({
           baseId: ordersBaseId,
           tableName: "Payments",
@@ -255,7 +266,15 @@ export async function POST(request: NextRequest) {
           console.error(`Background task ${idx} failed in verify route:`, result.reason)
           logErrorToAirtable(
             `Background Task ${idx} Failure (Order: ${orderId})`,
-            result.reason?.stack || result.reason?.message || String(result.reason)
+            result.reason?.stack || result.reason?.message || String(result.reason),
+            {
+              route: "/api/order/verify",
+              service: "checkout",
+              stage: `background-task-${idx}`,
+              orderId,
+              paymentId,
+              recordId: paymentRecordId,
+            }
           ).catch(e => console.error("Error logger failed:", e))
         }
       })
@@ -271,7 +290,11 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error("Order verification error:", error?.message || error)
-    await logErrorToAirtable("Order Verification", error)
+    await logErrorToAirtable("Order Verification", error, {
+      route: "/api/order/verify",
+      service: "checkout",
+      stage: "request",
+    })
     
     return NextResponse.json(
       { ok: false, error: "Payment verification failed. Please contact customer support." },
@@ -378,6 +401,10 @@ async function backfillExistingPaymentRecord(options: {
   if (!String(fields["Customer Name"] || "")) updateFields["Customer Name"] = options.shipping.name
   if (!String(fields["Customer Email"] || "")) updateFields["Customer Email"] = options.shipping.email
   if (!String(fields["Customer Phone"] || "")) updateFields["Customer Phone"] = options.shipping.phone
+  if (!String(fields["Shipping Address"] || "")) updateFields["Shipping Address"] = options.shipping.address
+  if (!String(fields["Shipping City"] || "")) updateFields["Shipping City"] = options.shipping.city
+  if (!String(fields["Shipping State"] || "")) updateFields["Shipping State"] = options.shipping.state
+  if (!String(fields["Shipping Pincode"] || "")) updateFields["Shipping Pincode"] = options.shipping.pincode
   if (!String(fields["Full Shipping Address"] || "")) updateFields["Full Shipping Address"] = options.fullAddress
   if (!Number(fields["Amount"] || 0)) updateFields["Amount"] = options.amount
   if (options.promoCode && !String(fields["Promo Code"] || "")) updateFields["Promo Code"] = options.promoCode

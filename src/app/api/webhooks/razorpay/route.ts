@@ -206,6 +206,10 @@ export async function POST(request: NextRequest) {
         "Customer Name": customerName,
         "Customer Email": customerEmail,
         "Customer Phone": customerPhone,
+        "Shipping Address": shippingAddress,
+        "Shipping City": shippingCity,
+        "Shipping State": shippingState,
+        "Shipping Pincode": shippingPincode,
         "Full Shipping Address": fullAddress,
         "Timestamp": new Date().toISOString(),
         "Shipping Status": "Processing",
@@ -278,7 +282,14 @@ export async function POST(request: NextRequest) {
           }
         }).catch(async (err) => {
           console.error("Webhook: Shiprocket order creation failed:", err)
-          logErrorToAirtable(`Shiprocket Failed (Order: ${orderId})`, err).catch(() => {})
+          logErrorToAirtable(`Shiprocket Failed (Order: ${orderId})`, err, {
+            route: "/api/webhooks/razorpay",
+            service: "shiprocket",
+            stage: "create-order",
+            orderId,
+            paymentId,
+            recordId: paymentRecordId,
+          }).catch(() => {})
           await updateAirtableRecord({
             baseId: ordersBaseId,
             tableName: "Payments",
@@ -296,7 +307,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     console.error("Razorpay webhook error:", error?.message || error)
-    await logErrorToAirtable("Razorpay Webhook", error)
+    await logErrorToAirtable("Razorpay Webhook", error, {
+      route: "/api/webhooks/razorpay",
+      service: "razorpay",
+      stage: "request",
+    })
     return NextResponse.json({ ok: false }, { status: 500 })
   }
 }

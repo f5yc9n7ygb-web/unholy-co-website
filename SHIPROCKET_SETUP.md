@@ -42,6 +42,14 @@ Set these secrets in the environment where your Next.js API routes run:
 
 `SHIPROCKET_EMAIL` and `SHIPROCKET_PASSWORD` must be the Shiprocket API user credentials, not the primary dashboard login.
 
+If Airtable shows `Shiprocket auth failed (403)` with an HTML response, treat it as an auth/config incident first:
+
+- Verify `SHIPROCKET_EMAIL` / `SHIPROCKET_PASSWORD` in production match an active Shiprocket API user from `Settings -> API`.
+- Reset or recreate the API user if needed.
+- Redeploy after updating the secrets.
+- Retry failed orders through `/api/cron/retry-shiprocket` once auth is fixed.
+- If fresh API-user credentials still return `403`, Shiprocket may be blocking the Cloudflare-origin request before it reaches the API.
+
 ## 3. Razorpay webhook
 
 Create this webhook in Razorpay:

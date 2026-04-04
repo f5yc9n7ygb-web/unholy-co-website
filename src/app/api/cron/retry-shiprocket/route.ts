@@ -23,6 +23,24 @@ import {
 import { escapeAirtableValue } from "@/lib/server/security"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 
+function parseFullShippingAddress(fullAddress: string) {
+  const parts = fullAddress
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  if (parts.length < 4) {
+    return null
+  }
+
+  return {
+    shippingAddress: parts.slice(0, -3).join(", "),
+    shippingCity: parts.at(-3) || "",
+    shippingState: parts.at(-2) || "",
+    shippingPincode: parts.at(-1) || "",
+  }
+}
+
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
   const expected = process.env.CRON_SECRET
@@ -64,28 +82,55 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // Look up the Abandoned Cart to get individual shipping address fields
-      const cartRecords = await queryAirtableRecords({
-        baseId: ordersBaseId,
-        tableName: "Orders",
-        filterByFormula: `{Razorpay Order ID} = "${escapeAirtableValue(orderId)}"`,
-        maxRecords: 1,
-      }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
+      let shippingAddress = String(pf["Shipping Address"] || "")
+      let shippingCity = String(pf["Shipping City"] || "")
+      let shippingState = String(pf["Shipping State"] || "")
+      let shippingPincode = String(pf["Shipping Pincode"] || "")
 
-      if (cartRecords.length === 0) {
-        errors.push(`Payment ${payment.id}: no abandoned cart for order ${orderId}`)
+      if (!shippingAddress || !shippingCity || !shippingState || !shippingPincode) {
+        const parsedAddress = parseFullShippingAddress(String(pf["Full Shipping Address"] || ""))
+        if (parsedAddress) {
+          shippingAddress ||= parsedAddress.shippingAddress
+          shippingCity ||= parsedAddress.shippingCity
+          shippingState ||= parsedAddress.shippingState
+          shippingPincode ||= parsedAddress.shippingPincode
+        }
+      }
+
+      if (!shippingAddress || !shippingCity || !shippingState || !shippingPincode) {
+        const cartRecords = await queryAirtableRecords({
+          baseId: ordersBaseId,
+          tableName: "Orders",
+          filterByFormula: `{Razorpay Order ID} = "${escapeAirtableValue(orderId)}"`,
+          maxRecords: 1,
+        }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
+
+        if (cartRecords.length > 0) {
+          const cf = cartRecords[0]!.fields
+          shippingAddress ||= String(cf["Shipping Address"] || "")
+          shippingCity ||= String(cf["Shipping City"] || "")
+          shippingState ||= String(cf["Shipping State"] || "")
+          shippingPincode ||= String(cf["Shipping Pincode"] || "")
+        }
+      }
+
+      if (!shippingAddress || !shippingCity || !shippingState || !shippingPincode) {
+        errors.push(`Payment ${payment.id}: missing structured shipping address for order ${orderId}`)
         continue
       }
 
-      const cf = cartRecords[0]!.fields
-      const shippingAddress = String(cf["Shipping Address"] || "")
-      const shippingCity = String(cf["Shipping City"] || "")
-      const shippingState = String(cf["Shipping State"] || "")
-      const shippingPincode = String(cf["Shipping Pincode"] || "")
-
-      if (!shippingAddress || !shippingCity || !shippingState || !shippingPincode) {
-        errors.push(`Payment ${payment.id}: incomplete shipping address in cart`)
-        continue
+      const addressFieldsToBackfill: Record<string, string> = {}
+      if (!String(pf["Shipping Address"] || "")) addressFieldsToBackfill["Shipping Address"] = shippingAddress
+      if (!String(pf["Shipping City"] || "")) addressFieldsToBackfill["Shipping City"] = shippingCity
+      if (!String(pf["Shipping State"] || "")) addressFieldsToBackfill["Shipping State"] = shippingState
+      if (!String(pf["Shipping Pincode"] || "")) addressFieldsToBackfill["Shipping Pincode"] = shippingPincode
+      if (Object.keys(addressFieldsToBackfill).length > 0) {
+        await updateAirtableRecord({
+          baseId: ordersBaseId,
+          tableName: "Payments",
+          recordId: payment.id,
+          fields: addressFieldsToBackfill,
+        }).catch(() => {})
       }
 
       retried++
@@ -128,11 +173,21 @@ export async function POST(request: NextRequest) {
         }
       } catch (err: any) {
         errors.push(`Payment ${payment.id} (order ${orderId}): ${err?.message || err}`)
-        logErrorToAirtable(`Shiprocket Retry Failed (Order: ${orderId})`, err).catch(() => {})
+        logErrorToAirtable(`Shiprocket Retry Failed (Order: ${orderId})`, err, {
+          route: "/api/cron/retry-shiprocket",
+          service: "shiprocket",
+          stage: "retry-create-order",
+          orderId,
+          recordId: payment.id,
+        }).catch(() => {})
       }
     }
   } catch (err: any) {
-    await logErrorToAirtable("Shiprocket Retry Cron", err)
+    await logErrorToAirtable("Shiprocket Retry Cron", err, {
+      route: "/api/cron/retry-shiprocket",
+      service: "shiprocket",
+      stage: "cron",
+    })
     return NextResponse.json({ ok: false, error: err?.message || "Unknown error" }, { status: 500 })
   }
 

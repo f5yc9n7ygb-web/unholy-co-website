@@ -15,6 +15,19 @@ type AirtableOptions = {
 
 type AirtableFields = Record<string, string | number | boolean | null | undefined>;
 
+type ErrorLogOptions = {
+  baseId?: string;
+  route?: string;
+  service?: string;
+  stage?: string;
+  orderId?: string;
+  paymentId?: string;
+  recordId?: string;
+  severity?: "info" | "warning" | "error" | "critical";
+  httpStatus?: number;
+  extra?: AirtableFields;
+};
+
 type MailjetAttachment = {
   ContentType: string;
   Filename: string;
@@ -287,31 +300,89 @@ function removeOptionalAirtableFields(fields: AirtableFields) {
   return changed ? Object.fromEntries(sanitizedEntries) : null;
 }
 
+function truncateForAirtable(value: string, maxLength = 10000) {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
+}
+
+function serializeErrorForLog(error: unknown) {
+  if (error instanceof Error) {
+    const candidate = error as Error & {
+      status?: number;
+      statusCode?: number;
+      cause?: unknown;
+    };
+
+    return {
+      message: error.message,
+      stack: error.stack || "",
+      name: error.name || "Error",
+      httpStatus:
+        typeof candidate.status === "number"
+          ? candidate.status
+          : typeof candidate.statusCode === "number"
+            ? candidate.statusCode
+            : undefined,
+      details: candidate.cause ? JSON.stringify({ cause: candidate.cause }) : "",
+    };
+  }
+
+  if (typeof error === "string") {
+    return {
+      message: error,
+      stack: "",
+      name: "Error",
+      httpStatus: undefined,
+      details: "",
+    };
+  }
+
+  const serialized = JSON.stringify(error);
+  return {
+    message: serialized || "Unknown Error",
+    stack: "",
+    name: "Error",
+    httpStatus: undefined,
+    details: serialized || "",
+  };
+}
+
 /**
  * Log an error to the Airtable 'Errors' table.
  */
-export async function logErrorToAirtable(context: string, error: unknown, options?: { baseId?: string; }) {
+export async function logErrorToAirtable(context: string, error: unknown, options: ErrorLogOptions = {}) {
   try {
-    const baseId = options?.baseId || process.env.AIRTABLE_ORDERS_BASE_ID;
+    const baseId = options.baseId || process.env.AIRTABLE_ORDERS_BASE_ID;
     const token = process.env.AIRTABLE_TOKEN;
     if (!baseId || !token) return;
 
-    let message = "Unknown Error";
-    let stack = "";
+    const serialized = serializeErrorForLog(error);
+    const richFields: AirtableFields = {
+      Timestamp: new Date().toISOString(),
+      Context: context,
+      Message: truncateForAirtable(serialized.message, 5000),
+      Stack: truncateForAirtable(serialized.stack, 20000),
+      "Error Name": serialized.name,
+      Severity: options.severity || "error",
+      Route: options.route,
+      Service: options.service,
+      Stage: options.stage,
+      "Order ID": options.orderId,
+      "Payment ID": options.paymentId,
+      "Record ID": options.recordId,
+      "HTTP Status": options.httpStatus ?? serialized.httpStatus,
+      Details: truncateForAirtable(serialized.details, 10000),
+      ...options.extra,
+    };
 
-    if (error instanceof Error) {
-      message = error.message;
-      stack = error.stack || "";
-    } else if (typeof error === "string") {
-      message = error;
-    } else {
-      message = JSON.stringify(error);
+    const richAttempt = await writeRecord(baseId, token, "Errors", richFields);
+    if (richAttempt.ok) {
+      return;
     }
 
     await writeRecord(baseId, token, "Errors", {
       Context: context,
-      Message: message,
-      Stack: stack,
+      Message: truncateForAirtable(serialized.message, 5000),
+      Stack: truncateForAirtable(serialized.stack, 20000),
     });
   } catch (err) {
     console.error("Failed to log error to Airtable:", err);
