@@ -16,6 +16,7 @@ import {
   updateAirtableRecord,
   logErrorToAirtable,
 } from "@/lib/server/integrations"
+import { isAuthorizedCron } from "@/lib/server/security"
 import { getShiprocketOrderDetails } from "@/lib/server/shiprocket"
 
 const SYNCABLE_STATUSES = [
@@ -26,9 +27,7 @@ const SYNCABLE_STATUSES = [
 ]
 
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  const expected = process.env.CRON_SECRET
-  if (!expected || authHeader !== `Bearer ${expected}`) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

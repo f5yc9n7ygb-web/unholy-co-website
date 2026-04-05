@@ -4,7 +4,7 @@ import { getPackById } from "@/lib/shop/catalog"
 import type { ShippingForm } from "@/lib/shop/types"
 import { validatePromoCode } from "@/lib/shop/promo"
 import { getRequiredEnv, logErrorToAirtable, saveRecordToAirtable } from "@/lib/server/integrations"
-import { checkStock } from "@/lib/server/inventory"
+import { checkStock, reserveStock } from "@/lib/server/inventory"
 import { getKVNamespace } from "@/lib/server/kv"
 import {
   ORDER_SESSION_COOKIE,
@@ -81,9 +81,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check stock availability
-    const stockInfo = await checkStock(pack.id, pack.qty)
-    if (!stockInfo.available) {
+    // Check stock availability (checkStock is called inside reserveStock)
+    const stockAvailable = await reserveStock(pack.id, pack.qty, `pre-${Date.now()}`, kv)
+    if (!stockAvailable) {
       return NextResponse.json(
         { ok: false, error: `${pack.title} is currently out of stock. Please try a different pack.` },
         { status: 409 }

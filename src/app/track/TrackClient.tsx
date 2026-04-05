@@ -13,6 +13,7 @@ type TrackingActivity = {
 
 type Order = {
   orderId: string
+  customerEmail: string
   pack: string
   quantity: number
   amount: number
@@ -352,7 +353,7 @@ export function TrackClient({ initialQuery }: { initialQuery: string }) {
                                 Reorder
                               </a>
                               <a
-                                href={`/api/invoice/${encodeURIComponent(order.orderId)}`}
+                                href={`/api/invoice/${encodeURIComponent(order.orderId)}?email=${encodeURIComponent(order.customerEmail)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="rounded-lg border border-white/[0.08] px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-bone/50 transition-all hover:border-blood/30 hover:text-bone/70"

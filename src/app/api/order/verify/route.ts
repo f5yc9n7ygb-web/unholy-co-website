@@ -204,6 +204,33 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // #9: Airtable dedup — KV claim succeeded, but check Airtable in case of
+    // KV eventual consistency (e.g. webhook wrote the record on another edge node)
+    const existingPayment = await queryAirtableRecords({
+      baseId: ordersBaseId,
+      tableName: "Payments",
+      filterByFormula: `{Payment ID} = "${escapeAirtableValue(paymentId)}"`,
+      maxRecords: 1,
+    }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
+
+    if (existingPayment.length > 0) {
+      // Record already written (likely by webhook) — backfill and return success
+      await backfillExistingPaymentRecord({
+        ordersBaseId, orderId, paymentId,
+        shipping: orderSession.shipping, fullAddress, amount: chargedAmount,
+        promoCode: orderSession.promoCode, discountAmount: orderSession.discountAmount,
+      }).catch((err) => console.error("Payment backfill failed:", err))
+      await markAbandonedCartConverted(ordersBaseId, orderId).catch((err) =>
+        console.error("Abandoned cart update failed:", err)
+      )
+      return createSuccessResponse({
+        pack, orderId, chargedAmount,
+        shippingName: orderSession.shipping.name,
+        shippingCity: orderSession.shipping.city,
+        shippingState: orderSession.shipping.state,
+      })
+    }
+
     const { id: paymentRecordId } = await saveRecordToAirtable({
       "Payment ID": paymentId,
       "Order ID": orderId,
@@ -226,10 +253,14 @@ export async function POST(request: NextRequest) {
       ...(orderSession.shipping.gstBusinessName ? { "GST Business Name": orderSession.shipping.gstBusinessName } : {}),
     }, { baseId: ordersBaseId, tableName: "Payments" })
 
-    // Await all post-order background tasks so they don't get killed by the Edge runtime immediately
-    await Promise.allSettled([
-      decrementStock(pack.id, pack.qty),
+    // #10: Critical tasks (stock, promo) must succeed — fail them loudly.
+    // Non-critical tasks (Shiprocket, email, cart update) use allSettled.
+    await Promise.all([
+      decrementStock(pack.id, pack.qty, orderId, kv),
       orderSession.promoRecordId ? incrementPromoUsage(orderSession.promoRecordId) : Promise.resolve(),
+    ])
+
+    await Promise.allSettled([
       createShiprocketOrder({
         orderId,
         orderDate: new Date().toISOString().split("T")[0]!,
@@ -298,17 +329,17 @@ export async function POST(request: NextRequest) {
       }),
       markAbandonedCartConverted(ordersBaseId, orderId)
     ]).then(results => {
-      // Safely monitor background task exceptions
       results.forEach((result, idx) => {
         if (result.status === "rejected") {
-          console.error(`Background task ${idx} failed in verify route:`, result.reason)
+          const taskNames = ["shiprocket", "email", "cart-update"]
+          console.error(`Background task ${taskNames[idx]} failed in verify route:`, result.reason)
           logErrorToAirtable(
-            `Background Task ${idx} Failure (Order: ${orderId})`,
+            `Background Task ${taskNames[idx]} Failure (Order: ${orderId})`,
             result.reason?.stack || result.reason?.message || String(result.reason),
             {
               route: "/api/order/verify",
               service: "checkout",
-              stage: `background-task-${idx}`,
+              stage: `background-task-${taskNames[idx]}`,
               orderId,
               paymentId,
               recordId: paymentRecordId,

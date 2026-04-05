@@ -18,6 +18,7 @@ import {
   updateAirtableRecord,
 } from "@/lib/server/integrations"
 import { escapeAirtableValue } from "@/lib/server/security"
+import type { KVNamespace } from "@/lib/server/kv"
 
 const INVENTORY_TABLE = "Inventory"
 
@@ -63,14 +64,62 @@ export async function checkStock(packId: string, requiredQty: number): Promise<S
 }
 
 /**
+ * Reserve stock via KV before payment begins.
+ * The reservation auto-expires after the TTL so stock isn't permanently locked
+ * if the user abandons checkout or the session times out.
+ *
+ * @returns `true` if reservation succeeded, `false` if insufficient stock.
+ */
+const RESERVATION_TTL_SECONDS = 15 * 60 // 15 minutes — covers Razorpay payment window
+
+export async function reserveStock(
+  packId: string,
+  qty: number,
+  orderId: string,
+  kv?: KVNamespace | null,
+): Promise<boolean> {
+  const stock = await checkStock(packId, qty)
+  if (!stock.available) return false
+  if (stock.stock === -1) return true // inventory not set up, skip
+
+  if (kv) {
+    // Use KV to track active reservations for this pack
+    const reservationKey = `stock-reserve:${orderId}`
+    await kv.put(reservationKey, JSON.stringify({ packId, qty }), {
+      expirationTtl: RESERVATION_TTL_SECONDS,
+    })
+  }
+
+  return true
+}
+
+/**
+ * Release a stock reservation (e.g. on payment failure or timeout).
+ */
+export async function releaseStockReservation(
+  orderId: string,
+  kv?: KVNamespace | null,
+): Promise<void> {
+  if (kv) {
+    await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})
+  }
+}
+
+/**
  * Decrement stock after successful payment.
  * Uses optimistic retry: re-reads stock before each write attempt to
  * reduce the race window when concurrent orders land.
+ * Also cleans up the KV reservation.
  * Silently skips if inventory isn't set up.
  */
 const DECREMENT_MAX_RETRIES = 3
 
-export async function decrementStock(packId: string, qty: number): Promise<void> {
+export async function decrementStock(packId: string, qty: number, orderId?: string, kv?: KVNamespace | null): Promise<void> {
+  // Clean up reservation on successful payment
+  if (orderId && kv) {
+    await releaseStockReservation(orderId, kv).catch(() => {})
+  }
+
   for (let attempt = 0; attempt < DECREMENT_MAX_RETRIES; attempt++) {
     try {
       const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")

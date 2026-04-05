@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer"
+import { timingSafeEqual } from "node:crypto"
 import { NextRequest } from "next/server"
 import type { KVNamespace } from "@/lib/server/kv"
 
@@ -228,4 +229,26 @@ function purgeExpiredRateLimits(now: number) {
       rateLimitStore.delete(key)
     }
   }
+}
+
+/**
+ * Timing-safe verification of CRON_SECRET bearer token.
+ * Prevents timing attacks that could leak the secret via response-time analysis.
+ */
+export function isAuthorizedCron(request: NextRequest): boolean {
+  const expected = process.env.CRON_SECRET
+  if (!expected) return false
+
+  const authHeader = request.headers.get("authorization")
+  if (!authHeader) return false
+
+  const prefix = "Bearer "
+  if (!authHeader.startsWith(prefix)) return false
+
+  const token = authHeader.slice(prefix.length)
+  if (token.length !== expected.length) return false
+
+  const tokenBuf = Uint8Array.from(Buffer.from(token))
+  const expectedBuf = Uint8Array.from(Buffer.from(expected))
+  return timingSafeEqual(tokenBuf, expectedBuf)
 }

@@ -6,6 +6,7 @@ import {
   sendAbandonedCartEmail1,
   sendAbandonedCartEmail2,
 } from "@/lib/server/integrations"
+import { isAuthorizedCron } from "@/lib/server/security"
 
 const ABANDONED_THRESHOLD_MS = 30 * 60 * 1000      // 30 minutes
 const EMAIL_2_DELAY_MS = 24 * 60 * 60 * 1000       // 24 hours after email 1
@@ -20,9 +21,7 @@ const EMAIL_2_DELAY_MS = 24 * 60 * 60 * 1000       // 24 hours after email 1
  * 2. Finds "email_1_sent" carts where email 1 was sent >24h ago → sends email 2
  */
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  const expected = process.env.CRON_SECRET
-  if (!expected || authHeader !== `Bearer ${expected}`) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

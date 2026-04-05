@@ -921,7 +921,7 @@ function ReviewStep({ selected, form, loading, payError, appliedPromo, onApplyPr
                   <div className="text-center sm:text-left">
                     <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-blood mb-1 animate-pulse-slow">One-Time Offer</span>
                     <p className="text-sm font-semibold text-offwhite">Upgrade to {nextPack.title} ({nextPack.qty} cans)</p>
-                    <p className="text-[10px] mt-1 text-bone/60">Best value. Add it for just ₹{(nextPack.price - selected.price).toLocaleString("en-IN")} more.</p>
+                    <p className="text-[10px] mt-1 text-bone/60">Best value. Add it for just ₹{(nextPack.price - effectiveTotal).toLocaleString("en-IN")} more.</p>
                   </div>
                   <button 
                     onClick={() => onUpgradeProduct(nextPack)} 

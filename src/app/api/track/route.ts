@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
 
         return {
           orderId: String(fields["Order ID"] || ""),
+          customerEmail: String(fields["Customer Email"] || ""),
           pack: String(fields["Pack"] || ""),
           quantity: Number(fields["Quantity"] || 0),
           amount: Number(fields["Amount"] || 0),
