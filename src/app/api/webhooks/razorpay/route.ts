@@ -29,7 +29,7 @@ import {
 import { buildPaymentFailedHtml, buildPaymentFailedText } from "@/lib/email/payment-failed-template"
 import { getKVNamespace } from "@/lib/server/kv"
 import { escapeAirtableValue } from "@/lib/server/security"
-import { claimProcessedPayment } from "@/lib/server/order-session"
+import { claimProcessedPayment, releaseProcessedPayment } from "@/lib/server/order-session"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock } from "@/lib/server/inventory"
 
@@ -164,8 +164,19 @@ export async function POST(request: NextRequest) {
     })
 
     if (cartRecords.length === 0) {
-      console.warn(`Webhook: No abandoned cart found for order ${orderId}`)
-      return NextResponse.json({ ok: true, message: "No cart record found" })
+      console.error(`Webhook: No abandoned cart found for order ${orderId}, payment ${paymentId}`)
+      await logErrorToAirtable(`Razorpay Webhook Missing Cart (Order: ${orderId})`, `Payment ${paymentId} captured but no Orders row exists for ${orderId}. Releasing claim so Razorpay retry can process it.`, {
+        route: "/api/webhooks/razorpay",
+        service: "razorpay",
+        stage: "missing-cart",
+        orderId,
+        paymentId,
+        severity: "critical",
+      })
+      // Release the KV claim so the Razorpay retry can actually process the payment
+      await releaseProcessedPayment(paymentId, kv)
+      // Return 500 so Razorpay retries — the cart record may not have been written yet
+      return NextResponse.json({ ok: false, error: "Cart record not found, retry expected" }, { status: 500 })
     }
 
     const cart = cartRecords[0]!

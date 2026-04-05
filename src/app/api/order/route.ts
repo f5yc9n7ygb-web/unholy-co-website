@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
 import type { ShippingForm } from "@/lib/shop/types"
 import { validatePromoCode } from "@/lib/shop/promo"
-import { getRequiredEnv, saveRecordToAirtable } from "@/lib/server/integrations"
+import { getRequiredEnv, logErrorToAirtable, saveRecordToAirtable } from "@/lib/server/integrations"
 import { checkStock } from "@/lib/server/inventory"
 import { getKVNamespace } from "@/lib/server/kv"
 import {
@@ -98,8 +98,12 @@ export async function POST(request: NextRequest) {
       if (promoResult.valid) {
         discountAmount = promoResult.discountAmount
         validatedPromoRecordId = promoResult.promo.recordId
+      } else {
+        return NextResponse.json(
+          { ok: false, error: `Promo code "${promoCode}" is no longer valid. Please remove it and try again.` },
+          { status: 400 }
+        )
       }
-      // If promo is invalid, silently ignore — charge full price
     }
 
     const finalPrice = pack.price - discountAmount
@@ -181,7 +185,7 @@ export async function POST(request: NextRequest) {
       shipping.state,
       shipping.pincode,
     ].filter(Boolean).join(", ")
-    saveRecordToAirtable({
+    await saveRecordToAirtable({
       "Razorpay Order ID": String(order.id || ""),
       "Pack": pack.title,
       "Pack ID": pack.id,
@@ -202,13 +206,16 @@ export async function POST(request: NextRequest) {
       ...(shipping.gstBusinessName ? { "GST Business Name": shipping.gstBusinessName } : {}),
       "Status": "pending",
       "Created At": new Date().toISOString().split("T")[0],
-    }, { baseId: ordersBaseId, tableName: "Orders" }).catch((err) =>
-      console.error("Abandoned cart save failed:", err)
-    )
+    }, { baseId: ordersBaseId, tableName: "Orders" })
 
     return nextResponse
   } catch (error: any) {
     console.error("Order API error:", error?.message || error)
+    await logErrorToAirtable("Order API", error, {
+      route: "/api/order",
+      service: "checkout",
+      stage: "create-order",
+    })
     return NextResponse.json(
       { ok: false, error: "Unable to create an order right now." },
       { status: 500 }

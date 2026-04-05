@@ -136,6 +136,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   }
 
   const onPay = async () => {
+    if (loading) return
     if (!key || !window.Razorpay) {
       setPayError("Payment gateway is not configured.")
       return

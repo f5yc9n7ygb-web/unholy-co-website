@@ -128,6 +128,19 @@ export async function claimProcessedPayment(paymentId: string, kv?: KVNamespace 
 }
 
 /**
+ * Release a previously claimed payment so it can be retried.
+ * Used when webhook processing fails before the payment record is written.
+ */
+export async function releaseProcessedPayment(paymentId: string, kv?: KVNamespace | null) {
+  const kvKey = `pay:${paymentId}`
+  if (kv) {
+    // Expire the key immediately so the next attempt can claim it
+    await kv.put(kvKey, "", { expirationTtl: 1 }).catch(() => {})
+  }
+  processedPayments.delete(paymentId)
+}
+
+/**
  * Idempotency guard for single-use keys (e.g. subscription double-submit).
  *
  * Uses Cloudflare KV when available, falls back to in-memory Map.

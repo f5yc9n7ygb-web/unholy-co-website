@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto"
+import { createHmac, timingSafeEqual } from "node:crypto"
 import { Buffer } from "node:buffer"
 import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
@@ -141,6 +141,44 @@ export async function POST(request: NextRequest) {
     const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
     if (!(await claimProcessedPayment(paymentId, kv))) {
+      // Payment already claimed (likely by webhook). Verify the record actually exists
+      // before telling the user everything is fine.
+      const existingRecords = await queryAirtableRecords({
+        baseId: ordersBaseId,
+        tableName: "Payments",
+        filterByFormula: `{Payment ID} = "${escapeAirtableValue(paymentId)}"`,
+        maxRecords: 1,
+      }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
+
+      if (existingRecords.length === 0) {
+        // Webhook claimed the payment but hasn't written the record yet (eventual consistency).
+        // Wait briefly and retry once before giving up.
+        await new Promise((r) => setTimeout(r, 2000))
+        const retryRecords = await queryAirtableRecords({
+          baseId: ordersBaseId,
+          tableName: "Payments",
+          filterByFormula: `{Payment ID} = "${escapeAirtableValue(paymentId)}"`,
+          maxRecords: 1,
+        }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
+
+        if (retryRecords.length === 0) {
+          // Record still doesn't exist — log and tell user to contact support
+          await logErrorToAirtable("Verify: Payment claimed but record missing", `Payment ${paymentId} was claimed in KV but no Airtable record exists after retry.`, {
+            route: "/api/order/verify",
+            service: "checkout",
+            stage: "backfill-missing",
+            orderId,
+            paymentId,
+            severity: "critical",
+          }).catch(() => {})
+
+          return NextResponse.json(
+            { ok: false, error: "Your payment was received but order confirmation is delayed. Please contact rituals@theunholy.co with your order details." },
+            { status: 202 }
+          )
+        }
+      }
+
       await backfillExistingPaymentRecord({
         ordersBaseId,
         orderId,
@@ -319,16 +357,14 @@ function isValidSignature(orderId: string, paymentId: string, signature: string,
     .update(`${orderId}|${paymentId}`)
     .digest("hex")
 
-  if (expected.length !== signature.length) {
+  const expectedBuf = Uint8Array.from(Buffer.from(expected))
+  const receivedBuf = Uint8Array.from(Buffer.from(signature))
+
+  if (expectedBuf.length !== receivedBuf.length) {
     return false
   }
 
-  let mismatch = 0
-  for (let i = 0; i < expected.length; i++) {
-    mismatch |= expected.charCodeAt(i) ^ signature.charCodeAt(i)
-  }
-
-  return mismatch === 0
+  return timingSafeEqual(expectedBuf, receivedBuf)
 }
 
 function createSuccessResponse(options: {

@@ -83,6 +83,12 @@ async function getAuthToken(kv?: KVNamespace | null): Promise<string> {
     const isRetryable = isHtml403 || response.status >= 500
 
     if (isHtml403) {
+      // Clear cached token so the next call gets a fresh one instead of
+      // being locked out for the entire 9-day cache TTL.
+      cachedToken = null
+      if (kv) {
+        await kv.put(TOKEN_KV_KEY, "", { expirationTtl: 1 }).catch(() => {})
+      }
       lastError = new Error(
         "Shiprocket auth failed (403 HTML response). " +
         "This usually means Shiprocket temporarily blocked the request before it reached the API, " +
