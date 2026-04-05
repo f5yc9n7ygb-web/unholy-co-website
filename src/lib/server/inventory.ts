@@ -29,137 +29,159 @@ export type StockInfo = {
 }
 
 /**
- * Check if a pack has sufficient stock.
- * Returns { available: true } if inventory table is missing (graceful skip).
+ * Read the inventory record for a pack.
+ * Returns null if the Inventory table isn't set up (graceful skip).
  */
-export async function checkStock(packId: string, requiredQty: number): Promise<StockInfo> {
+async function getInventoryRecord(packId: string) {
   try {
     const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
-
     const records = await queryAirtableRecords({
       baseId,
       tableName: INVENTORY_TABLE,
       filterByFormula: `{Pack ID} = "${escapeAirtableValue(packId)}"`,
       maxRecords: 1,
     })
-
-    // No inventory record = unlimited stock (table not set up yet)
-    if (records.length === 0) {
-      return { available: true, stock: -1, recordId: null }
-    }
-
+    if (records.length === 0) return null
     const record = records[0]!
-    const stock = Number(record.fields["Stock"] || 0)
-
     return {
-      available: stock >= requiredQty,
-      stock,
       recordId: record.id,
+      stock: Number(record.fields["Stock"] || 0),
+      reserved: Number(record.fields["Reserved"] || 0),
     }
   } catch {
-    // Inventory table doesn't exist or query failed — don't block orders
     console.warn("Inventory check skipped (table may not exist)")
-    return { available: true, stock: -1, recordId: null }
+    return null
   }
 }
 
 /**
- * Reserve stock via KV before payment begins.
- * The reservation auto-expires after the TTL so stock isn't permanently locked
- * if the user abandons checkout or the session times out.
+ * Check if a pack has sufficient stock.
+ * Available = Stock - Reserved (accounts for in-progress checkouts).
+ * Returns { available: true } if inventory table is missing (graceful skip).
+ */
+export async function checkStock(packId: string, requiredQty: number): Promise<StockInfo> {
+  const inv = await getInventoryRecord(packId)
+  if (!inv) {
+    return { available: true, stock: -1, recordId: null }
+  }
+  const effectiveStock = inv.stock - inv.reserved
+  return {
+    available: effectiveStock >= requiredQty,
+    stock: effectiveStock,
+    recordId: inv.recordId,
+  }
+}
+
+/**
+ * Reserve stock in Airtable before payment begins.
+ * Increments the Reserved column so concurrent checkStock() calls see
+ * reduced availability. The reservation is released on payment success
+ * (decrementStock) or times out via the cron cleanup.
  *
  * @returns `true` if reservation succeeded, `false` if insufficient stock.
  */
-const RESERVATION_TTL_SECONDS = 15 * 60 // 15 minutes — covers Razorpay payment window
-
 export async function reserveStock(
   packId: string,
   qty: number,
   orderId: string,
   kv?: KVNamespace | null,
 ): Promise<boolean> {
-  const stock = await checkStock(packId, qty)
-  if (!stock.available) return false
-  if (stock.stock === -1) return true // inventory not set up, skip
+  const inv = await getInventoryRecord(packId)
+  if (!inv) return true // inventory not set up, skip
 
+  const effectiveStock = inv.stock - inv.reserved
+  if (effectiveStock < qty) return false
+
+  const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+
+  // Increment Reserved in Airtable so other checkouts see reduced availability
+  await updateAirtableRecord({
+    baseId,
+    tableName: INVENTORY_TABLE,
+    recordId: inv.recordId,
+    fields: { Reserved: inv.reserved + qty },
+  })
+
+  // Track reservation in KV for cleanup (auto-expires in 15 min)
   if (kv) {
-    // Use KV to track active reservations for this pack
-    const reservationKey = `stock-reserve:${orderId}`
-    await kv.put(reservationKey, JSON.stringify({ packId, qty }), {
-      expirationTtl: RESERVATION_TTL_SECONDS,
-    })
+    await kv.put(
+      `stock-reserve:${orderId}`,
+      JSON.stringify({ packId, qty, recordId: inv.recordId }),
+      { expirationTtl: 15 * 60 },
+    )
   }
 
   return true
 }
 
 /**
- * Release a stock reservation (e.g. on payment failure or timeout).
+ * Release a stock reservation — decrements the Reserved column.
+ * Called on payment failure or abandonment.
  */
 export async function releaseStockReservation(
   orderId: string,
   kv?: KVNamespace | null,
 ): Promise<void> {
-  if (kv) {
-    await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})
+  if (!kv) return
+  const raw = await kv.get(`stock-reserve:${orderId}`).catch(() => null)
+  if (!raw) return
+
+  try {
+    const { packId, qty, recordId } = JSON.parse(raw) as {
+      packId: string; qty: number; recordId: string
+    }
+    const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+    const inv = await getInventoryRecord(packId)
+    if (inv) {
+      await updateAirtableRecord({
+        baseId,
+        tableName: INVENTORY_TABLE,
+        recordId,
+        fields: { Reserved: Math.max(0, inv.reserved - qty) },
+      })
+    }
+  } catch (err) {
+    console.error("Failed to release stock reservation:", err)
   }
+
+  await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})
 }
 
 /**
  * Decrement stock after successful payment.
- * Uses optimistic retry: re-reads stock before each write attempt to
- * reduce the race window when concurrent orders land.
- * Also cleans up the KV reservation.
+ * Decrements Stock AND Reserved (converting the reservation into a sale).
+ * Uses optimistic retry with re-read before each write.
  * Silently skips if inventory isn't set up.
  */
 const DECREMENT_MAX_RETRIES = 3
 
 export async function decrementStock(packId: string, qty: number, orderId?: string, kv?: KVNamespace | null): Promise<void> {
-  // Clean up reservation on successful payment
-  if (orderId && kv) {
-    await releaseStockReservation(orderId, kv).catch(() => {})
-  }
-
   for (let attempt = 0; attempt < DECREMENT_MAX_RETRIES; attempt++) {
     try {
+      const inv = await getInventoryRecord(packId)
+      if (!inv) return
+
       const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
-
-      const records = await queryAirtableRecords({
-        baseId,
-        tableName: INVENTORY_TABLE,
-        filterByFormula: `{Pack ID} = "${escapeAirtableValue(packId)}"`,
-        maxRecords: 1,
-      })
-
-      if (records.length === 0) return
-
-      const record = records[0]!
-      const currentStock = Number(record.fields["Stock"] || 0)
-      const newStock = Math.max(0, currentStock - qty)
+      const newStock = Math.max(0, inv.stock - qty)
+      const newReserved = Math.max(0, inv.reserved - qty)
 
       await updateAirtableRecord({
         baseId,
         tableName: INVENTORY_TABLE,
-        recordId: record.id,
-        fields: { Stock: newStock },
+        recordId: inv.recordId,
+        fields: { Stock: newStock, Reserved: newReserved },
       })
 
-      // Verify our write landed. If the value differs from what we wrote,
-      // another concurrent request read the same stale value and overwrote us
-      // (or overwrote the other request). Re-read and retry.
-      const verifyRecords = await queryAirtableRecords({
-        baseId,
-        tableName: INVENTORY_TABLE,
-        filterByFormula: `{Pack ID} = "${escapeAirtableValue(packId)}"`,
-        maxRecords: 1,
-      })
+      // Verify write landed (detect concurrent overwrites)
+      const verify = await getInventoryRecord(packId)
+      if (verify && verify.stock !== newStock) {
+        console.warn(`Inventory: write conflict for ${packId} (attempt ${attempt + 1}), retrying...`)
+        continue
+      }
 
-      if (verifyRecords.length > 0) {
-        const verifiedStock = Number(verifyRecords[0]!.fields["Stock"] || 0)
-        if (verifiedStock !== newStock) {
-          console.warn(`Inventory: write conflict for ${packId} (attempt ${attempt + 1}), retrying...`)
-          continue
-        }
+      // Clean up KV reservation key
+      if (orderId && kv) {
+        await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})
       }
 
       return // success
