@@ -108,7 +108,7 @@ export function TransitionProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <TransitionContext.Provider value={{ navigate }}>
+    <TransitionContext value={{ navigate }}>
       {children}
 
       <div
@@ -181,6 +181,6 @@ export function TransitionProvider({ children }: { children: ReactNode }) {
           </div>
         </div>
       </div>
-    </TransitionContext.Provider>
+    </TransitionContext>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import React, { useEffect, useRef } from "react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 
@@ -14,7 +14,7 @@ gsap.registerPlugin(ScrollTrigger)
 
 interface SplitTextRevealProps {
   text: string
-  as?: keyof JSX.IntrinsicElements
+  as?: keyof React.JSX.IntrinsicElements
   className?: string
   stagger?: number    // seconds between each char
   duration?: number   // animation duration per char

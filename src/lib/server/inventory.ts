@@ -86,32 +86,52 @@ export async function reserveStock(
   orderId: string,
   kv?: KVNamespace | null,
 ): Promise<boolean> {
-  const inv = await getInventoryRecord(packId)
-  if (!inv) return true // inventory not set up, skip
+  const MAX_RETRIES = 3
+  
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const inv = await getInventoryRecord(packId)
+      if (!inv) return true // inventory not set up, skip
 
-  const effectiveStock = inv.stock - inv.reserved
-  if (effectiveStock < qty) return false
+      const effectiveStock = inv.stock - inv.reserved
+      if (effectiveStock < qty) return false
 
-  const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+      const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+      const newReserved = inv.reserved + qty
 
-  // Increment Reserved in Airtable so other checkouts see reduced availability
-  await updateAirtableRecord({
-    baseId,
-    tableName: INVENTORY_TABLE,
-    recordId: inv.recordId,
-    fields: { Reserved: inv.reserved + qty },
-  })
+      // Increment Reserved in Airtable so other checkouts see reduced availability
+      await updateAirtableRecord({
+        baseId,
+        tableName: INVENTORY_TABLE,
+        recordId: inv.recordId,
+        fields: { Reserved: newReserved },
+      })
 
-  // Track reservation in KV for cleanup (auto-expires in 15 min)
-  if (kv) {
-    await kv.put(
-      `stock-reserve:${orderId}`,
-      JSON.stringify({ packId, qty, recordId: inv.recordId }),
-      { expirationTtl: 15 * 60 },
-    )
+      // Verify write landed
+      const verify = await getInventoryRecord(packId)
+      if (verify && verify.reserved !== newReserved) {
+        console.warn(`Inventory: reserve write conflict for ${packId} (attempt ${attempt + 1}), retrying...`)
+        continue
+      }
+
+      // Track reservation in KV for cleanup (auto-expires in 15 min)
+      if (kv) {
+        await kv.put(
+          `stock-reserve:${orderId}`,
+          JSON.stringify({ packId, qty, recordId: inv.recordId }),
+          { expirationTtl: 15 * 60 },
+        )
+      }
+
+      return true
+    } catch (err) {
+      if (attempt === MAX_RETRIES - 1) {
+        console.error("Inventory reservation failed after retries:", err)
+        return false
+      }
+    }
   }
-
-  return true
+  return false
 }
 
 /**
@@ -126,22 +146,37 @@ export async function releaseStockReservation(
   const raw = await kv.get(`stock-reserve:${orderId}`).catch(() => null)
   if (!raw) return
 
-  try {
-    const { packId, qty, recordId } = JSON.parse(raw) as {
-      packId: string; qty: number; recordId: string
-    }
-    const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
-    const inv = await getInventoryRecord(packId)
-    if (inv) {
+  const { packId, qty, recordId } = JSON.parse(raw) as {
+    packId: string; qty: number; recordId: string
+  }
+  const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+  
+  const MAX_RETRIES = 3
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const inv = await getInventoryRecord(packId)
+      if (!inv) break
+      
+      const newReserved = Math.max(0, inv.reserved - qty)
+
       await updateAirtableRecord({
         baseId,
         tableName: INVENTORY_TABLE,
         recordId,
-        fields: { Reserved: Math.max(0, inv.reserved - qty) },
+        fields: { Reserved: newReserved },
       })
+      
+      const verify = await getInventoryRecord(packId)
+      if (verify && verify.reserved !== newReserved) {
+        console.warn(`Inventory: release write conflict for ${packId} (attempt ${attempt + 1}), retrying...`)
+        continue
+      }
+      break
+    } catch (err) {
+      if (attempt === MAX_RETRIES - 1) {
+        console.error("Failed to release stock reservation after retries:", err)
+      }
     }
-  } catch (err) {
-    console.error("Failed to release stock reservation:", err)
   }
 
   await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})

@@ -182,3 +182,28 @@ function calculateDiscount(promo: PromoCode, orderTotal: number): number {
   // Flat discount — can't exceed order total
   return Math.min(promo.discountValue, orderTotal)
 }
+
+
+/**
+ * Increment the usage count using the promo code directly (used by webhooks).
+ */
+export async function incrementPromoUsageByCode(code: string): Promise<void> {
+  if (!code || typeof code !== "string") return
+  
+  const normalized = code.trim().toUpperCase()
+  try {
+    const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+    const records = await queryAirtableRecords({
+      baseId,
+      tableName: PROMO_TABLE,
+      filterByFormula: `{Code} = "${escapeAirtableValue(normalized)}"`,
+      maxRecords: 1,
+    })
+    
+    if (records.length > 0) {
+      await incrementPromoUsage(records[0]!.id)
+    }
+  } catch (err) {
+    console.warn(`Failed to increment promo usage for code ${code}: `, err)
+  }
+}

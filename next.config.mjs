@@ -10,6 +10,12 @@ const nextConfig = {
   experimental: {
     viewTransition: true,
   },
+  turbopack: {
+    root: process.cwd(),
+    resolveAlias: {
+      '@/public': path.join(process.cwd(), 'public'),
+    },
+  },
   webpack: (config) => {
     config.resolve = config.resolve || {}
     config.resolve.alias = {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 
 /*
   TextScramble — gothic matrix-style text decode effect.
@@ -12,7 +12,7 @@ const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#
 
 interface TextScrambleProps {
   text: string
-  as?: keyof JSX.IntrinsicElements
+  as?: keyof React.JSX.IntrinsicElements
   className?: string
   speed?: number          // ms per iteration
   revealDelay?: number    // ms before each char resolves

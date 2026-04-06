@@ -32,6 +32,7 @@ import { escapeAirtableValue } from "@/lib/server/security"
 import { claimProcessedPayment, releaseProcessedPayment } from "@/lib/server/order-session"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock } from "@/lib/server/inventory"
+import { incrementPromoUsageByCode } from "@/lib/shop/promo"
 
 export async function POST(request: NextRequest) {
   try {
@@ -238,6 +239,7 @@ export async function POST(request: NextRequest) {
         fields: { Status: "converted", "Converted At": new Date().toISOString().split("T")[0] },
       }),
       decrementStock(pack.id, pack.qty),
+      ...(promoCode ? [incrementPromoUsageByCode(promoCode)] : []),
       sendOrderConfirmationEmail({
         customerName: customerName || "Customer",
         customerEmail,
