@@ -113,28 +113,53 @@ export async function POST(request: NextRequest) {
     const contextId = createOrderContextId()
     const { keyId, keySecret } = getRazorpayCredentials()
 
-    const response = await fetch(RAZORPAY_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
-      },
-      body: JSON.stringify({
-        amount,
-        currency,
-        receipt,
-        payment_capture: 1,
-        notes: {
-          contextId,
-        },
-      }),
-      cache: "no-store",
+    // Razorpay can be sluggish during peak hours; enforce timeout + retry on
+    // 5xx/network errors so a single flaky call doesn't kill the checkout.
+    const razorpayAuthHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`
+    const razorpayBody = JSON.stringify({
+      amount,
+      currency,
+      receipt,
+      payment_capture: 1,
+      notes: { contextId },
     })
 
-    const order = await response.json()
-    if (!response.ok) {
-      console.error("Razorpay Error Payload:", order)
-      throw new Error("Unable to create order.")
+    let response: Response | null = null
+    let order: any = null
+    let lastError: unknown = null
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        response = await fetch(RAZORPAY_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: razorpayAuthHeader,
+          },
+          body: razorpayBody,
+          cache: "no-store",
+          signal: AbortSignal.timeout(4000),
+        })
+        order = await response.json().catch(() => null)
+        if (response.ok) break
+        // Retry on 5xx, don't retry on 4xx (our request is broken)
+        if (response.status < 500) {
+          console.error("Razorpay Error Payload:", order)
+          throw new Error("Unable to create order.")
+        }
+        lastError = new Error(`Razorpay ${response.status}`)
+      } catch (err) {
+        lastError = err
+      }
+      // backoff before retry
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 500))
+    }
+
+    if (!response || !response.ok || !order) {
+      console.error("Razorpay create-order failed after retries:", lastError)
+      return NextResponse.json(
+        { ok: false, error: "Payment gateway is slow right now. Please try again.", retryable: true },
+        { status: 503 }
+      )
     }
 
     const sessionToken = createOrderSessionToken({

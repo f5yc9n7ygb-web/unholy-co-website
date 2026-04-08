@@ -3,7 +3,8 @@ import {
   getRequiredEnv,
   queryAirtableRecords,
 } from "@/lib/server/integrations"
-import { escapeAirtableValue } from "@/lib/server/security"
+import { checkRateLimit, escapeAirtableValue } from "@/lib/server/security"
+import { getKVNamespace } from "@/lib/server/kv"
 import { generateInvoicePdf } from "@/lib/pdf/generate-invoice"
 
 // Force dynamic rendering — invoices contain PII and must never be cached
@@ -23,6 +24,34 @@ export async function GET(
     const emailParam = request.nextUrl.searchParams.get("email")?.trim().toLowerCase()
     if (!emailParam) {
       return NextResponse.json({ error: "Email is required" }, { status: 401 })
+    }
+
+    // Rate limit per IP (prevents PDF-generation CPU abuse + brute-force guessing)
+    const kv = await getKVNamespace()
+    const rateLimit = await checkRateLimit(request, {
+      bucket: "invoice-download",
+      limit: 10,
+      windowMs: 60 * 60 * 1000,
+    }, kv)
+    if (!rateLimit.ok) {
+      return NextResponse.json(
+        { error: "Too many invoice requests. Try again later." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
+      )
+    }
+
+    // Per-(email, orderId) throttle — prevents guessing orderIds against a known email
+    if (kv) {
+      const comboKey = `rl:invoice-combo:${emailParam}:${orderId}`
+      const existing = await kv.get(comboKey)
+      const count = existing ? Number(existing) || 0 : 0
+      if (count >= 5) {
+        return NextResponse.json(
+          { error: "Too many attempts. Try again later." },
+          { status: 429, headers: { "Retry-After": "3600" } }
+        )
+      }
+      await kv.put(comboKey, String(count + 1), { expirationTtl: 3600 })
     }
 
     const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")

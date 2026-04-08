@@ -9,6 +9,22 @@
 export type KVNamespace = {
   get(key: string): Promise<string | null>
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
+  delete(key: string): Promise<void>
+}
+
+/**
+ * Get the Cloudflare `ExecutionContext` so we can call `waitUntil()` to run
+ * background work after the response is returned. Returns null on local dev.
+ */
+export async function getExecutionContext(): Promise<{ waitUntil(p: Promise<unknown>): void } | null> {
+  try {
+    // @ts-ignore — resolved at runtime on Cloudflare Pages
+    const mod = await import("@cloudflare/next-on-pages")
+    const ctx = mod.getRequestContext()
+    return ctx.ctx ?? null
+  } catch {
+    return null
+  }
 }
 
 /**

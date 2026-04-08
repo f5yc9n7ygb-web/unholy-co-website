@@ -27,7 +27,7 @@ import {
   logErrorToAirtable,
 } from "@/lib/server/integrations"
 import { buildPaymentFailedHtml, buildPaymentFailedText } from "@/lib/email/payment-failed-template"
-import { getKVNamespace } from "@/lib/server/kv"
+import { getKVNamespace, getExecutionContext } from "@/lib/server/kv"
 import { escapeAirtableValue } from "@/lib/server/security"
 import { claimProcessedPayment, releaseProcessedPayment } from "@/lib/server/order-session"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
@@ -231,32 +231,66 @@ export async function POST(request: NextRequest) {
       { baseId: ordersBaseId, tableName: "Payments" }
     )
 
-    const backgroundTasks = [
+    // ── Critical path: stock + promo (must succeed before fulfillment) ────────
+    // These are awaited sequentially so a promo increment never lands without
+    // a matching stock decrement (and vice versa). If either throws we still
+    // return 200 because the payment is captured — ops must reconcile manually.
+    try {
+      await decrementStock(pack.id, pack.qty, orderId, kv)
+      if (promoCode) {
+        await incrementPromoUsageByCode(promoCode)
+      }
+    } catch (err) {
+      await logErrorToAirtable(`Critical fulfillment failure (Order: ${orderId})`, err, {
+        route: "/api/webhooks/razorpay",
+        service: "fulfillment",
+        stage: "stock-promo",
+        orderId,
+        paymentId,
+        severity: "critical",
+      })
+    }
+
+    // ── Email dedup: verify endpoint may have already sent the confirmation ──
+    const emailDedupKey = `email:confirm:${paymentId}`
+    let shouldSendEmail = true
+    if (kv) {
+      const alreadySent = await kv.get(emailDedupKey)
+      if (alreadySent) {
+        shouldSendEmail = false
+      } else {
+        await kv.put(emailDedupKey, "1", { expirationTtl: 24 * 60 * 60 })
+      }
+    }
+
+    const backgroundTasks: Promise<unknown>[] = [
       updateAirtableRecord({
         baseId: ordersBaseId,
         tableName: "Orders",
         recordId: cart.id,
         fields: { Status: "converted", "Converted At": new Date().toISOString().split("T")[0] },
       }),
-      decrementStock(pack.id, pack.qty),
-      ...(promoCode ? [incrementPromoUsageByCode(promoCode)] : []),
-      sendOrderConfirmationEmail({
-        customerName: customerName || "Customer",
-        customerEmail,
-        customerPhone,
-        orderId,
-        paymentId,
-        packTitle: pack.title,
-        packQty: pack.qty,
-        packPrice: chargedAmount,
-        shippingAddress,
-        shippingCity,
-        shippingState,
-        shippingPincode,
-        promoCode: promoCode || undefined,
-        discountAmount: discountAmount || undefined,
-      })
     ]
+    if (shouldSendEmail) {
+      backgroundTasks.push(
+        sendOrderConfirmationEmail({
+          customerName: customerName || "Customer",
+          customerEmail,
+          customerPhone,
+          orderId,
+          paymentId,
+          packTitle: pack.title,
+          packQty: pack.qty,
+          packPrice: chargedAmount,
+          shippingAddress,
+          shippingCity,
+          shippingState,
+          shippingPincode,
+          promoCode: promoCode || undefined,
+          discountAmount: discountAmount || undefined,
+        })
+      )
+    }
 
     if (shippingAddress && shippingCity && shippingState && shippingPincode) {
       backgroundTasks.push(
@@ -315,7 +349,16 @@ export async function POST(request: NextRequest) {
       console.warn(`Webhook: Missing shipping address for order ${orderId}; skipping Shiprocket creation.`)
     }
 
-    await Promise.allSettled(backgroundTasks)
+    // Fire-and-forget background tasks using Cloudflare waitUntil when available
+    // so Razorpay gets a sub-second ACK even if Shiprocket/Mailjet are slow.
+    // In local dev (no execution context), we await to keep behavior unchanged.
+    const execCtx = await getExecutionContext()
+    const bgPromise = Promise.allSettled(backgroundTasks)
+    if (execCtx) {
+      execCtx.waitUntil(bgPromise)
+    } else {
+      await bgPromise
+    }
 
     return NextResponse.json({ ok: true })
   } catch (error: any) {

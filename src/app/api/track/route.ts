@@ -90,6 +90,22 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
+      // Per-email brute-force throttle: 6 failed/successful attempts/hour per email.
+      // Prevents IP-rotating attackers from guessing order IDs against a known victim.
+      const emailLower = query.toLowerCase()
+      if (kv) {
+        const emailKey = `rl:track-history-email:${emailLower}`
+        const existing = await kv.get(emailKey)
+        const count = existing ? Number(existing) || 0 : 0
+        if (count >= 6) {
+          return NextResponse.json(
+            { ok: false, error: "Too many attempts for this email. Please try again later." },
+            { status: 429, headers: { "Retry-After": "3600" } }
+          )
+        }
+        await kv.put(emailKey, String(count + 1), { expirationTtl: 3600 })
+      }
+
       // Step 1: Verify ownership — email + orderId must match a real record
       const verifyRecords = await queryAirtableRecords({
         baseId: ordersBaseId,

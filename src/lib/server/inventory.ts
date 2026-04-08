@@ -29,6 +29,58 @@ export type StockInfo = {
 }
 
 /**
+ * Distributed mutex for inventory mutations.
+ *
+ * Cloudflare KV has no native CAS, so this uses a put-then-verify pattern:
+ * write our token, re-read, and only proceed if our token won. 5s TTL
+ * prevents a crashed worker from holding the lock forever.
+ *
+ * Under very high contention (1000+ concurrent drops) a true Durable Object
+ * is better, but this closes the ~500ms read-modify-write race window that
+ * caused overselling in practice.
+ */
+async function withInventoryLock<T>(
+  packId: string,
+  kv: KVNamespace | null | undefined,
+  fn: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  if (!kv) return fn() // local dev — no distributed lock available
+  const lockKey = `inv-lock:${packId}`
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+  let acquired = false
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const existing = await kv.get(lockKey)
+    if (!existing) {
+      await kv.put(lockKey, token, { expirationTtl: 5 })
+      const verify = await kv.get(lockKey)
+      if (verify === token) {
+        acquired = true
+        break
+      }
+    }
+    await new Promise((r) => setTimeout(r, 80 + attempt * 40))
+  }
+
+  if (!acquired) {
+    console.warn(`Inventory: could not acquire lock for ${packId}, rejecting`)
+    return fallback
+  }
+
+  try {
+    return await fn()
+  } finally {
+    try {
+      const current = await kv.get(lockKey)
+      if (current === token) await kv.delete(lockKey)
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/**
  * Read the inventory record for a pack.
  * Returns null if the Inventory table isn't set up (graceful skip).
  */
@@ -86,9 +138,7 @@ export async function reserveStock(
   orderId: string,
   kv?: KVNamespace | null,
 ): Promise<boolean> {
-  const MAX_RETRIES = 3
-  
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+  return withInventoryLock(packId, kv, async () => {
     try {
       const inv = await getInventoryRecord(packId)
       if (!inv) return true // inventory not set up, skip
@@ -99,20 +149,12 @@ export async function reserveStock(
       const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
       const newReserved = inv.reserved + qty
 
-      // Increment Reserved in Airtable so other checkouts see reduced availability
       await updateAirtableRecord({
         baseId,
         tableName: INVENTORY_TABLE,
         recordId: inv.recordId,
         fields: { Reserved: newReserved },
       })
-
-      // Verify write landed
-      const verify = await getInventoryRecord(packId)
-      if (verify && verify.reserved !== newReserved) {
-        console.warn(`Inventory: reserve write conflict for ${packId} (attempt ${attempt + 1}), retrying...`)
-        continue
-      }
 
       // Track reservation in KV for cleanup (auto-expires in 15 min)
       if (kv) {
@@ -125,13 +167,10 @@ export async function reserveStock(
 
       return true
     } catch (err) {
-      if (attempt === MAX_RETRIES - 1) {
-        console.error("Inventory reservation failed after retries:", err)
-        return false
-      }
+      console.error("Inventory reservation failed:", err)
+      return false
     }
-  }
-  return false
+  }, false)
 }
 
 /**
@@ -149,35 +188,23 @@ export async function releaseStockReservation(
   const { packId, qty, recordId } = JSON.parse(raw) as {
     packId: string; qty: number; recordId: string
   }
-  const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
-  
-  const MAX_RETRIES = 3
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+
+  await withInventoryLock(packId, kv, async () => {
     try {
       const inv = await getInventoryRecord(packId)
-      if (!inv) break
-      
+      if (!inv) return
+      const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
       const newReserved = Math.max(0, inv.reserved - qty)
-
       await updateAirtableRecord({
         baseId,
         tableName: INVENTORY_TABLE,
         recordId,
         fields: { Reserved: newReserved },
       })
-      
-      const verify = await getInventoryRecord(packId)
-      if (verify && verify.reserved !== newReserved) {
-        console.warn(`Inventory: release write conflict for ${packId} (attempt ${attempt + 1}), retrying...`)
-        continue
-      }
-      break
     } catch (err) {
-      if (attempt === MAX_RETRIES - 1) {
-        console.error("Failed to release stock reservation after retries:", err)
-      }
+      console.error("Failed to release stock reservation:", err)
     }
-  }
+  }, undefined)
 
   await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})
 }
@@ -188,10 +215,8 @@ export async function releaseStockReservation(
  * Uses optimistic retry with re-read before each write.
  * Silently skips if inventory isn't set up.
  */
-const DECREMENT_MAX_RETRIES = 3
-
 export async function decrementStock(packId: string, qty: number, orderId?: string, kv?: KVNamespace | null): Promise<void> {
-  for (let attempt = 0; attempt < DECREMENT_MAX_RETRIES; attempt++) {
+  await withInventoryLock(packId, kv, async () => {
     try {
       const inv = await getInventoryRecord(packId)
       if (!inv) return
@@ -199,6 +224,10 @@ export async function decrementStock(packId: string, qty: number, orderId?: stri
       const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
       const newStock = Math.max(0, inv.stock - qty)
       const newReserved = Math.max(0, inv.reserved - qty)
+      if (inv.stock - qty < 0) {
+        // Oversell detected — log loudly so ops can reconcile
+        console.error(`Inventory OVERSELL: ${packId} qty=${qty} stock=${inv.stock}`)
+      }
 
       await updateAirtableRecord({
         baseId,
@@ -207,23 +236,11 @@ export async function decrementStock(packId: string, qty: number, orderId?: stri
         fields: { Stock: newStock, Reserved: newReserved },
       })
 
-      // Verify write landed (detect concurrent overwrites)
-      const verify = await getInventoryRecord(packId)
-      if (verify && verify.stock !== newStock) {
-        console.warn(`Inventory: write conflict for ${packId} (attempt ${attempt + 1}), retrying...`)
-        continue
-      }
-
-      // Clean up KV reservation key
       if (orderId && kv) {
         await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})
       }
-
-      return // success
     } catch (err) {
-      if (attempt === DECREMENT_MAX_RETRIES - 1) {
-        console.error("Inventory decrement failed after retries:", err)
-      }
+      console.error("Inventory decrement failed:", err)
     }
-  }
+  }, undefined)
 }

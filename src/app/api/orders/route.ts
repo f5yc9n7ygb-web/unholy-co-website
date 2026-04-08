@@ -54,6 +54,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "An order ID is required." }, { status: 400 })
     }
 
+    // Per-email rate limit (prevents an attacker rotating IPs from brute-forcing
+    // order IDs against a known victim email).
+    if (kv) {
+      const emailKey = `rl:order-history-email:${email}`
+      const existing = await kv.get(emailKey)
+      const count = existing ? Number(existing) || 0 : 0
+      if (count >= 6) {
+        return NextResponse.json(
+          { ok: false, error: "Too many attempts for this email. Please try again later." },
+          { status: 429, headers: { "Retry-After": "3600" } }
+        )
+      }
+      await kv.put(emailKey, String(count + 1), { expirationTtl: 3600 })
+    }
+
     const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
     const records = await queryAirtableRecords({

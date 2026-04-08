@@ -8,6 +8,8 @@
  * Empty/missing payloads are accepted without auth for test pings.
  */
 
+import { Buffer } from "node:buffer"
+import { timingSafeEqual } from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
 import {
   getRequiredEnv,
@@ -56,8 +58,15 @@ export async function POST(request: NextRequest) {
     }
     const receivedToken =
       request.headers.get("x-api-key") ||
-      request.headers.get("authorization")?.replace("Bearer ", "")
-    if (receivedToken !== webhookSecret) {
+      request.headers.get("authorization")?.replace("Bearer ", "") ||
+      ""
+    // Timing-safe comparison to prevent token brute-force via response-time analysis
+    const receivedBuf = Buffer.from(receivedToken)
+    const expectedBuf = Buffer.from(webhookSecret)
+    if (
+      receivedBuf.length !== expectedBuf.length ||
+      !timingSafeEqual(Uint8Array.from(receivedBuf), Uint8Array.from(expectedBuf))
+    ) {
       return NextResponse.json({ ok: false, error: "Invalid webhook token" }, { status: 401 })
     }
 

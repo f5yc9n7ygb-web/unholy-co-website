@@ -459,23 +459,86 @@ export async function updateAirtableRecord(options: {
 
 /**
  * Get the next sequential invoice number for the current Indian financial year.
- * Counts existing Payments records that have an "Invoice Number" assigned and returns count + 1.
+ *
+ * Uses KV as an atomic counter with a short-lived mutex to serialize concurrent
+ * increments. Falls back to counting Airtable records if KV is unavailable
+ * (local dev) or if the counter needs to be seeded for the first time in a FY.
+ *
+ * GST compliance requires strictly-unique, monotonically-increasing invoice
+ * numbers per FY — the previous implementation (plain record count) produced
+ * duplicates under concurrent payments.
  */
 export async function getNextInvoiceSeq(ordersBaseId: string): Promise<number> {
   const now = new Date();
   const month = now.getMonth() + 1;
   const fyStart = month >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  const fyLabel = `${fyStart}-${fyStart + 1}`;
   const fyStartDate = `${fyStart}-04-01T00:00:00.000Z`;
   const fyEndDate = `${fyStart + 1}-04-01T00:00:00.000Z`;
 
-  const records = await queryAirtableRecords({
-    baseId: ordersBaseId,
-    tableName: "Payments",
-    filterByFormula: `AND(IS_AFTER({Timestamp}, "${fyStartDate}"), IS_BEFORE({Timestamp}, "${fyEndDate}"), {Invoice Number} != "")`,
-    maxRecords: 1000,
-  });
+  const seedFromAirtable = async (): Promise<number> => {
+    const records = await queryAirtableRecords({
+      baseId: ordersBaseId,
+      tableName: "Payments",
+      filterByFormula: `AND(IS_AFTER({Timestamp}, "${fyStartDate}"), IS_BEFORE({Timestamp}, "${fyEndDate}"), {Invoice Number} != "")`,
+      maxRecords: 1000,
+    });
+    return records.length;
+  };
 
-  return records.length + 1;
+  const { getKVNamespace } = await import("@/lib/server/kv");
+  const kv = await getKVNamespace();
+  if (!kv) {
+    // Local dev: best-effort, non-atomic (acceptable since not GST-critical locally)
+    return (await seedFromAirtable()) + 1;
+  }
+
+  const counterKey = `invoice-seq:${fyLabel}`;
+  const lockKey = `invoice-seq-lock:${fyLabel}`;
+  const lockToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  // Acquire short-lived mutex — KV has no true CAS, so we use get/put + verify.
+  // 5s TTL prevents a crashed worker from holding the lock forever.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const existingLock = await kv.get(lockKey);
+    if (!existingLock) {
+      await kv.put(lockKey, lockToken, { expirationTtl: 5 });
+      // Verify we won the race (another worker may have written simultaneously)
+      const verify = await kv.get(lockKey);
+      if (verify === lockToken) break;
+    }
+    if (attempt === 9) {
+      // Couldn't acquire lock — fall through and do a best-effort read/write.
+      // Worst case: rare duplicate that ops can reconcile manually.
+      console.warn("Invoice sequence lock contention — proceeding without lock");
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 100 + attempt * 50));
+  }
+
+  try {
+    const rawCounter = await kv.get(counterKey);
+    let current = rawCounter ? Number(rawCounter) : NaN;
+    if (!Number.isFinite(current)) {
+      // First call of the FY — seed from Airtable so we don't restart at 1
+      // if an earlier deploy wrote numbers directly.
+      current = await seedFromAirtable();
+    }
+    const next = current + 1;
+    // FY counters never expire during the FY; give them 400 days to cover rollover.
+    await kv.put(counterKey, String(next), { expirationTtl: 400 * 24 * 60 * 60 });
+    return next;
+  } finally {
+    // Release lock only if we still own it
+    try {
+      const current = await kv.get(lockKey);
+      if (current === lockToken) {
+        await kv.delete(lockKey);
+      }
+    } catch {
+      // ignore
+    }
+  }
 }
 
 /* ─── Abandoned Cart Emails ─── */

@@ -30,10 +30,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const res = await fetch(
-      `https://appyflow.in/api/verifyGST?gstNo=${encodeURIComponent(gstin)}&key_secret=${encodeURIComponent(apiKey)}`,
-      { cache: "no-store" }
-    )
+    // POST with body so the API key never appears in URLs, referrers, or access logs
+    const res = await fetch("https://appyflow.in/api/verifyGST", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ gstNo: gstin, key_secret: apiKey }).toString(),
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    })
     const data = await res.json()
 
     if (data.error || !data.taxpayerInfo) {

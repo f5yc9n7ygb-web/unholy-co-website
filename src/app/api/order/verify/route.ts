@@ -253,12 +253,37 @@ export async function POST(request: NextRequest) {
       ...(orderSession.shipping.gstBusinessName ? { "GST Business Name": orderSession.shipping.gstBusinessName } : {}),
     }, { baseId: ordersBaseId, tableName: "Payments" })
 
-    // #10: Critical tasks (stock, promo) must succeed — fail them loudly.
-    // Non-critical tasks (Shiprocket, email, cart update) use allSettled.
-    await Promise.all([
-      decrementStock(pack.id, pack.qty, orderId, kv),
-      orderSession.promoRecordId ? incrementPromoUsage(orderSession.promoRecordId) : Promise.resolve(),
-    ])
+    // Critical tasks must run sequentially: if stock decrement throws, we must
+    // NOT increment the promo counter (and vice versa). Running them in
+    // Promise.all left the system in a half-applied state on partial failure.
+    try {
+      await decrementStock(pack.id, pack.qty, orderId, kv)
+      if (orderSession.promoRecordId) {
+        await incrementPromoUsage(orderSession.promoRecordId)
+      }
+    } catch (err) {
+      await logErrorToAirtable(`Critical fulfillment failure (Order: ${orderId})`, err, {
+        route: "/api/order/verify",
+        service: "fulfillment",
+        stage: "stock-promo",
+        orderId,
+        paymentId,
+        severity: "critical",
+      }).catch(() => {})
+    }
+
+    // Email dedup — webhook may also fire sendOrderConfirmationEmail; claim
+    // the key here so only one path sends.
+    const emailDedupKey = `email:confirm:${paymentId}`
+    let shouldSendEmail = true
+    if (kv) {
+      const already = await kv.get(emailDedupKey)
+      if (already) {
+        shouldSendEmail = false
+      } else {
+        await kv.put(emailDedupKey, "1", { expirationTtl: 24 * 60 * 60 })
+      }
+    }
 
     await Promise.allSettled([
       createShiprocketOrder({
@@ -311,22 +336,24 @@ export async function POST(request: NextRequest) {
           fields: { "Shipping Status": "Shiprocket Failed" },
         }).catch((err) => console.error("Failed to update status on error:", err))
       }),
-      sendOrderConfirmationEmail({
-        customerName: orderSession.shipping.name || "Customer",
-        customerEmail: orderSession.shipping.email,
-        customerPhone: orderSession.shipping.phone,
-        orderId,
-        paymentId,
-        packTitle: pack.title,
-        packQty: pack.qty,
-        packPrice: chargedAmount,
-        shippingAddress: orderSession.shipping.address,
-        shippingCity: orderSession.shipping.city,
-        shippingState: orderSession.shipping.state,
-        shippingPincode: orderSession.shipping.pincode,
-        promoCode: orderSession.promoCode,
-        discountAmount: orderSession.discountAmount,
-      }),
+      shouldSendEmail
+        ? sendOrderConfirmationEmail({
+            customerName: orderSession.shipping.name || "Customer",
+            customerEmail: orderSession.shipping.email,
+            customerPhone: orderSession.shipping.phone,
+            orderId,
+            paymentId,
+            packTitle: pack.title,
+            packQty: pack.qty,
+            packPrice: chargedAmount,
+            shippingAddress: orderSession.shipping.address,
+            shippingCity: orderSession.shipping.city,
+            shippingState: orderSession.shipping.state,
+            shippingPincode: orderSession.shipping.pincode,
+            promoCode: orderSession.promoCode,
+            discountAmount: orderSession.discountAmount,
+          })
+        : Promise.resolve(),
       markAbandonedCartConverted(ordersBaseId, orderId)
     ]).then(results => {
       results.forEach((result, idx) => {
