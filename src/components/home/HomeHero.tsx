@@ -7,6 +7,7 @@ import {
   useTransform,
   useSpring,
   useMotionValue,
+  transform,
   type MotionValue,
 } from "framer-motion"
 import Image from "next/image"
@@ -87,14 +88,14 @@ function BloodLetter({
     return () => cancelAnimationFrame(raf)
   }, [phase, magX, magY, mouseRef, scrollYProgress])
 
-  // Scroll-driven 3D explosion
+  // Scroll-driven 3D explosion — function-based to bypass FM 12 WAAPI ScrollTimeline
   const exp = EXPLOSION[index]
-  const explodeX = useTransform(scrollYProgress, [0.06, 0.26], [0, exp.x])
-  const explodeY = useTransform(scrollYProgress, [0.06, 0.26], [0, exp.y])
-  const explodeRX = useTransform(scrollYProgress, [0.06, 0.26], [0, exp.rx])
-  const explodeRY = useTransform(scrollYProgress, [0.06, 0.26], [0, exp.ry])
-  const explodeRZ = useTransform(scrollYProgress, [0.06, 0.26], [0, exp.rz])
-  const explodeScale = useTransform(scrollYProgress, [0.06, 0.26], [1, exp.s])
+  const explodeX = useTransform(scrollYProgress, (v) => transform(v, [0.06, 0.26], [0, exp.x]))
+  const explodeY = useTransform(scrollYProgress, (v) => transform(v, [0.06, 0.26], [0, exp.y]))
+  const explodeRX = useTransform(scrollYProgress, (v) => transform(v, [0.06, 0.26], [0, exp.rx]))
+  const explodeRY = useTransform(scrollYProgress, (v) => transform(v, [0.06, 0.26], [0, exp.ry]))
+  const explodeRZ = useTransform(scrollYProgress, (v) => transform(v, [0.06, 0.26], [0, exp.rz]))
+  const explodeScale = useTransform(scrollYProgress, (v) => transform(v, [0.06, 0.26], [1, exp.s]))
 
   // Combine magnetic + explosion offsets
   const combinedX = useTransform(
@@ -108,16 +109,18 @@ function BloodLetter({
 
   // Blood color sweep (B turns red first, T last)
   const sweep = (index / 10) * 0.06
-  const letterColor = useTransform(
-    scrollYProgress,
-    [sweep, 0.04 + sweep, 0.12 + sweep],
-    ["rgba(246,246,246,0.95)", "rgba(176,0,32,0.88)", "rgba(176,0,32,1.0)"]
-  )
-  const glowOpacityValue = useTransform(
-    scrollYProgress,
-    [sweep, 0.08 + sweep],
-    [0, 1]
-  )
+  const letterColor = useTransform(scrollYProgress, (v) => {
+    const s0 = sweep, s1 = 0.04 + sweep, s2 = 0.12 + sweep
+    if (v <= s0) return "rgba(246,246,246,0.95)"
+    if (v >= s2) return "rgba(176,0,32,1.0)"
+    if (v <= s1) {
+      const t = (v - s0) / (s1 - s0)
+      return `rgba(${Math.round(246 + (176 - 246) * t)},${Math.round(246 - 246 * t)},${Math.round(246 + (32 - 246) * t)},${(0.95 + (0.88 - 0.95) * t).toFixed(2)})`
+    }
+    const t = (v - s1) / (s2 - s1)
+    return `rgba(176,0,32,${(0.88 + (1.0 - 0.88) * t).toFixed(2)})`
+  })
+  const glowOpacityValue = useTransform(scrollYProgress, (v) => transform(v, [sweep, 0.08 + sweep], [0, 1]))
 
   const showText = phase === "text" || phase === "complete"
 
@@ -229,10 +232,10 @@ export default function HomeHero() {
     offset: ["start start", "end start"],
   })
 
-  // Text parent transforms
-  const textScale = useTransform(scrollYProgress, [0, 0.22], [1, 1.6])
-  const textOpacity = useTransform(scrollYProgress, [0.10, 0.28], [1, 0])
-  const textY = useTransform(scrollYProgress, [0, 0.25], [0, -20])
+  // Text parent transforms — function-based to bypass FM 12 WAAPI ScrollTimeline
+  const textScale = useTransform(scrollYProgress, (v) => transform(v, [0, 0.22], [1, 1.6]))
+  const textOpacity = useTransform(scrollYProgress, (v) => transform(v, [0.10, 0.28], [1, 0]))
+  const textY = useTransform(scrollYProgress, (v) => transform(v, [0, 0.25], [0, -20]))
 
   // ── Can — magnetic tracking ───────────────────────────────────────────────
   const canMagX = useMotionValue(0)
@@ -274,28 +277,28 @@ export default function HomeHero() {
   }, [canMagX, canMagY, canTiltX, canTiltY, scrollYProgress])
 
   // Can scroll transforms — revealed by scroll, not time
-  const rawCanScale = useTransform(scrollYProgress, [0.15, 0.42], [0.5, 1])
-  const rawCanY = useTransform(scrollYProgress, [0.15, 0.42], [80, 0])
-  const rawCanRotate = useTransform(scrollYProgress, [0.15, 0.40], [-6, 0])
-  const canOpacity = useTransform(scrollYProgress, [0.15, 0.36], [0, 1])
+  const rawCanScale = useTransform(scrollYProgress, (v) => transform(v, [0.15, 0.42], [0.5, 1]))
+  const rawCanY = useTransform(scrollYProgress, (v) => transform(v, [0.15, 0.42], [80, 0]))
+  const rawCanRotate = useTransform(scrollYProgress, (v) => transform(v, [0.15, 0.40], [-6, 0]))
+  const canOpacity = useTransform(scrollYProgress, (v) => transform(v, [0.15, 0.36], [0, 1]))
   const canScale = useSpring(rawCanScale, { stiffness: 80, damping: 12 })
   const canY = useSpring(rawCanY, { stiffness: 90, damping: 14 })
   const canRotate = useSpring(rawCanRotate, { stiffness: 70, damping: 10 })
-  const canScrollScale = useTransform(scrollYProgress, [0.36, 0.50], [1, 1.08])
+  const canScrollScale = useTransform(scrollYProgress, (v) => transform(v, [0.36, 0.50], [1, 1.08]))
 
   // ── Glow layers ───────────────────────────────────────────────────────────
-  const glowOpacity = useTransform(scrollYProgress, [0.08, 0.35], [0, 0.8])
-  const glowScale = useTransform(scrollYProgress, [0.08, 0.35], [0.5, 1])
-  const burstOpacity = useTransform(scrollYProgress, [0.22, 0.35, 0.52], [0, 1, 0.4])
-  const burstScale = useTransform(scrollYProgress, [0.22, 0.40], [0.2, 1.4])
+  const glowOpacity = useTransform(scrollYProgress, (v) => transform(v, [0.08, 0.35], [0, 0.8]))
+  const glowScale = useTransform(scrollYProgress, (v) => transform(v, [0.08, 0.35], [0.5, 1]))
+  const burstOpacity = useTransform(scrollYProgress, (v) => transform(v, [0.22, 0.35, 0.52], [0, 1, 0.4]))
+  const burstScale = useTransform(scrollYProgress, (v) => transform(v, [0.22, 0.40], [0.2, 1.4]))
 
   // ── Bottom content ────────────────────────────────────────────────────────
-  const contentOpacity = useTransform(scrollYProgress, [0.35, 0.50], [0, 1])
-  const contentY = useTransform(scrollYProgress, [0.35, 0.50], [30, 0])
+  const contentOpacity = useTransform(scrollYProgress, (v) => transform(v, [0.35, 0.50], [0, 1]))
+  const contentY = useTransform(scrollYProgress, (v) => transform(v, [0.35, 0.50], [30, 0]))
 
   // ── Section fade ──────────────────────────────────────────────────────────
-  const sectionOpacity = useTransform(scrollYProgress, [0.58, 0.75], [1, 0])
-  const indicatorOpacity = useTransform(scrollYProgress, [0, 0.05], [0.8, 0])
+  const sectionOpacity = useTransform(scrollYProgress, (v) => transform(v, [0.58, 0.75], [1, 0]))
+  const indicatorOpacity = useTransform(scrollYProgress, (v) => transform(v, [0, 0.05], [0.8, 0]))
 
   // Derived booleans
   const showFluid = phase !== "idle"

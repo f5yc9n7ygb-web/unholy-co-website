@@ -33,7 +33,7 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "^1.17.1",
+    "@opennextjs/cloudflare": "^1.18.0",
     "@types/node": "22.5.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

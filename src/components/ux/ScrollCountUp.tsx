@@ -1,6 +1,6 @@
 "use client"
 
-import { MotionValue, motion, useTransform, useSpring } from "framer-motion"
+import { MotionValue, motion, useTransform, useSpring, transform } from "framer-motion"
 
 export function ScrollCountUp({
   progress,
@@ -19,7 +19,7 @@ export function ScrollCountUp({
   const smoothProgress = useSpring(progress, { damping: 30, stiffness: 200 })
 
   // Map the 0-1 progress to the numeric target
-  const numericValue = useTransform(smoothProgress, [0, 0.5], [0, numericPart])
+  const numericValue = useTransform(smoothProgress, (v) => transform(v, [0, 0.5], [0, numericPart]))
   
   const formattedValue = useTransform(numericValue, (latest) => {
     const hasDecimals = value.includes(".")

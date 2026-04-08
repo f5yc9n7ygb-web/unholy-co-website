@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef } from "react"
-import { motion, useScroll, useTransform } from "framer-motion"
+import { motion, useScroll, useTransform, transform } from "framer-motion"
 import { TransitionLink } from "@/components/ux/TransitionLink"
 import { CountUp } from "@/components/ux/CountUp"
 
@@ -66,10 +66,10 @@ export function StoryClient() {
   })
 
   /* Ghost year drifts + scales on scroll */
-  const ghostScale = useTransform(scrollYProgress, [0, 1], [1, 1.18])
-  const ghostOpacity = useTransform(scrollYProgress, [0, 0.6], [1, 0])
-  const titleY = useTransform(scrollYProgress, [0, 0.6], [0, -30])
-  const titleOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0])
+  const ghostScale = useTransform(scrollYProgress, (v) => transform(v, [0, 1], [1, 1.18]))
+  const ghostOpacity = useTransform(scrollYProgress, (v) => transform(v, [0, 0.6], [1, 0]))
+  const titleY = useTransform(scrollYProgress, (v) => transform(v, [0, 0.6], [0, -30]))
+  const titleOpacity = useTransform(scrollYProgress, (v) => transform(v, [0, 0.5], [1, 0]))
 
   return (
     <>

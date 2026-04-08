@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef } from "react"
-import { motion, useScroll, useTransform } from "framer-motion"
+import { motion, useScroll, useTransform, transform } from "framer-motion"
 import { SplitTextReveal } from "@/components/ux/SplitTextReveal"
 import { TextScramble } from "@/components/ux/TextScramble"
 import Reveal from "@/components/ux/Reveal"
@@ -37,7 +37,7 @@ function DesktopRitual() {
     offset: ["start start", "end end"],
   })
 
-  const x = useTransform(scrollYProgress, [0.05, 0.95], ["0%", "-72%"])
+  const x = useTransform(scrollYProgress, (v) => `${transform(v, [0.05, 0.95], [0, -72])}%`)
 
   return (
     <section ref={containerRef} className="relative hidden h-[400vh] overflow-x-clip md:block">

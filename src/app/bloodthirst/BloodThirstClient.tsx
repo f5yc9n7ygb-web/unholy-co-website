@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useEffect, useState, Suspense } from "react"
-import { motion, useScroll, useTransform, useMotionValueEvent } from "framer-motion"
+import { motion, useScroll, useTransform, useMotionValueEvent, transform } from "framer-motion"
 import { TransitionLink } from "@/components/ux/TransitionLink"
 import { CountUp } from "@/components/ux/CountUp"
 import { PACKS } from "@/lib/shop/catalog"
@@ -77,6 +77,7 @@ function ScrollText({
   className = "",
   align = "right",
   startVisible = false,
+  persist = false,
   isMobile = false,
 }: {
   children: React.ReactNode
@@ -86,25 +87,22 @@ function ScrollText({
   className?: string
   align?: "left" | "right" | "center"
   startVisible?: boolean
+  persist?: boolean
   isMobile?: boolean
 }) {
-  const opacity = useTransform(scrollProgress,
-    startVisible
-      ? [exitAt - 0.03, exitAt]
-      : [enterAt, enterAt + 0.02, exitAt - 0.02, exitAt],
-    startVisible
-      ? [1, 0]
-      : [0, 1, 1, 0]
-  )
+  // Function-based useTransform forces JS-driven updates, bypassing
+  // framer-motion 12's WAAPI ScrollTimeline optimization which breaks in Chrome.
+  const opacity = useTransform(scrollProgress, (v) => {
+    if (startVisible) return transform(v, [exitAt - 0.03, exitAt], [1, 0])
+    if (persist) return transform(v, [enterAt, enterAt + 0.02], [0, 1])
+    return transform(v, [enterAt, enterAt + 0.02, exitAt - 0.02, exitAt], [0, 1, 1, 0])
+  })
 
-  const y = useTransform(scrollProgress,
-    startVisible
-      ? [exitAt - 0.03, exitAt]
-      : [enterAt, enterAt + 0.03, exitAt - 0.03, exitAt],
-    startVisible
-      ? [0, -30]
-      : [40, 0, 0, -30]
-  )
+  const y = useTransform(scrollProgress, (v) => {
+    if (startVisible) return transform(v, [exitAt - 0.03, exitAt], [0, -30])
+    if (persist) return transform(v, [enterAt, enterAt + 0.03], [40, 0])
+    return transform(v, [enterAt, enterAt + 0.03, exitAt - 0.03, exitAt], [40, 0, 0, -30])
+  })
 
   // On mobile: all text goes to bottom center, full width
   const effectiveAlign = isMobile ? "center" : align
@@ -187,8 +185,8 @@ export function BloodThirstClient() {
   }, [])
 
   /* Atmospheric blood glow — intensifies with scroll */
-  const glowOpacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.03, 0.08, 0.15])
-  const vignetteOpacity = useTransform(scrollYProgress, [0, 0.3], [0.8, 0.4])
+  const glowOpacity = useTransform(scrollYProgress, (v) => transform(v, [0, 0.5, 1], [0.03, 0.08, 0.15]))
+  const vignetteOpacity = useTransform(scrollYProgress, (v) => transform(v, [0, 0.3], [0.8, 0.4]))
 
   return (
     <>
@@ -239,8 +237,8 @@ export function BloodThirstClient() {
               isMobile ? "top-[8%]" : "top-[15%]"
             }`}
             style={{
-              opacity: useTransform(scrollYProgress, [0.08, 0.11, 0.15, 0.18], [0, 1, 1, 0]),
-              y: useTransform(scrollYProgress, [0.08, 0.11, 0.15, 0.18], [30, 0, 0, -30]),
+              opacity: useTransform(scrollYProgress, (v) => transform(v, [0.08, 0.11, 0.15, 0.18], [0, 1, 1, 0])),
+              y: useTransform(scrollYProgress, (v) => transform(v, [0.08, 0.11, 0.15, 0.18], [30, 0, 0, -30])),
             }}
           >
             <p className="mb-3 text-[9px] uppercase tracking-[0.5em] text-bone/25 md:text-[10px]">
@@ -341,7 +339,8 @@ export function BloodThirstClient() {
           <ScrollText
             scrollProgress={scrollYProgress}
             enterAt={0.82}
-            exitAt={1.01}
+            exitAt={1.0}
+            persist
             align="right"
             isMobile={isMobile}
           >
@@ -368,7 +367,7 @@ export function BloodThirstClient() {
           <motion.div
             className="absolute bottom-8 left-1/2 z-30 -translate-x-1/2"
             style={{
-              opacity: useTransform(scrollYProgress, [0, 0.03], [1, 0]),
+              opacity: useTransform(scrollYProgress, (v) => transform(v, [0, 0.03], [1, 0])),
             }}
           >
             <div className="flex flex-col items-center gap-2">
