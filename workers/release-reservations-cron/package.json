@@ -1,0 +1,17 @@
+{
+  "name": "release-reservations-cron",
+  "version": "1.0.0",
+  "description": "Cloudflare Cron Worker that releases stale stock reservations from abandoned checkouts.",
+  "main": "src/index.ts",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260317.1"
+  }
+}

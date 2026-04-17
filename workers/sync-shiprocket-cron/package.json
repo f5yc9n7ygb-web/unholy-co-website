@@ -1,0 +1,17 @@
+{
+  "name": "sync-shiprocket-cron",
+  "version": "1.0.0",
+  "description": "Cloudflare Cron Worker that polls Shiprocket for AWB/status updates on pending orders.",
+  "main": "src/index.ts",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260317.1"
+  }
+}

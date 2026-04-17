@@ -1,0 +1,10 @@
+name = "unholy-sync-shiprocket-cron"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = ["*/20 * * * *"]
+
+[vars]
+SITE_URL = "https://theunholy.co"
+# CRON_SECRET must be set via: wrangler secret put CRON_SECRET
