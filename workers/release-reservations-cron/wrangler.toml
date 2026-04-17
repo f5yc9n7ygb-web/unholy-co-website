@@ -3,7 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 [triggers]
-crons = ["*/10 * * * *"]
+# Temporarily paused — re-enable to "*/10 * * * *" after Pages deploy rolls out
+# the route fix that decouples this cron from the abandoned-cart email flow.
+crons = []
 
 [vars]
 SITE_URL = "https://theunholy.co"

@@ -17,12 +17,21 @@ import { isAuthorizedCron } from "@/lib/server/security"
  * Inventory table drifts upward over time because the KV reservation key
  * expires silently after 15 minutes but Airtable is never updated.
  *
+ * Status flow (runs AFTER the abandoned-cart email sequence completes, so the
+ * two crons don't race each other for the same "pending" records):
+ *   pending → email_1_sent → email_2_sent → expired (here)
+ *
  * Safety rules:
- *  - Only releases Orders with Status = "pending" AND Created At > 30 minutes ago
+ *  - Primary target: Status = "email_2_sent" AND Email 2 Sent At > 24h ago
+ *    (customer has had email 1 + email 2 + 24h to respond)
+ *  - Safety net: Status = "pending" AND Created At > 72h ago
+ *    (catches carts the abandoned-cart cron never processed — e.g. if that cron
+ *    was down; without this the Reserved counter would drift indefinitely)
  *  - Converted and payment_failed carts are left untouched
  *  - Marks released carts with Status = "expired" so we don't re-release them
  */
-const RELEASE_AGE_MS = 30 * 60 * 1000 // 30 minutes
+const EMAIL_2_RELEASE_AGE_MS = 24 * 60 * 60 * 1000 // 24h after email 2
+const PENDING_SAFETY_AGE_MS = 72 * 60 * 60 * 1000  // 72h safety net for pending stragglers
 
 export async function POST(request: NextRequest) {
   if (!isAuthorizedCron(request)) {
@@ -31,13 +40,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
-    const cutoff = new Date(Date.now() - RELEASE_AGE_MS).toISOString()
+    const email2Cutoff = new Date(Date.now() - EMAIL_2_RELEASE_AGE_MS).toISOString()
+    const pendingCutoff = new Date(Date.now() - PENDING_SAFETY_AGE_MS).toISOString()
 
-    // Find pending orders older than the cutoff
+    // Normal path: email_2_sent carts given 24h to respond, plus safety net for
+    // pending carts the abandoned-cart cron never processed.
     const staleCarts = await queryAirtableRecords({
       baseId: ordersBaseId,
       tableName: "Orders",
-      filterByFormula: `AND({Status} = "pending", IS_BEFORE({Created At}, "${cutoff}"))`,
+      filterByFormula: `OR(
+        AND({Status} = "email_2_sent", IS_BEFORE({Email 2 Sent At}, "${email2Cutoff}")),
+        AND({Status} = "pending", IS_BEFORE({Created At}, "${pendingCutoff}"))
+      )`,
       maxRecords: 50,
     })
 
