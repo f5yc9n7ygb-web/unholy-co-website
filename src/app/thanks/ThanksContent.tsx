@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { motion } from "framer-motion"
 import { usePostHog } from "posthog-js/react"
 import { TransitionLink } from "@/components/ux/TransitionLink"
+import { trackPixel } from "@/lib/meta-pixel"
 
 type ReceiptSummary = {
   packId: string
@@ -41,6 +42,20 @@ export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
       pack_id: receipt.packId,
       quantity: receipt.qty,
     })
+    // Meta Pixel Purchase — use orderId as eventID for future CAPI deduplication.
+    trackPixel(
+      "Purchase",
+      {
+        value: receipt.price,
+        currency: "INR",
+        content_ids: [receipt.packId],
+        content_name: receipt.packTitle,
+        content_type: "product",
+        num_items: receipt.qty,
+        contents: [{ id: receipt.packId, quantity: 1, item_price: receipt.price }],
+      },
+      receipt.orderId,
+    )
   }, [isVerified, receipt, posthog])
 
   return (

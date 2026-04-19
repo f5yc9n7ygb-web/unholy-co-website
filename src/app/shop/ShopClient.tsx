@@ -5,6 +5,7 @@ import Image from "next/image"
 import { useState, useEffect } from "react"
 import { motion, MotionConfig } from "framer-motion"
 import { PACKS, type Pack, getGstAmount, getBasePrice } from "@/lib/shop/catalog"
+import { trackPixel } from "@/lib/meta-pixel"
 import type { ShippingForm } from "@/lib/shop/types"
 import { usePageTransition } from "@/context/TransitionContext"
 
@@ -132,6 +133,15 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
       setTouched(new Set(Object.keys(form)))
       return
     }
+    trackPixel("InitiateCheckout", {
+      value: selected.price,
+      currency: "INR",
+      content_ids: [selected.id],
+      content_name: selected.title,
+      content_type: "product",
+      num_items: selected.qty,
+      contents: [{ id: selected.id, quantity: 1, item_price: selected.price }],
+    })
     go("review")
   }
 
@@ -250,7 +260,18 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
                 packs={PACKS}
                 selected={selected}
                 onSelect={setSelected}
-                onContinue={() => go("shipping")}
+                onContinue={() => {
+                  trackPixel("AddToCart", {
+                    value: selected.price,
+                    currency: "INR",
+                    content_ids: [selected.id],
+                    content_name: selected.title,
+                    content_type: "product",
+                    num_items: selected.qty,
+                    contents: [{ id: selected.id, quantity: 1, item_price: selected.price }],
+                  })
+                  go("shipping")
+                }}
               />
             )}
             {step === "shipping" && (

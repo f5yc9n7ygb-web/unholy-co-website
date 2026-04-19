@@ -9,6 +9,7 @@ import { NoiseGrain } from '@/components/ux/NoiseGrain'
 import { HeartbeatGlow } from '@/components/ux/HeartbeatGlow'
 import { TransitionProvider } from '@/context/TransitionContext'
 import { PostHogProvider } from '@/components/providers/PostHogProvider'
+import { MetaPixelProvider } from '@/components/providers/MetaPixelProvider'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -111,13 +112,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className={`${inter.className} body-glow`} suppressHydrationWarning>
         <PostHogProvider>
-          <TransitionProvider>
-            <Preloader />
-            <HeartbeatGlow />
-            <ScrollProgress />
-            <SiteChrome>{children}</SiteChrome>
-            <NoiseGrain />
-          </TransitionProvider>
+          <MetaPixelProvider>
+            <TransitionProvider>
+              <Preloader />
+              <HeartbeatGlow />
+              <ScrollProgress />
+              <SiteChrome>{children}</SiteChrome>
+              <NoiseGrain />
+            </TransitionProvider>
+          </MetaPixelProvider>
         </PostHogProvider>
       </body>
     </html>

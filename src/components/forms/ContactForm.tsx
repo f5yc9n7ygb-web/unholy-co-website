@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react"
 import { resolveSafeAction } from "@/lib/client/safe-action"
+import { trackPixel } from "@/lib/meta-pixel"
 
 type ContactFormProps = {
   action?: string
@@ -59,6 +60,7 @@ export function ContactForm({ action }: ContactFormProps) {
         throw new Error("Unable to send your message right now.")
       }
 
+      trackPixel("Lead", { content_name: "contact_form" })
       setStatus({ state: "success" })
       setForm({ name: "", email: "", phone: "", message: "", company: "" })
     } catch (error: any) {
