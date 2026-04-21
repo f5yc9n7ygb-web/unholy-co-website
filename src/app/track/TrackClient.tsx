@@ -272,7 +272,7 @@ export function TrackClient({ initialQuery }: { initialQuery: string }) {
     setTrackError("")
     setTrackOrder(null)
     try {
-      const res = await fetch("/api/track", {
+      const res = await fetch("/api/order-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: q, mode: "track" }),
@@ -295,7 +295,7 @@ export function TrackClient({ initialQuery }: { initialQuery: string }) {
     setHistError("")
     setHistOrders([])
     try {
-      const res = await fetch("/api/track", {
+      const res = await fetch("/api/order-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: email, orderId, mode: "history" }),
