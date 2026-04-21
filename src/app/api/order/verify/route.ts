@@ -22,6 +22,7 @@ import {
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock } from "@/lib/server/inventory"
 import { incrementPromoUsage } from "@/lib/shop/promo"
+import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
 
 const RAZORPAY_ORDERS_ENDPOINT = "https://api.razorpay.com/v1/orders"
 const RAZORPAY_PAYMENTS_ENDPOINT = "https://api.razorpay.com/v1/payments"
@@ -190,9 +191,11 @@ export async function POST(request: NextRequest) {
         discountAmount: orderSession.discountAmount,
       }).catch((err) => console.error("Payment backfill failed:", err))
 
-      await markAbandonedCartConverted(ordersBaseId, orderId).catch((err) =>
-        console.error("Abandoned cart update failed:", err)
-      )
+      await markCartConvertedAndSupersedeForEmail({
+        ordersBaseId,
+        orderId,
+        customerEmail: orderSession.shipping.email,
+      }).catch((err) => console.error("Abandoned cart update failed:", err))
 
       return createSuccessResponse({
         pack,
@@ -220,9 +223,11 @@ export async function POST(request: NextRequest) {
         shipping: orderSession.shipping, fullAddress, amount: chargedAmount,
         promoCode: orderSession.promoCode, discountAmount: orderSession.discountAmount,
       }).catch((err) => console.error("Payment backfill failed:", err))
-      await markAbandonedCartConverted(ordersBaseId, orderId).catch((err) =>
-        console.error("Abandoned cart update failed:", err)
-      )
+      await markCartConvertedAndSupersedeForEmail({
+        ordersBaseId,
+        orderId,
+        customerEmail: orderSession.shipping.email,
+      }).catch((err) => console.error("Abandoned cart update failed:", err))
       return createSuccessResponse({
         pack, orderId, chargedAmount,
         shippingName: orderSession.shipping.name,
@@ -354,7 +359,11 @@ export async function POST(request: NextRequest) {
             discountAmount: orderSession.discountAmount,
           })
         : Promise.resolve(),
-      markAbandonedCartConverted(ordersBaseId, orderId)
+      markCartConvertedAndSupersedeForEmail({
+        ordersBaseId,
+        orderId,
+        customerEmail: orderSession.shipping.email,
+      })
     ]).then(results => {
       results.forEach((result, idx) => {
         if (result.status === "rejected") {
@@ -515,26 +524,6 @@ async function backfillExistingPaymentRecord(options: {
     tableName: "Payments",
     recordId: record.id,
     fields: updateFields,
-  })
-}
-
-async function markAbandonedCartConverted(ordersBaseId: string, orderId: string) {
-  const records = await queryAirtableRecords({
-    baseId: ordersBaseId,
-    tableName: "Orders",
-    filterByFormula: `{Razorpay Order ID} = "${escapeAirtableValue(orderId)}"`,
-    maxRecords: 1,
-  })
-
-  if (records.length === 0) {
-    return
-  }
-
-  await updateAirtableRecord({
-    baseId: ordersBaseId,
-    tableName: "Orders",
-    recordId: records[0]!.id,
-    fields: { "Status": "converted", "Converted At": new Date().toISOString().split("T")[0] },
   })
 }
 

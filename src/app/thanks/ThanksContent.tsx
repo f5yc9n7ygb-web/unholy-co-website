@@ -38,11 +38,27 @@ export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
 
   useEffect(() => {
     if (!isVerified || !receipt) return
+
+    // Guard: only fire conversion events once per orderId. The thanks page can
+    // be reloaded, revisited via email link, or restored from bfcache — each
+    // mount would otherwise re-fire Purchase, inflating Meta/PostHog counts.
+    // Fallback to packId+qty when orderId is missing (verified pre-webhook).
+    const dedupKey = receipt.orderId || `${receipt.packId}-${receipt.qty}-${receipt.price ?? ""}`
+    const storageKey = `unholy_purchase_fired_${dedupKey}`
+    try {
+      if (localStorage.getItem(storageKey)) return
+      localStorage.setItem(storageKey, String(Date.now()))
+    } catch {
+      // localStorage unavailable (private mode, quota) — fall through and fire.
+      // A duplicate in that edge case is better than silently dropping a real
+      // conversion for a user who genuinely can't persist state.
+    }
+
     posthog?.capture("order_completed", {
       pack_id: receipt.packId,
       quantity: receipt.qty,
     })
-    // Meta Pixel Purchase — use orderId as eventID for future CAPI deduplication.
+    // Meta Pixel Purchase — orderId doubles as eventID for future CAPI dedup.
     trackPixel(
       "Purchase",
       {

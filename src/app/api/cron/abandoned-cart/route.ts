@@ -6,10 +6,37 @@ import {
   sendAbandonedCartEmail1,
   sendAbandonedCartEmail2,
 } from "@/lib/server/integrations"
-import { isAuthorizedCron } from "@/lib/server/security"
+import { escapeAirtableValue, isAuthorizedCron } from "@/lib/server/security"
 
 const ABANDONED_THRESHOLD_MS = 30 * 60 * 1000      // 30 minutes
 const EMAIL_2_DELAY_MS = 24 * 60 * 60 * 1000       // 24 hours after email 1
+
+/**
+ * Safety net: before emailing a cart, check whether the customer has already
+ * converted (paid) on any other order. If so, skip the email and quietly mark
+ * the cart expired so future sweeps ignore it.
+ *
+ * This guards against the case where verify/webhook supersede didn't run
+ * (new flow, legacy row, transient Airtable error) and prevents sending
+ * abandonment emails to customers who already paid — the bug that hit
+ * Anurag Kalra.
+ *
+ * Returns true when the cart should be skipped (the caller must not email it).
+ */
+async function hasCustomerAlreadyConverted(
+  ordersBaseId: string,
+  customerEmail: string,
+): Promise<boolean> {
+  if (!customerEmail) return false
+  const emailEsc = escapeAirtableValue(customerEmail)
+  const converted = await queryAirtableRecords({
+    baseId: ordersBaseId,
+    tableName: "Orders",
+    filterByFormula: `AND(LOWER({Customer Email}) = LOWER("${emailEsc}"), {Status} = "converted")`,
+    maxRecords: 1,
+  }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
+  return converted.length > 0
+}
 
 /**
  * POST /api/cron/abandoned-cart
@@ -45,9 +72,22 @@ export async function POST(request: NextRequest) {
 
     for (const record of pendingCarts) {
       const f = record.fields
+      const customerEmail = String(f["Customer Email"] || "")
       try {
+        // Safety net: don't email a customer whose cart we missed superseding
+        // at conversion time. If they have any converted order, expire this row.
+        if (await hasCustomerAlreadyConverted(ordersBaseId, customerEmail)) {
+          await updateAirtableRecord({
+            baseId: ordersBaseId,
+            tableName,
+            recordId: record.id,
+            fields: { Status: "expired" },
+          })
+          continue
+        }
+
         await sendAbandonedCartEmail1({
-          customerEmail: String(f["Customer Email"] || ""),
+          customerEmail,
           customerName: String(f["Customer Name"] || "Sinner"),
           packTitle: String(f["Pack"] || "BloodThirst"),
           packQty: Number(f["Quantity"] || 0),
@@ -68,7 +108,7 @@ export async function POST(request: NextRequest) {
 
         email1Sent++
       } catch (err: any) {
-        errors.push(`Email 1 failed for ${f["Customer Email"]}: ${err?.message}`)
+        errors.push(`Email 1 failed for ${customerEmail}: ${err?.message}`)
       }
     }
   } catch (err: any) {
@@ -87,9 +127,22 @@ export async function POST(request: NextRequest) {
 
     for (const record of followUpCarts) {
       const f = record.fields
+      const customerEmail = String(f["Customer Email"] || "")
       try {
+        // Same safety net as email 1 — critical here because email 2 is the
+        // 24h follow-up, more likely to catch a since-converted customer.
+        if (await hasCustomerAlreadyConverted(ordersBaseId, customerEmail)) {
+          await updateAirtableRecord({
+            baseId: ordersBaseId,
+            tableName,
+            recordId: record.id,
+            fields: { Status: "expired" },
+          })
+          continue
+        }
+
         await sendAbandonedCartEmail2({
-          customerEmail: String(f["Customer Email"] || ""),
+          customerEmail,
           customerName: String(f["Customer Name"] || "Sinner"),
           packTitle: String(f["Pack"] || "BloodThirst"),
           packQty: Number(f["Quantity"] || 0),
@@ -110,7 +163,7 @@ export async function POST(request: NextRequest) {
 
         email2Sent++
       } catch (err: any) {
-        errors.push(`Email 2 failed for ${f["Customer Email"]}: ${err?.message}`)
+        errors.push(`Email 2 failed for ${customerEmail}: ${err?.message}`)
       }
     }
   } catch (err: any) {

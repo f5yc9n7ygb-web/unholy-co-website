@@ -33,6 +33,7 @@ import { claimProcessedPayment, releaseProcessedPayment } from "@/lib/server/ord
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock } from "@/lib/server/inventory"
 import { incrementPromoUsageByCode } from "@/lib/shop/promo"
+import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
 
 export async function POST(request: NextRequest) {
   try {
@@ -264,11 +265,26 @@ export async function POST(request: NextRequest) {
     }
 
     const backgroundTasks: Promise<unknown>[] = [
-      updateAirtableRecord({
-        baseId: ordersBaseId,
-        tableName: "Orders",
-        recordId: cart.id,
-        fields: { Status: "converted", "Converted At": new Date().toISOString().split("T")[0] },
+      // Mark this cart converted AND supersede any other in-flight carts from
+      // the same customer email. The helper does both via the shared path that
+      // /api/order/verify uses — keeps webhook + verify behavior identical so
+      // whichever races to conversion first, the abandoned-cart sweep stays clean.
+      // We pass skipConvertedUpdate:false because the webhook owns the
+      // converted-row state in this flow.
+      markCartConvertedAndSupersedeForEmail({
+        ordersBaseId,
+        orderId,
+        customerEmail,
+      }).catch((err) => {
+        console.error("Webhook: cart conversion/supersede failed:", err)
+        // Fall back to the original inline update if the helper errored before
+        // marking the row. Beats leaving the paid cart stuck in `pending`.
+        return updateAirtableRecord({
+          baseId: ordersBaseId,
+          tableName: "Orders",
+          recordId: cart.id,
+          fields: { Status: "converted", "Converted At": new Date().toISOString().split("T")[0]! },
+        }).catch((e) => console.error("Webhook: fallback conversion update failed:", e))
       }),
     ]
     if (shouldSendEmail) {
