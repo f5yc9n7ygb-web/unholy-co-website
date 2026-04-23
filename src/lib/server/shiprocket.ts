@@ -393,28 +393,49 @@ export async function getShiprocketOrderDetails(
     throw new Error(`Shiprocket order fetch failed (${response.status}): ${text}`)
   }
 
-  const raw = await response.json()
-  console.log(`Shiprocket order ${shiprocketOrderId} response:`, JSON.stringify(raw).slice(0, 2000))
-
-  const data = raw as {
+  const raw = (await response.json()) as {
     data?: {
-      status: string
-      shipments?: Array<{
-        id: number
-        awb_code: string
-        courier_name: string
-        status: string
-      }>
+      status?: string
+      // Shiprocket returns `shipments` as a single object for single-shipment
+      // orders and as an array for multi-shipment orders. Handle both shapes.
+      shipments?:
+        | {
+            id?: number
+            awb?: string
+            awb_code?: string
+            courier?: string
+            courier_name?: string
+            status?: string
+          }
+        | Array<{
+            id?: number
+            awb?: string
+            awb_code?: string
+            courier?: string
+            courier_name?: string
+            status?: string
+          }>
+      // Populated at the top level once an AWB is assigned
+      awb_data?: { awb?: string }
     }
   }
 
-  const order = data.data
+  const order = raw.data
   if (!order) return null
 
-  const shipment = order.shipments?.[0]
+  const shipment = Array.isArray(order.shipments)
+    ? order.shipments[0]
+    : order.shipments
+
+  const awbCode =
+    shipment?.awb ||
+    shipment?.awb_code ||
+    order.awb_data?.awb ||
+    null
+
   return {
-    awbCode: shipment?.awb_code || null,
-    courierName: shipment?.courier_name || null,
+    awbCode: awbCode || null,
+    courierName: shipment?.courier || shipment?.courier_name || null,
     status: shipment?.status || order.status || "NEW",
     shipmentId: shipment?.id || null,
   }
