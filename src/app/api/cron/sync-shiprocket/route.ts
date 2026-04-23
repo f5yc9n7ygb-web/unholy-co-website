@@ -19,12 +19,10 @@ import {
 import { isAuthorizedCron } from "@/lib/server/security"
 import { getShiprocketOrderDetails } from "@/lib/server/shiprocket"
 
-const SYNCABLE_STATUSES = [
-  "Processing",
-  "Shiprocket Failed",
-  "AWB Assigned",
-  "Pickup Requested",
-]
+// Any non-terminal status — once status advances past "AWB Assigned" we still
+// need to keep polling until the AWB is actually present in Airtable, since
+// Shiprocket webhooks often skip the AWB field even in late-stage updates.
+const TERMINAL_STATUSES = ["Delivered", "Cancelled", "RTO Delivered"]
 
 export async function POST(request: NextRequest) {
   if (!isAuthorizedCron(request)) {
@@ -38,9 +36,14 @@ export async function POST(request: NextRequest) {
 
   try {
     // Find payments with a Shiprocket Order ID that haven't reached a terminal state
+    // and still need something synced (either no AWB yet, or no courier yet).
+    const terminalGuard = TERMINAL_STATUSES.map(
+      (s) => `{Shipping Status} != "${s}"`,
+    ).join(", ")
     const formula = `AND(
       {Shiprocket Order ID} != '',
-      OR(${SYNCABLE_STATUSES.map(s => `{Shipping Status} = "${s}"`).join(", ")})
+      ${terminalGuard},
+      OR({AWB Code} = '', {Courier Name} = '')
     )`
 
     const records = await queryAirtableRecords({
@@ -74,8 +77,15 @@ export async function POST(request: NextRequest) {
           updateFields["Courier Name"] = details.courierName
         }
 
-        // Map Shiprocket status to our status labels
-        if (details.awbCode && !currentAwb) {
+        // Only promote status to "AWB Assigned" from pre-AWB states — don't
+        // regress an already-advanced status (Shipped / In Transit / etc.)
+        // back to AWB Assigned just because we backfilled the AWB field.
+        const currentStatus = String(fields["Shipping Status"] || "")
+        if (
+          details.awbCode &&
+          !currentAwb &&
+          (currentStatus === "Processing" || currentStatus === "Shiprocket Failed" || currentStatus === "")
+        ) {
           updateFields["Shipping Status"] = "AWB Assigned"
         }
 

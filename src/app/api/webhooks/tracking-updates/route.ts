@@ -20,6 +20,7 @@ import {
 import { escapeAirtableValue } from "@/lib/server/security"
 import { buildShippingUpdateHtml, buildShippingUpdateText } from "@/lib/email/shipping-update-template"
 import { getKVNamespace } from "@/lib/server/kv"
+import { getShiprocketOrderDetails } from "@/lib/server/shiprocket"
 
 /** Shiprocket sr-status code → human-readable status */
 const STATUS_MAP: Record<number, string> = {
@@ -147,24 +148,25 @@ export async function POST(request: NextRequest) {
     }
 
     const record = records[0]!
+    const fields = record.fields
 
-    // Idempotency: skip if we already processed this exact status event for this record
+    // Idempotency applies to email sends only — Airtable writes are idempotent
+    // assignments and dropping them caused AWBs to go missing when Shiprocket
+    // sent a duplicate status event without the AWB before the one with it.
     const kv = await getKVNamespace()
+    let alreadyEmailed = false
     if (kv && effectiveStatusId) {
       const dedupKey = `sr_evt:${record.id}:${effectiveStatusId}`
-      const already = await kv.get(dedupKey)
-      if (already) {
-        return NextResponse.json({ ok: true, message: "Already processed" })
-      }
-      // Claim this event — 48h TTL is enough to cover any Shiprocket retry window
-      await kv.put(dedupKey, "1", { expirationTtl: 48 * 60 * 60 })
+      alreadyEmailed = Boolean(await kv.get(dedupKey))
     }
-    const fields = record.fields
 
     // Update Airtable with new status
     const updateFields: Record<string, string | number | null> = {
       "Shipping Status": statusLabel,
     }
+
+    let effectiveAwb = awb || String(fields["AWB Code"] || "")
+    let effectiveCourier = courier_name || String(fields["Courier Name"] || "")
 
     if (awb && !fields["AWB Code"]) {
       updateFields["AWB Code"] = awb
@@ -174,6 +176,28 @@ export async function POST(request: NextRequest) {
     }
     if (etd) {
       updateFields["Estimated Delivery"] = etd
+    }
+
+    // Fallback: if the record still lacks an AWB after applying this payload,
+    // fetch it directly from Shiprocket. Shiprocket frequently sends status
+    // updates without the `awb` field, leaving AWB Code empty forever.
+    if (!effectiveAwb) {
+      const shiprocketOrderId = Number(fields["Shiprocket Order ID"])
+      if (shiprocketOrderId) {
+        try {
+          const details = await getShiprocketOrderDetails(shiprocketOrderId)
+          if (details?.awbCode) {
+            updateFields["AWB Code"] = details.awbCode
+            effectiveAwb = details.awbCode
+            if (details.courierName && !effectiveCourier) {
+              updateFields["Courier Name"] = details.courierName
+              effectiveCourier = details.courierName
+            }
+          }
+        } catch (err: any) {
+          console.warn(`Shipping webhook: Shiprocket fallback fetch failed for order ${shiprocketOrderId}: ${err?.message || err}`)
+        }
+      }
     }
 
     // Mark delivered date
@@ -188,12 +212,19 @@ export async function POST(request: NextRequest) {
       fields: updateFields,
     })
 
+    // Claim the idempotency key now that we've applied the update so future
+    // duplicate events skip the email but can still re-sync Airtable.
+    if (kv && effectiveStatusId && !alreadyEmailed) {
+      const dedupKey = `sr_evt:${record.id}:${effectiveStatusId}`
+      await kv.put(dedupKey, "1", { expirationTtl: 48 * 60 * 60 }).catch(() => {})
+    }
+
     // Send email notification for key status changes
     const customerEmail = String(fields["Customer Email"] || "")
     const customerName = String(fields["Customer Name"] || "")
     const orderId = String(fields["Order ID"] || razorpayOrderId || "")
     // Notify on: Shipped(6), In Transit(18), Out for Delivery(17), Delivered(7), Picked Up(42)
-    const shouldNotify = [6, 7, 17, 18, 42].includes(effectiveStatusId || 0)
+    const shouldNotify = [6, 7, 17, 18, 42].includes(effectiveStatusId || 0) && !alreadyEmailed
     const isDelivered = effectiveStatusId === 7
 
     if (shouldNotify && customerEmail) {
@@ -208,8 +239,8 @@ export async function POST(request: NextRequest) {
         html: buildShippingUpdateHtml({
           customerName: customerName.split(" ")[0] || "Customer",
           status: statusLabel,
-          awbCode: awb || String(fields["AWB Code"] || ""),
-          courierName: courier_name || String(fields["Courier Name"] || ""),
+          awbCode: effectiveAwb,
+          courierName: effectiveCourier,
           etd: etd || null,
           trackingUrl,
           isDelivered,
@@ -217,8 +248,8 @@ export async function POST(request: NextRequest) {
         text: buildShippingUpdateText({
           customerName: customerName.split(" ")[0] || "Customer",
           status: statusLabel,
-          awbCode: awb || String(fields["AWB Code"] || ""),
-          courierName: courier_name || String(fields["Courier Name"] || ""),
+          awbCode: effectiveAwb,
+          courierName: effectiveCourier,
           etd: etd || null,
           trackingUrl,
           isDelivered,
