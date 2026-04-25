@@ -24,7 +24,9 @@ type TrackPageProps = {
 export default async function TrackPage({ searchParams }: TrackPageProps) {
   const resolved = (await searchParams) || {}
   const orderParam = resolved.order
-  const initialQuery = Array.isArray(orderParam) ? orderParam[0] : orderParam
+  const idParam = resolved.id
+  const initialQueryParam = orderParam || idParam
+  const initialQuery = Array.isArray(initialQueryParam) ? initialQueryParam[0] : initialQueryParam
 
   return <TrackClient initialQuery={initialQuery || ""} />
 }

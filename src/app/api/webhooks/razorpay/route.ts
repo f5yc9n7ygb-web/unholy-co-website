@@ -29,11 +29,12 @@ import {
 import { buildPaymentFailedHtml, buildPaymentFailedText } from "@/lib/email/payment-failed-template"
 import { getKVNamespace, getExecutionContext } from "@/lib/server/kv"
 import { escapeAirtableValue } from "@/lib/server/security"
-import { claimProcessedPayment, releaseProcessedPayment } from "@/lib/server/order-session"
+import { claimProcessedPayment, readOrderSessionToken, releaseProcessedPayment } from "@/lib/server/order-session"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock } from "@/lib/server/inventory"
 import { incrementPromoUsageByCode } from "@/lib/shop/promo"
 import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
+import { sendMetaPurchaseEvent } from "@/lib/server/meta-capi"
 
 export async function POST(request: NextRequest) {
   try {
@@ -142,6 +143,7 @@ export async function POST(request: NextRequest) {
     if (!(await claimProcessedPayment(paymentId, kv))) {
       return NextResponse.json({ ok: true, message: "Already processed" })
     }
+    const orderSession = readOrderSessionToken(kv ? await kv.get(`os:${orderId}`) : null)
 
     const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
@@ -251,6 +253,25 @@ export async function POST(request: NextRequest) {
         severity: "critical",
       })
     }
+
+    await sendMetaPurchaseEvent({
+      eventId: orderId,
+      value: chargedAmount,
+      currency: "INR",
+      contentIds: [pack.id],
+      contentName: pack.title,
+      numItems: pack.qty,
+      contents: [{ id: pack.id, quantity: 1, item_price: chargedAmount }],
+      customer: {
+        email: orderSession?.shipping.email || customerEmail,
+        phone: orderSession?.shipping.phone || customerPhone,
+        name: orderSession?.shipping.name || customerName,
+        city: orderSession?.shipping.city || shippingCity,
+        state: orderSession?.shipping.state || shippingState,
+        pincode: orderSession?.shipping.pincode || shippingPincode,
+      },
+      attribution: orderSession?.metaAttribution,
+    })
 
     // ── Email dedup: verify endpoint may have already sent the confirmation ──
     const emailDedupKey = `email:confirm:${paymentId}`

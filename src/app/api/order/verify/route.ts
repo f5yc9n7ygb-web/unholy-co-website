@@ -23,6 +23,7 @@ import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock } from "@/lib/server/inventory"
 import { incrementPromoUsage } from "@/lib/shop/promo"
 import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
+import { sendMetaPurchaseEvent } from "@/lib/server/meta-capi"
 
 const RAZORPAY_ORDERS_ENDPOINT = "https://api.razorpay.com/v1/orders"
 const RAZORPAY_PAYMENTS_ENDPOINT = "https://api.razorpay.com/v1/payments"
@@ -197,6 +198,8 @@ export async function POST(request: NextRequest) {
         customerEmail: orderSession.shipping.email,
       }).catch((err) => console.error("Abandoned cart update failed:", err))
 
+      await sendMetaPurchaseForOrder({ orderSession, pack, orderId, chargedAmount })
+
       return createSuccessResponse({
         pack,
         orderId,
@@ -228,6 +231,7 @@ export async function POST(request: NextRequest) {
         orderId,
         customerEmail: orderSession.shipping.email,
       }).catch((err) => console.error("Abandoned cart update failed:", err))
+      await sendMetaPurchaseForOrder({ orderSession, pack, orderId, chargedAmount })
       return createSuccessResponse({
         pack, orderId, chargedAmount,
         shippingName: orderSession.shipping.name,
@@ -385,6 +389,8 @@ export async function POST(request: NextRequest) {
       })
     })
 
+    await sendMetaPurchaseForOrder({ orderSession, pack, orderId, chargedAmount })
+
     return createSuccessResponse({
       pack,
       orderId,
@@ -465,6 +471,32 @@ function createSuccessResponse(options: {
   })
 
   return response
+}
+
+async function sendMetaPurchaseForOrder(options: {
+  orderSession: NonNullable<ReturnType<typeof readOrderSessionToken>>
+  pack: NonNullable<ReturnType<typeof getPackById>>
+  orderId: string
+  chargedAmount: number
+}) {
+  await sendMetaPurchaseEvent({
+    eventId: options.orderId,
+    value: options.chargedAmount,
+    currency: "INR",
+    contentIds: [options.pack.id],
+    contentName: options.pack.title,
+    numItems: options.pack.qty,
+    contents: [{ id: options.pack.id, quantity: 1, item_price: options.chargedAmount }],
+    customer: {
+      email: options.orderSession.shipping.email,
+      phone: options.orderSession.shipping.phone,
+      name: options.orderSession.shipping.name,
+      city: options.orderSession.shipping.city,
+      state: options.orderSession.shipping.state,
+      pincode: options.orderSession.shipping.pincode,
+    },
+    attribution: options.orderSession.metaAttribution,
+  })
 }
 
 async function backfillExistingPaymentRecord(options: {

@@ -16,9 +16,18 @@ type OrderSessionPayload = {
   qty: number
   amount: number
   shipping: ShippingForm
+  metaAttribution?: MetaAttributionData
   promoCode?: string
   promoRecordId?: string
   discountAmount?: number
+}
+
+export type MetaAttributionData = {
+  fbp?: string
+  fbc?: string
+  clientIpAddress?: string
+  clientUserAgent?: string
+  eventSourceUrl?: string
 }
 
 type ReceiptPayload = {

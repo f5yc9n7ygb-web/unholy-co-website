@@ -17,13 +17,31 @@ import {
   validateRequestOrigin,
 } from "@/lib/server/security"
 
+export const dynamic = "force-dynamic"
+
+const NO_STORE_HEADERS = {
+  "Cache-Control": "private, no-store, no-cache, must-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+}
+
+const TERMINAL_SHIPPING_STATUSES = new Set([
+  "delivered",
+  "cancelled",
+  "rto delivered",
+])
+
+function shouldFetchLiveTracking(shippingStatus: string) {
+  return !TERMINAL_SHIPPING_STATUSES.has(shippingStatus.trim().toLowerCase())
+}
+
 async function mapRecordToOrder(record: { fields: Record<string, unknown> }, fetchTracking: boolean) {
   const fields = record.fields
   const awbCode = String(fields["AWB Code"] || "")
   const shippingStatus = String(fields["Shipping Status"] || "Processing")
 
   let tracking = null
-  if (fetchTracking && awbCode && !shippingStatus.toLowerCase().includes("deliver")) {
+  if (fetchTracking && awbCode && shouldFetchLiveTracking(shippingStatus)) {
     try {
       tracking = await trackShipmentByAwb(awbCode)
     } catch {
@@ -135,7 +153,7 @@ export async function POST(request: NextRequest) {
         allRecords.map((record, i) => mapRecordToOrder(record, i < 3))
       )
 
-      return NextResponse.json({ ok: true, orders, mode: "history" })
+      return NextResponse.json({ ok: true, orders, mode: "history" }, { headers: NO_STORE_HEADERS })
     }
 
     // ── Track mode: order ID only (self-authenticating) ──
@@ -162,16 +180,16 @@ export async function POST(request: NextRequest) {
 
     const orders = await Promise.all(records.map((r) => mapRecordToOrder(r, true)))
 
-    return NextResponse.json({ ok: true, orders, mode: "track" })
+    return NextResponse.json({ ok: true, orders, mode: "track" }, { headers: NO_STORE_HEADERS })
   } catch (error: any) {
     console.error("Track API error:", error?.message || error)
     return NextResponse.json(
       { ok: false, error: "Unable to look up the order right now." },
-      { status: 500 }
+      { status: 500, headers: NO_STORE_HEADERS }
     )
   }
 }
 
 export async function GET() {
-  return NextResponse.json({ error: "Method not allowed. Use POST." }, { status: 405 })
+  return NextResponse.json({ error: "Method not allowed. Use POST." }, { status: 405, headers: NO_STORE_HEADERS })
 }

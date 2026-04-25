@@ -272,9 +272,10 @@ export function TrackClient({ initialQuery }: { initialQuery: string }) {
     setTrackError("")
     setTrackOrder(null)
     try {
-      const res = await fetch("/api/order-status", {
+      const res = await fetch("/api/order-lookup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
         body: JSON.stringify({ query: q, mode: "track" }),
       })
       const data = await res.json()
@@ -295,9 +296,10 @@ export function TrackClient({ initialQuery }: { initialQuery: string }) {
     setHistError("")
     setHistOrders([])
     try {
-      const res = await fetch("/api/order-status", {
+      const res = await fetch("/api/order-lookup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
         body: JSON.stringify({ query: email, orderId, mode: "history" }),
       })
       const data = await res.json()

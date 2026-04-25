@@ -12,6 +12,7 @@ import {
   createOrderReceipt,
   createOrderSessionToken,
 } from "@/lib/server/order-session"
+import { getMetaAttributionFromRequest } from "@/lib/server/meta-capi"
 import {
   ORDER_BODY_LIMIT_BYTES,
   checkRateLimit,
@@ -169,6 +170,7 @@ export async function POST(request: NextRequest) {
       qty: pack.qty,
       amount,
       shipping,
+      metaAttribution: getMetaAttributionFromRequest(request),
       promoCode: promoCode || undefined,
       promoRecordId: validatedPromoRecordId || undefined,
       discountAmount: discountAmount || undefined,
