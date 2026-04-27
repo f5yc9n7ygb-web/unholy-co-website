@@ -2,10 +2,10 @@
 
 import Script from "next/script"
 import Image from "next/image"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, MotionConfig } from "framer-motion"
 import { PACKS, type Pack, getGstAmount, getBasePrice } from "@/lib/shop/catalog"
-import { trackPixel } from "@/lib/meta-pixel"
+import { trackPixel, generateEventId } from "@/lib/meta-pixel"
 import type { ShippingForm } from "@/lib/shop/types"
 import { usePageTransition } from "@/context/TransitionContext"
 
@@ -107,6 +107,33 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
     setAppliedPromo(null)
   }, [selected.id])
 
+  // ── Meta Pixel: ViewContent ───────────────────────────────────────────────
+  // Fires once when the shop has settled on its initial pack (default or the
+  // one restored from localStorage). We deliberately do NOT refire on pack
+  // selection change — that interaction is captured by AddToCart on Proceed.
+  // The ref guards against double-fire from React Strict Mode and bfcache.
+  const viewContentFired = useRef(false)
+  useEffect(() => {
+    if (viewContentFired.current) return
+    viewContentFired.current = true
+    trackPixel(
+      "ViewContent",
+      {
+        value: selected.price,
+        currency: "INR",
+        content_ids: [selected.id],
+        content_name: selected.title,
+        content_type: "product",
+        num_items: selected.qty,
+        contents: [{ id: selected.id, quantity: 1, item_price: selected.price }],
+      },
+      generateEventId(),
+    )
+    // Intentionally empty deps — fire once per mount, using whatever pack was
+    // resolved synchronously from PACKS[0] / localStorage on the first render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     if (touched.size === 0) return
     const allErrors = validateForm(form)
@@ -133,15 +160,19 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
       setTouched(new Set(Object.keys(form)))
       return
     }
-    trackPixel("InitiateCheckout", {
-      value: selected.price,
-      currency: "INR",
-      content_ids: [selected.id],
-      content_name: selected.title,
-      content_type: "product",
-      num_items: selected.qty,
-      contents: [{ id: selected.id, quantity: 1, item_price: selected.price }],
-    })
+    trackPixel(
+      "InitiateCheckout",
+      {
+        value: selected.price,
+        currency: "INR",
+        content_ids: [selected.id],
+        content_name: selected.title,
+        content_type: "product",
+        num_items: selected.qty,
+        contents: [{ id: selected.id, quantity: 1, item_price: selected.price }],
+      },
+      generateEventId(),
+    )
     go("review")
   }
 
@@ -261,15 +292,19 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
                 selected={selected}
                 onSelect={setSelected}
                 onContinue={() => {
-                  trackPixel("AddToCart", {
-                    value: selected.price,
-                    currency: "INR",
-                    content_ids: [selected.id],
-                    content_name: selected.title,
-                    content_type: "product",
-                    num_items: selected.qty,
-                    contents: [{ id: selected.id, quantity: 1, item_price: selected.price }],
-                  })
+                  trackPixel(
+                    "AddToCart",
+                    {
+                      value: selected.price,
+                      currency: "INR",
+                      content_ids: [selected.id],
+                      content_name: selected.title,
+                      content_type: "product",
+                      num_items: selected.qty,
+                      contents: [{ id: selected.id, quantity: 1, item_price: selected.price }],
+                    },
+                    generateEventId(),
+                  )
                   go("shipping")
                 }}
               />

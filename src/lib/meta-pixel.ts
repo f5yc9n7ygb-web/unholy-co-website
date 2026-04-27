@@ -62,6 +62,24 @@ export function trackPixel(event: StandardEvent, params?: PixelParams, eventID?:
   }
 }
 
+/**
+ * Generate a unique event ID for browser↔server CAPI deduplication.
+ *
+ * Used for non-Purchase events where we don't already have a stable business
+ * key (Purchase uses `orderId`). Currently ad-hoc — when a CAPI counterpart is
+ * added later, the same ID must be sent server-side via the Conversions API
+ * `event_id` field so Meta can deduplicate.
+ *
+ * Falls back to a timestamp+random string when `crypto.randomUUID` is missing
+ * (older Safari, non-secure contexts). Output is always a non-empty string.
+ */
+export function generateEventId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+  return `evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+}
+
 /** Fire a custom (non-standard) event. */
 export function trackPixelCustom(event: string, params?: PixelParams, eventID?: string): void {
   if (typeof window === "undefined") return

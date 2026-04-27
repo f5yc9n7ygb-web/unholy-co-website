@@ -6,6 +6,32 @@ import { useEffect, useRef, type ReactNode } from "react"
 import { trackPixel } from "@/lib/meta-pixel"
 
 /**
+ * Promote a `?fbclid=` URL param into the `_fbc` cookie so server-side CAPI
+ * has a stable click attribution token even when Meta's pixel script hasn't
+ * yet auto-set the cookie (or is blocked by the user's browser).
+ *
+ * Format per Meta spec: `fb.<subdomain-index>.<unix-timestamp-seconds>.<fbclid>`.
+ * We use subdomain-index `1` (apex domain). 90-day TTL matches Meta default.
+ *
+ * Never overwrites an existing `_fbc` so we don't trample a fresher click ID.
+ */
+function captureFbclidToCookie() {
+  if (typeof window === "undefined" || typeof document === "undefined") return
+  try {
+    const fbclid = new URL(window.location.href).searchParams.get("fbclid")
+    if (!fbclid) return
+    const existing = document.cookie.split("; ").find((row) => row.startsWith("_fbc="))
+    if (existing) return
+    const value = `fb.1.${Math.floor(Date.now() / 1000)}.${fbclid}`
+    const maxAge = 60 * 60 * 24 * 90 // 90 days
+    const secure = window.location.protocol === "https:" ? "; Secure" : ""
+    document.cookie = `_fbc=${value}; Max-Age=${maxAge}; Path=/; SameSite=Lax${secure}`
+  } catch {
+    /* never let attribution code break the page */
+  }
+}
+
+/**
  * Meta Pixel (Facebook Pixel) provider.
  *
  * Loads the pixel base code once (gated by NEXT_PUBLIC_META_PIXEL_ID) and
@@ -16,6 +42,12 @@ export function MetaPixelProvider({ children }: { children: ReactNode }) {
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID
   const pathname = usePathname()
   const lastPath = useRef<string | null>(null)
+
+  // Run once on mount — independent of the pixel env var so attribution is
+  // captured even if the Pixel itself is blocked.
+  useEffect(() => {
+    captureFbclidToCookie()
+  }, [])
 
   useEffect(() => {
     if (!pixelId) return
