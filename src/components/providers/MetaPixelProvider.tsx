@@ -13,15 +13,16 @@ import { trackPixel } from "@/lib/meta-pixel"
  * Format per Meta spec: `fb.<subdomain-index>.<unix-timestamp-seconds>.<fbclid>`.
  * We use subdomain-index `1` (apex domain). 90-day TTL matches Meta default.
  *
- * Never overwrites an existing `_fbc` so we don't trample a fresher click ID.
+ * Always overwrites when the URL carries an `fbclid` — the URL value is by
+ * definition the freshest click ID, and Meta's own Pixel script behaves the
+ * same way. Skipping the overwrite would let a stale prior fbclid linger for
+ * up to 90 days and misattribute the conversion.
  */
 function captureFbclidToCookie() {
   if (typeof window === "undefined" || typeof document === "undefined") return
   try {
     const fbclid = new URL(window.location.href).searchParams.get("fbclid")
     if (!fbclid) return
-    const existing = document.cookie.split("; ").find((row) => row.startsWith("_fbc="))
-    if (existing) return
     const value = `fb.1.${Math.floor(Date.now() / 1000)}.${fbclid}`
     const maxAge = 60 * 60 * 24 * 90 // 90 days
     const secure = window.location.protocol === "https:" ? "; Secure" : ""

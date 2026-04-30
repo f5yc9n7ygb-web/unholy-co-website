@@ -61,7 +61,23 @@ const STEPS: Step[] = ["select", "shipping", "review"]
 export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   const { navigate } = usePageTransition()
   const [step, setStep] = useState<Step>("select")
-  const [selected, setSelected] = useState<Pack>(PACKS[0])
+  // Lazy-init from localStorage so the first render — and any effects that
+  // close over `selected` (notably the ViewContent fire below) — already see
+  // the restored pack for returning users.
+  const [selected, setSelected] = useState<Pack>(() => {
+    if (typeof window === "undefined") return PACKS[0]
+    try {
+      const saved = localStorage.getItem("unholy_cart")
+      if (saved) {
+        const data = JSON.parse(saved)
+        if (data.packId) {
+          const pack = PACKS.find((p) => p.id === data.packId)
+          if (pack) return pack
+        }
+      }
+    } catch { /* ignore corrupt data */ }
+    return PACKS[0]
+  })
   const [loading, setLoading] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null)
@@ -73,16 +89,14 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
 
   const key = razorpayKey
 
-  // ── Persist cart selection & shipping in localStorage ──
+  // ── Hydrate shipping form from localStorage ──
+  // Pack selection is lazy-initialized in useState above, so this only
+  // restores the shipping form fields.
   useEffect(() => {
     try {
       const saved = localStorage.getItem("unholy_cart")
       if (saved) {
         const data = JSON.parse(saved)
-        if (data.packId) {
-          const pack = PACKS.find((p) => p.id === data.packId)
-          if (pack) setSelected(pack)
-        }
         if (data.shipping) {
           setForm((prev) => ({ ...prev, ...data.shipping }))
         }
@@ -129,8 +143,10 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
       },
       generateEventId(),
     )
-    // Intentionally empty deps — fire once per mount, using whatever pack was
-    // resolved synchronously from PACKS[0] / localStorage on the first render.
+    // Intentionally empty deps — fire once per mount. `selected` is resolved
+    // synchronously in the useState lazy initializer above (PACKS[0] or the
+    // pack restored from localStorage), so this closure has the correct pack
+    // even for returning users.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
