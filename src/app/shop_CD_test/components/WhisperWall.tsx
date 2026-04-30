@@ -6,9 +6,8 @@ import Image from "next/image"
 /**
  * Beat 7 — the Whisper Wall.
  *
- * A masonry of captions from the cult. No photos yet (brand is pre-launch),
- * so we use typographic "postcards" — handwritten-style captions on dark
- * cards with a blood-red seal. Replace with real UGC photography as it lands.
+ * A masonry of use cases. Until real UGC is available, these are framed as
+ * intended moments, not customer testimonials.
  *
  * When photos ship, swap the CaptionCard body for <Image /> with a polaroid
  * frame and the caption becomes a bottom-overlay.
@@ -22,12 +21,12 @@ type Whisper = {
 }
 
 const WHISPERS: Whisper[] = [
-  { city: "MUMBAI", caption: "studio, 3am, deadline. this got me there.", mood: "night", initials: "A.R." },
-  { city: "BANGALORE", caption: "post-workout. nothing else tasted real after this.", mood: "gym", initials: "P.K." },
-  { city: "DELHI", caption: "dj booth, 4 sets deep. the cold kept me standing.", mood: "bar", initials: "S.M." },
-  { city: "GOA", caption: "morning after. cures things no lemonade can.", mood: "hotel", initials: "N.J." },
-  { city: "PUNE", caption: "desk water. now the only water on the desk.", mood: "desk", initials: "R.V." },
-  { city: "HYDERABAD", caption: "the can alone is worth the subscription.", mood: "ritual", initials: "D.T." },
+  { city: "NIGHT SHIFT", caption: "cold hydration for edits, decks, sets, and deadlines that run past midnight.", mood: "night", initials: "01" },
+  { city: "GYM BAG", caption: "zero sugar, 500ml, and a can that does not look like everyone else's bottle.", mood: "gym", initials: "02" },
+  { city: "BAR KIT", caption: "premium still water that looks intentional on a table, console, or backstage crate.", mood: "bar", initials: "03" },
+  { city: "HOTEL ROOM", caption: "mineral water for the morning after, the late check-in, and the blacked-out minibar.", mood: "hotel", initials: "04" },
+  { city: "DESK WATER", caption: "a daily object with enough edge to stay on the desk instead of hiding in a drawer.", mood: "desk", initials: "05" },
+  { city: "DROP TABLE", caption: "built for limited batches, event fridges, gifting crates, and after-dark rituals.", mood: "ritual", initials: "06" },
 ]
 
 const moodStyle: Record<Whisper["mood"], string> = {
@@ -51,11 +50,11 @@ export function WhisperWall() {
           className="mb-14 max-w-2xl md:mb-20"
         >
           <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.5em] text-blood/70 md:text-[11px]">
-            // whispers from the cult
+            // where it belongs
           </p>
           <h2 className="font-cinzel text-3xl font-black uppercase leading-[0.95] text-offwhite md:text-5xl">
-            They don't talk.<br />
-            <span className="text-blood">They whisper.</span>
+            Built for<br />
+            <span className="text-blood">after dark.</span>
           </h2>
         </motion.div>
 
@@ -90,7 +89,7 @@ export function WhisperWall() {
                 className="font-cinzel text-xl leading-snug text-offwhite/90 md:text-2xl"
                 style={{ fontStyle: "italic", fontWeight: 400 }}
               >
-                "{w.caption}"
+                {w.caption}
               </p>
 
               {/* Tiny can */}
@@ -125,7 +124,7 @@ export function WhisperWall() {
           transition={{ duration: 0.8, delay: 0.4 }}
           className="mt-10 text-center font-mono text-[10px] uppercase tracking-[0.35em] text-bone/30 md:text-[11px]"
         >
-          // unsolicited. initials used with consent.
+          // real customer photos belong here once the first batch lands.
         </motion.p>
       </div>
     </section>

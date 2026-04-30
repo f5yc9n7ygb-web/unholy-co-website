@@ -5,26 +5,25 @@ import { motion } from "framer-motion"
 /**
  * Beat 6 — the Rites.
  *
- * Three guarantees, reframed as rites of passage. Extreme risk reversal
- * ("return empty cans") is the conversion-critical one — it says the
- * brand is so sure of the product that the ask is preposterous.
+ * Three checkout assurances, reframed as rites of passage.
+ * Copy stays aligned with the site's legal/refund policy.
  */
 
 const RITES = [
   {
     mark: "I",
-    title: "RITE OF COLD",
-    body: "Delivered in insulated crates at 2°C. Crack one within the hour. If it's not cold on arrival, we replace the pack — no photos, no forms.",
+    title: "RITE OF DISPATCH",
+    body: "Orders are packed for transit and dispatched quickly after payment verification. You get order confirmation and tracking as the shipment moves.",
   },
   {
     mark: "II",
-    title: "RITE OF TASTE",
-    body: "One pour. One judgement. If the mountain doesn't deliver, we refund the pack in 48 hours. Keep the remaining cans. Your call.",
+    title: "RITE OF DAMAGE",
+    body: "If your pack arrives damaged, incomplete, or materially incorrect, contact support within 48 hours with your order details for replacement or refund review.",
   },
   {
     mark: "III",
-    title: "RITE OF RETURN",
-    body: "Didn't feel it? Return the empty cans with your address. We refund the pack. The only water brand in India that'll take back empties.",
+    title: "RITE OF CLARITY",
+    body: "Prices include GST, shipping is free across India, and Razorpay handles secure payment through UPI, cards, net banking, and wallets.",
   },
 ]
 
@@ -52,11 +51,10 @@ export function Rites() {
           </p>
           <h2 className="font-cinzel text-3xl font-black uppercase leading-[0.95] text-offwhite md:text-5xl">
             Three promises.<br />
-            <span className="text-blood">All of them extreme.</span>
+            <span className="text-blood">Built for checkout.</span>
           </h2>
           <p className="mt-5 text-sm text-bone/50 md:text-base">
-            We're the only premium water brand in India that takes back empty cans for a refund.
-            We can afford to be this confident.
+            The ritual stays theatrical. The order terms stay clear.
           </p>
         </motion.div>
 

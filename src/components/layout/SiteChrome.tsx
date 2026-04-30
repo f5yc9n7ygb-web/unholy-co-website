@@ -17,6 +17,10 @@ export function SiteChrome({ children }: SiteChromeProps) {
   const pathname = usePathname()
 
   const standalone = STANDALONE.some((r) => pathname === r || pathname.startsWith(r + "/"))
+  const suppressInitiationPopup =
+    pathname === "/shop" ||
+    pathname.startsWith("/shop/") ||
+    pathname === "/shop_CD_test"
 
   return (
     <>
@@ -25,7 +29,7 @@ export function SiteChrome({ children }: SiteChromeProps) {
         {children}
       </main>
       {!standalone && <Footer />}
-      {!standalone && <InitiationPopup />}
+      {!standalone && !suppressInitiationPopup && <InitiationPopup />}
     </>
   )
 }

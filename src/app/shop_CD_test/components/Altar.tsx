@@ -1,31 +1,23 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import Image from "next/image"
 import { motion, useScroll, useTransform } from "framer-motion"
 
 /**
  * Beat 1 — the Altar.
  *
- * A cinematic pre-fold intro: black screen, a horizontal red rift opens,
- * the can fades in, a batch counter ticks quietly in the corner.
+ * A cinematic pre-fold intro: black screen, soft red altar glow,
+ * the can fades in, and the buying path is immediately visible.
  *
- * No CTAs above the fold. The user self-selects by scrolling past.
+ * Above-fold CTAs let cold buyers choose a pack or jump to checkout.
  */
 export function Altar({
-  batchClaimed,
-  batchTotal,
+  onChoosePack,
+  onCheckout,
 }: {
-  batchClaimed: number
-  batchTotal: number
+  onChoosePack: () => void
+  onCheckout: () => void
 }) {
-  const [riftReady, setRiftReady] = useState(false)
-
-  useEffect(() => {
-    const t = setTimeout(() => setRiftReady(true), 320)
-    return () => clearTimeout(t)
-  }, [])
-
   const { scrollY } = useScroll()
   // Subtle parallax as user scrolls past
   const canY = useTransform(scrollY, [0, 800], [0, -140])
@@ -43,7 +35,7 @@ export function Altar({
         }}
       />
 
-      {/* Batch counter — top left, quiet */}
+      {/* Batch signal — top left, quiet */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -53,10 +45,8 @@ export function Altar({
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blood" />
         <span>Batch 001</span>
         <span className="text-bone/20">·</span>
-        <span className="tabular-nums">
-          {batchClaimed.toLocaleString()} / {batchTotal.toLocaleString()}
-        </span>
-        <span className="hidden text-bone/40 sm:inline">claimed</span>
+        <span className="tabular-nums">Limited run</span>
+        <span className="hidden text-bone/40 sm:inline">ships across India</span>
       </motion.div>
 
       {/* Scroll hint — top right */}
@@ -71,26 +61,22 @@ export function Altar({
       </motion.div>
 
       <div className="relative flex min-h-screen flex-col items-center justify-center px-4">
-        {/* The rift */}
+        {/* Vertical altar glow behind the can */}
         <motion.div
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-[2px] -translate-x-1/2 -translate-y-1/2"
-          initial={{ scaleX: 0, opacity: 0, width: "0%" }}
-          animate={
-            riftReady
-              ? { scaleX: 1, opacity: 1, width: "120%" }
-              : { scaleX: 0, opacity: 0, width: "0%" }
-          }
+          className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-[560px] w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+          initial={{ scale: 0.78, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
           transition={{
-            width: { duration: 0.9, ease: [0.16, 1, 0.3, 1] },
-            scaleX: { duration: 0.9, ease: [0.16, 1, 0.3, 1] },
-            opacity: { duration: 0.3 },
+            scale: { duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.25 },
+            opacity: { duration: 0.7, delay: 0.25 },
           }}
           style={{
             background:
-              "linear-gradient(90deg, transparent 0%, rgba(176,0,32,0.8) 15%, rgba(255,255,255,0.95) 50%, rgba(176,0,32,0.8) 85%, transparent 100%)",
+              "radial-gradient(ellipse at 50% 55%, rgba(176,0,32,0.42) 0%, rgba(176,0,32,0.16) 38%, transparent 72%)",
             boxShadow:
-              "0 0 50px rgba(176,0,32,0.8), 0 0 120px rgba(176,0,32,0.4), 0 0 240px rgba(176,0,32,0.15)",
+              "0 0 90px rgba(176,0,32,0.28), inset 0 0 80px rgba(176,0,32,0.16)",
+            filter: "blur(16px)",
           }}
         />
 
@@ -156,6 +142,41 @@ export function Altar({
             Himalayan mineral water. Cold-forged. Zero sugar. Zero plastic.<br className="hidden md:inline" />
             <span className="text-bone/35">Sold in batches. Delivered across India.</span>
           </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 2.25 }}
+            className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
+          >
+            <button
+              type="button"
+              onClick={onChoosePack}
+              className="w-full rounded-xl bg-blood px-7 py-3.5 font-cinzel text-xs font-black uppercase tracking-[0.25em] text-white shadow-[0_0_40px_rgba(176,0,32,0.45)] transition-transform hover:scale-[1.02] sm:w-auto"
+            >
+              Choose pack
+            </button>
+            <button
+              type="button"
+              onClick={onCheckout}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-7 py-3.5 font-cinzel text-xs font-bold uppercase tracking-[0.25em] text-bone transition-colors hover:border-blood/50 hover:text-offwhite sm:w-auto"
+            >
+              Checkout
+            </button>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 2.45 }}
+            className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 font-mono text-[9px] uppercase tracking-[0.25em] text-bone/35 md:text-[10px]"
+          >
+            <span>From ₹169/can</span>
+            <span className="h-1 w-1 rounded-full bg-bone/20" />
+            <span>Free shipping</span>
+            <span className="h-1 w-1 rounded-full bg-bone/20" />
+            <span>GST included</span>
+          </motion.div>
         </motion.div>
       </div>
 

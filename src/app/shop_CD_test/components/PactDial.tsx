@@ -23,22 +23,28 @@ const RITES: Record<string, { rite: string; subtitle: string }> = {
 }
 
 // Pre-computed can constellation positions for each pack size.
-// Radial clusters behind the hero can, in viewport-relative units.
+// Mirrored columns keep the pack visual balanced on both sides of the hero can.
 // Each entry: [x%, y%, depth 0..1 (controls scale/blur)]
 function buildConstellation(qty: number): Array<[number, number, number]> {
-  const seed = qty * 9973
   const points: Array<[number, number, number]> = []
   const count = Math.min(qty - 1, 18) // cap at 18 satellites for perf
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2 + (seed % 7) * 0.01
-    const ring = Math.floor(i / 6)
-    const radius = 140 + ring * 70 + ((seed + i * 131) % 40)
-    const jitterY = ((seed + i * 271) % 50) - 25
-    const x = Math.cos(angle) * radius
-    const y = Math.sin(angle) * radius * 0.55 + jitterY
-    const depth = 0.45 + ring * 0.22 + ((i * 37) % 15) / 100
-    points.push([x, y, Math.min(depth, 0.92)])
+  const yLanes = [-170, -60, 70, 175, -245, 245, 10, -125, 130]
+  const pairCount = Math.floor(count / 2)
+
+  for (let i = 0; i < pairCount; i++) {
+    const ring = Math.floor(i / 3)
+    const spread = 150 + ring * 78 + (i % 3) * 24
+    const y = yLanes[i % yLanes.length] + ring * 12
+    const depth = Math.min(0.88, 0.5 + ring * 0.13 + (i % 3) * 0.05)
+
+    points.push([-spread, y, depth])
+    points.push([spread, y + (i % 2 === 0 ? 24 : -24), Math.max(0.45, depth - 0.04)])
   }
+
+  if (count % 2 === 1) {
+    points.push([0, -225, 0.48])
+  }
+
   return points
 }
 
@@ -46,10 +52,12 @@ export function PactDial({
   selected,
   onSelect,
   appliedDiscount = 0,
+  onCheckout,
 }: {
   selected: Pack
   onSelect: (pack: Pack) => void
   appliedDiscount?: number
+  onCheckout?: () => void
 }) {
   const selectedIndex = PACKS.findIndex((p) => p.id === selected.id)
   const constellation = useMemo(() => buildConstellation(selected.qty), [selected.qty])
@@ -202,13 +210,13 @@ export function PactDial({
           <div className="relative px-2 md:px-8">
             {/* Rail */}
             <div
-              className="pointer-events-none absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gradient-to-r from-transparent via-white/15 to-transparent"
+              className="pointer-events-none absolute left-0 right-0 top-[26px] h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
               aria-hidden="true"
             />
 
             {/* Active segment fill */}
             <motion.div
-              className="pointer-events-none absolute top-1/2 h-[2px] -translate-y-1/2 rounded-full bg-gradient-to-r from-blood/60 via-blood to-blood/60"
+              className="pointer-events-none absolute top-[25px] h-[2px] rounded-full bg-gradient-to-r from-blood/60 via-blood to-blood/60"
               style={{
                 left: `${8}%`,
                 boxShadow: "0 0 12px rgba(176,0,32,0.7)",
@@ -332,6 +340,16 @@ export function PactDial({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {onCheckout && (
+            <button
+              type="button"
+              onClick={onCheckout}
+              className="mt-8 rounded-xl bg-blood px-8 py-4 font-cinzel text-xs font-black uppercase tracking-[0.25em] text-white shadow-[0_0_44px_rgba(176,0,32,0.45)] transition-transform hover:scale-[1.02] md:text-sm"
+            >
+              Continue to checkout
+            </button>
+          )}
         </div>
       </div>
     </section>

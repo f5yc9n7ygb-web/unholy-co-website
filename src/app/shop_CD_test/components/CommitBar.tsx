@@ -20,6 +20,7 @@ export function CommitBar({
   onSeal: () => void
 }) {
   const [visible, setVisible] = useState(false)
+  const [inputFocused, setInputFocused] = useState(false)
 
   useEffect(() => {
     const onScroll = () => {
@@ -31,11 +32,25 @@ export function CommitBar({
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
 
+  useEffect(() => {
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null
+      setInputFocused(!!target?.matches("input, textarea, select"))
+    }
+    const onFocusOut = () => setInputFocused(false)
+    document.addEventListener("focusin", onFocusIn)
+    document.addEventListener("focusout", onFocusOut)
+    return () => {
+      document.removeEventListener("focusin", onFocusIn)
+      document.removeEventListener("focusout", onFocusOut)
+    }
+  }, [])
+
   const total = selected.price - appliedDiscount
 
   return (
     <AnimatePresence>
-      {visible && (
+      {visible && !inputFocused && (
         <motion.div
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -74,7 +89,7 @@ export function CommitBar({
               </div>
               <div className="min-w-0">
                 <div className="truncate font-cinzel text-[10px] uppercase tracking-[0.25em] text-blood/70 md:text-[11px]">
-                  {selected.qty} cans · batch 001
+                  {selected.qty} cans · checkout ready
                 </div>
                 <div className="flex items-baseline gap-2">
                   <RollingPrice
@@ -97,13 +112,13 @@ export function CommitBar({
               style={{
                 boxShadow: "0 0 30px rgba(176,0,32,0.45), inset 0 1px 0 rgba(255,255,255,0.2)",
               }}
-              aria-label={`Seal the pact for ₹${total}`}
+              aria-label={`Checkout for ₹${total}`}
             >
               <span
                 className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full"
                 aria-hidden="true"
               />
-              <span className="relative">Seal</span>
+              <span className="relative">Checkout</span>
               <svg
                 aria-hidden="true"
                 className="relative h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5 md:h-4 md:w-4"

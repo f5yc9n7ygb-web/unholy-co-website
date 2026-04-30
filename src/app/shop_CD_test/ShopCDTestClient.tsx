@@ -4,7 +4,7 @@ import Script from "next/script"
 import { useEffect, useRef, useState } from "react"
 import { MotionConfig } from "framer-motion"
 import { PACKS, type Pack } from "@/lib/shop/catalog"
-import { trackPixel } from "@/lib/meta-pixel"
+import { trackPixel, generateEventId } from "@/lib/meta-pixel"
 import type { ShippingForm } from "@/lib/shop/types"
 import { usePageTransition } from "@/context/TransitionContext"
 
@@ -12,7 +12,6 @@ import { Altar } from "./components/Altar"
 import { ProductFilm } from "./components/ProductFilm"
 import { AnchorLine } from "./components/AnchorLine"
 import { PactDial } from "./components/PactDial"
-import { PactMeter } from "./components/PactMeter"
 import { Rites } from "./components/Rites"
 import { WhisperWall } from "./components/WhisperWall"
 import { Seal, type FormErrors } from "./components/Seal"
@@ -41,21 +40,19 @@ function validateForm(form: ShippingForm): FormErrors {
   return errors
 }
 
-const BATCH_TOTAL = 1000
-/** Stable SSR baseline — client drifts upward after mount to avoid hydration mismatch. */
-const BATCH_BASELINE = 847
-
-/** Deterministic pseudo-live claimed count: drifts upward over time. */
-function computeBatchClaimed() {
-  const baseEpoch = new Date("2026-04-15T00:00:00.000Z").getTime()
-  const hoursSince = Math.max(0, (Date.now() - baseEpoch) / (1000 * 60 * 60))
-  const drift = Math.floor(hoursSince * 1.4)
-  return Math.min(BATCH_TOTAL - 12, 720 + drift)
+export type AppliedPromo = {
+  code: string
+  discountType: "percentage" | "flat"
+  discountValue: number
+  discountAmount: number
+  finalPrice: number
+  promoRecordId: string
 }
 
 export function ShopCDTestClient({ razorpayKey }: { razorpayKey?: string }) {
   const { navigate } = usePageTransition()
   const sealRef = useRef<HTMLElement>(null)
+  const addToCartPackRef = useRef<string | null>(null)
 
   const [selected, setSelected] = useState<Pack>(
     PACKS.find((p) => p.id === "pack12") || PACKS[0]
@@ -75,11 +72,7 @@ export function ShopCDTestClient({ razorpayKey }: { razorpayKey?: string }) {
   const [loading, setLoading] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
   const [wax, setWax] = useState(false)
-
-  const [batchClaimed, setBatchClaimed] = useState<number>(BATCH_BASELINE)
-  useEffect(() => {
-    setBatchClaimed(computeBatchClaimed())
-  }, [])
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null)
 
   // ── Persist selection + shipping in localStorage (share key with /shop) ──
   useEffect(() => {
@@ -136,18 +129,49 @@ export function ShopCDTestClient({ razorpayKey }: { razorpayKey?: string }) {
   const handleSelect = (pack: Pack) => {
     if (pack.id === selected.id) return
     setSelected(pack)
-    trackPixel("ViewContent", {
-      value: pack.price,
-      currency: "INR",
-      content_ids: [pack.id],
-      content_name: pack.title,
-      content_type: "product",
-      num_items: pack.qty,
-    })
+    setAppliedPromo(null)
+    addToCartPackRef.current = null
+    trackPixel(
+      "ViewContent",
+      {
+        value: pack.price,
+        currency: "INR",
+        content_ids: [pack.id],
+        content_name: pack.title,
+        content_type: "product",
+        num_items: pack.qty,
+      },
+      generateEventId(),
+    )
+  }
+
+  const effectiveTotal = appliedPromo ? appliedPromo.finalPrice : selected.price
+
+  const trackAddToCart = () => {
+    if (addToCartPackRef.current === selected.id) return
+    addToCartPackRef.current = selected.id
+    trackPixel(
+      "AddToCart",
+      {
+        value: effectiveTotal,
+        currency: "INR",
+        content_ids: [selected.id],
+        content_name: selected.title,
+        content_type: "product",
+        num_items: selected.qty,
+        contents: [{ id: selected.id, quantity: 1, item_price: effectiveTotal }],
+      },
+      generateEventId(),
+    )
   }
 
   const scrollToSeal = () => {
+    trackAddToCart()
     sealRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  const scrollToPacks = () => {
+    document.getElementById("pact-dial")?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
 
   const onSeal = async () => {
@@ -167,15 +191,19 @@ export function ShopCDTestClient({ razorpayKey }: { razorpayKey?: string }) {
       return
     }
 
-    trackPixel("InitiateCheckout", {
-      value: selected.price,
-      currency: "INR",
-      content_ids: [selected.id],
-      content_name: selected.title,
-      content_type: "product",
-      num_items: selected.qty,
-      contents: [{ id: selected.id, quantity: 1, item_price: selected.price }],
-    })
+    trackPixel(
+      "InitiateCheckout",
+      {
+        value: effectiveTotal,
+        currency: "INR",
+        content_ids: [selected.id],
+        content_name: selected.title,
+        content_type: "product",
+        num_items: selected.qty,
+        contents: [{ id: selected.id, quantity: 1, item_price: effectiveTotal }],
+      },
+      generateEventId(),
+    )
 
     setWax(true)
     setPayError(null)
@@ -190,6 +218,8 @@ export function ShopCDTestClient({ razorpayKey }: { razorpayKey?: string }) {
         body: JSON.stringify({
           packId: selected.id,
           shipping: form,
+          promoCode: appliedPromo?.code || undefined,
+          promoRecordId: appliedPromo?.promoRecordId || undefined,
         }),
       })
       const data = await res.json()
@@ -261,13 +291,16 @@ export function ShopCDTestClient({ razorpayKey }: { razorpayKey?: string }) {
       />
 
       <main className="relative z-10 bg-black text-offwhite">
-        <Altar batchClaimed={batchClaimed} batchTotal={BATCH_TOTAL} />
-        <ProductFilm />
+        <Altar onChoosePack={scrollToPacks} onCheckout={scrollToSeal} />
+        <PactDial
+          selected={selected}
+          onSelect={handleSelect}
+          appliedDiscount={appliedPromo?.discountAmount || 0}
+          onCheckout={scrollToSeal}
+        />
         <AnchorLine />
-        <PactDial selected={selected} onSelect={handleSelect} />
-        <PactMeter claimed={batchClaimed} total={BATCH_TOTAL} />
+        <ProductFilm />
         <Rites />
-        <WhisperWall />
         <Seal
           ref={sealRef}
           selected={selected}
@@ -275,14 +308,22 @@ export function ShopCDTestClient({ razorpayKey }: { razorpayKey?: string }) {
           errors={errors}
           loading={loading}
           payError={payError}
+          appliedPromo={appliedPromo}
+          onApplyPromo={setAppliedPromo}
+          onRemovePromo={() => setAppliedPromo(null)}
           onChange={updateField}
           onBlur={blurField}
           onSeal={onSeal}
           wax={wax}
         />
+        <WhisperWall />
       </main>
 
-      <CommitBar selected={selected} onSeal={scrollToSeal} />
+      <CommitBar
+        selected={selected}
+        appliedDiscount={appliedPromo?.discountAmount || 0}
+        onSeal={scrollToSeal}
+      />
     </MotionConfig>
   )
 }
