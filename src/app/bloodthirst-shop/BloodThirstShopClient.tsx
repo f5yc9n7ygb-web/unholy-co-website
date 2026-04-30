@@ -2,7 +2,7 @@
 
 import Script from "next/script"
 import dynamic from "next/dynamic"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Lenis from "lenis"
 import { MotionConfig, motion, useScroll } from "framer-motion"
 
@@ -22,7 +22,15 @@ const RitualScene = dynamic(
 
 export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string }) {
   const checkout = useRitualCheckout({ razorpayKey })
+  const [previewClose, setPreviewClose] = useState(false)
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const sp = new URLSearchParams(window.location.search)
+    setPreviewClose(sp.get("preview") === "close")
+  }, [])
+
   const pageRef = useRef<HTMLDivElement>(null)
+  const offerRef = useRef<HTMLDivElement>(null)
   const [isMobile, setIsMobile] = useState(false)
   const [reduceMotion, setReduceMotion] = useState(false)
 
@@ -71,17 +79,22 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
   }, [reduceMotion])
 
   // ── On sealed: jump to top, play close phase, then auto-redirect after a beat ──
+  // NOTE: only depend on isSealed — checkout is recreated each render and would re-fire.
+  const goToReceipt = checkout.goToReceipt
+  const isSealed = checkout.isSealed
   useEffect(() => {
-    if (!checkout.isSealed) return
+    if (!isSealed) return
     window.scrollTo({ top: 0, behavior: "instant" })
-    const t = setTimeout(() => {
-      checkout.goToReceipt()
-    }, 12000)
+    const t = setTimeout(() => goToReceipt(), 12000)
     return () => clearTimeout(t)
-  }, [checkout.isSealed, checkout])
+  }, [isSealed, goToReceipt])
 
-  // ── Sealed view: only the close phase, no scroll story ──
-  if (checkout.isSealed) {
+  const skipToOffer = () => {
+    offerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  // ── Sealed (post-payment) OR preview mode → only the close phase ──
+  if (isSealed || previewClose) {
     return (
       <MotionConfig reducedMotion="user">
         <Script
@@ -90,10 +103,24 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
         />
         <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a]">
           <BackgroundGlow />
+          <RitualCursor />
+          <MinimalHeader />
           <PhaseClose
             selected={checkout.selected}
-            form={checkout.form}
-            onContinue={checkout.goToReceipt}
+            form={
+              previewClose
+                ? {
+                    name: "Marked, Anonymous",
+                    email: "you@unholy.co",
+                    phone: "",
+                    address: "Address on file",
+                    city: "Bombay",
+                    pincode: "400001",
+                    state: "Maharashtra",
+                  }
+                : checkout.form
+            }
+            onContinue={previewClose ? () => history.back() : goToReceipt}
           />
         </div>
       </MotionConfig>
@@ -122,35 +149,37 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
         />
       </div>
 
-      {/* Top vignette so copy stays legible over the scene */}
+      {/* Soft edge vignette — gentle, doesn't drown the can */}
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0 z-[6]"
         style={{
           background:
-            "radial-gradient(ellipse 80% 60% at 50% 50%, transparent 30%, rgba(10,10,10,0.5) 75%, rgba(10,10,10,0.85) 100%)",
+            "radial-gradient(ellipse 110% 80% at 50% 50%, transparent 55%, rgba(10,10,10,0.55) 95%)",
         }}
       />
 
       {/* Minimal header — logo only, no nav */}
-      <MinimalHeader />
+      <MinimalHeader onSkip={skipToOffer} />
 
       {/* Scroll spine */}
       <div ref={pageRef} className="relative z-10">
-        <PhaseArrival />
+        <PhaseArrival onSkip={skipToOffer} />
         <PhaseDescent />
         <PhaseProof />
-        <PhaseOffer
-          selected={checkout.selected}
-          onSelect={checkout.selectPack}
-          form={checkout.form}
-          errors={checkout.errors}
-          onChange={checkout.updateField}
-          onBlur={checkout.blurField}
-          onSign={checkout.sign}
-          isSubmitting={checkout.isSubmitting}
-          payError={checkout.payError}
-        />
+        <div ref={offerRef}>
+          <PhaseOffer
+            selected={checkout.selected}
+            onSelect={checkout.selectPack}
+            form={checkout.form}
+            errors={checkout.errors}
+            onChange={checkout.updateField}
+            onBlur={checkout.blurField}
+            onSign={checkout.sign}
+            isSubmitting={checkout.isSubmitting}
+            payError={checkout.payError}
+          />
+        </div>
 
         {/* Bottom whisper — page closes, doesn't end */}
         <footer className="relative z-10 border-t border-bone/10 px-6 py-12 text-center">
@@ -163,8 +192,8 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
   )
 }
 
-/* ─── Minimal header — logo only, sits above the scene ─── */
-function MinimalHeader() {
+/* ─── Minimal header — logo + skip-to-offer link ─── */
+function MinimalHeader({ onSkip }: { onSkip?: () => void }) {
   return (
     <header className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex items-center justify-between px-6 py-5 md:px-10">
       <a
@@ -174,9 +203,21 @@ function MinimalHeader() {
       >
         UNHOLY CO.
       </a>
-      <span className="pointer-events-auto font-mono text-[9px] uppercase tracking-[0.45em] text-bone/40">
-        BloodThirst
-      </span>
+      <div className="pointer-events-auto flex items-center gap-6">
+        {onSkip && (
+          <button
+            data-rune
+            onClick={onSkip}
+            className="hidden items-center gap-2 font-mono text-[10px] uppercase tracking-[0.4em] text-bone/45 transition-colors hover:text-blood md:inline-flex"
+          >
+            <span>or just buy</span>
+            <span className="inline-block h-px w-5 bg-bone/40 transition-all duration-300 hover:w-8 hover:bg-blood" />
+          </button>
+        )}
+        <span className="font-mono text-[9px] uppercase tracking-[0.45em] text-bone/40">
+          BloodThirst
+        </span>
+      </div>
     </header>
   )
 }
