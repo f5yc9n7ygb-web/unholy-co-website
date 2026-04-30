@@ -7,7 +7,7 @@ import { Footer } from "./Footer"
 import { InitiationPopup } from "@/components/ux/InitiationPopup"
 
 // Routes that render without the site header + footer (client-side navigation)
-const STANDALONE = ["/teaser"]
+const STANDALONE = ["/teaser", "/bloodthirst-shop"]
 
 interface SiteChromeProps {
   children: ReactNode
