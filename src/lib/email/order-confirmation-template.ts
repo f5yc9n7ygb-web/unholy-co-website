@@ -134,7 +134,7 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
                 Track Your Order
               </a>
               <div style="margin-top:14px;">
-                <a href="https://theunholy.co/api/invoice/${encodeURIComponent(o.orderId)}" style="font-size:11px; color:${textMuted}; text-decoration:underline;">
+                <a href="https://theunholy.co/api/invoice/${encodeURIComponent(o.orderId)}?email=${encodeURIComponent(o.customerEmail)}" style="font-size:11px; color:${textMuted}; text-decoration:underline;">
                   Download GST Invoice (PDF)
                 </a>
               </div>
@@ -197,7 +197,7 @@ TRACK YOUR ORDER
 https://theunholy.co/track?order=${o.orderId}
 
 DOWNLOAD GST INVOICE
-https://theunholy.co/api/invoice/${o.orderId}
+https://theunholy.co/api/invoice/${o.orderId}?email=${encodeURIComponent(o.customerEmail)}
 
 Questions? rituals@theunholy.co
 
