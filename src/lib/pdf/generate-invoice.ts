@@ -92,9 +92,11 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   const basePrice = getBasePrice(amount)
   const gstAmount = getGstAmount(amount)
 
-  // Determine if interstate (IGST) or intra-state (CGST+SGST)
+  // Determine if interstate (IGST) or intra-state (CGST+SGST).
+  // Default to interstate when state is unknown — CGST+SGST only applies when
+  // the buyer is confirmed to be in UP (code "09").
   const buyerStateCode = shippingState ? getStateCode(shippingState) : ""
-  const isInterstate = buyerStateCode !== "" && buyerStateCode !== SUPPLIER_STATE_CODE
+  const isInterstate = buyerStateCode !== SUPPLIER_STATE_CODE
 
   // Original price before discount (for display)
   const originalAmount = discountAmount ? amount + discountAmount : amount
