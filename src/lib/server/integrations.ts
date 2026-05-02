@@ -131,13 +131,16 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
     return;
   }
 
-  // Assign a sequential invoice number and persist it to Airtable
+  const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID");
+
+  // Assign a sequential invoice number, persist it to Airtable, and capture
+  // the record ID + whether a PDF attachment already exists (for idempotency).
   let invoiceSeq: number | undefined;
+  let paymentRecordId: string | undefined;
+  let hasExistingPdf = false;
   try {
-    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID");
     invoiceSeq = await getNextInvoiceSeq(ordersBaseId);
 
-    // Find the payment record and store the invoice number
     const paymentRecords = await queryAirtableRecords({
       baseId: ordersBaseId,
       tableName: "Payments",
@@ -145,10 +148,13 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
       maxRecords: 1,
     });
     if (paymentRecords.length > 0) {
+      paymentRecordId = paymentRecords[0]!.id;
+      const existingAttachments = paymentRecords[0]!.fields["Invoice PDF"];
+      hasExistingPdf = Array.isArray(existingAttachments) && existingAttachments.length > 0;
       await updateAirtableRecord({
         baseId: ordersBaseId,
         tableName: "Payments",
-        recordId: paymentRecords[0]!.id,
+        recordId: paymentRecordId,
         fields: { "Invoice Number": invoiceSeq },
       });
     }
@@ -156,7 +162,8 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
     console.error("Invoice sequence assignment failed:", err);
   }
 
-  // Generate invoice PDF to attach
+  // Generate invoice PDF — attach to the email and store on the Airtable record
+  // so the finance team can download it directly from Airtable.
   let attachments: MailjetAttachment[] = [];
   try {
     const pdfBytes = await generateInvoicePdf({
@@ -190,6 +197,21 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
       Filename: `UNHOLY-Invoice-${options.orderId}.pdf`,
       Base64Content: base64Pdf,
     }];
+
+    // Upload to the Payments record so the finance team can access invoices
+    // directly from Airtable without going through the customer-facing API.
+    // Skipped when an attachment already exists so retries stay idempotent.
+    if (paymentRecordId && !hasExistingPdf) {
+      await uploadAttachmentToAirtableRecord({
+        baseId: ordersBaseId,
+        tableName: "Payments",
+        recordId: paymentRecordId,
+        fieldName: "Invoice PDF",
+        fileBytes: pdfBytes,
+        filename: `UNHOLY-Invoice-${options.orderId}.pdf`,
+        contentType: "application/pdf",
+      }).catch((err) => console.error("Invoice Airtable attachment failed (non-blocking):", err));
+    }
   } catch (err) {
     // Don't block the email if PDF generation fails
     console.error("Invoice PDF generation failed, sending email without attachment:", err);
@@ -394,7 +416,9 @@ export async function logErrorToAirtable(context: string, error: unknown, option
 
 export type AirtableRecord = {
   id: string;
-  fields: AirtableFields;
+  // Unknown values because Airtable can return attachment arrays and other
+  // complex types that don't fit the write-side AirtableFields primitives.
+  fields: Record<string, unknown>;
 };
 
 export async function queryAirtableRecords(options: {
@@ -452,6 +476,45 @@ export async function updateAirtableRecord(options: {
   if (!response.ok) {
     const message = await response.text();
     throw new Error(`Airtable update error (${response.status}): ${message}`);
+  }
+}
+
+/* ─── Airtable Attachment Upload ─── */
+
+/**
+ * Upload a file directly to an Airtable attachment field via the content
+ * upload API. Uses the table/field name (not IDs) so no schema look-up is
+ * needed. Throws on non-2xx so callers can decide whether to swallow errors.
+ */
+async function uploadAttachmentToAirtableRecord(options: {
+  baseId: string
+  tableName: string
+  recordId: string
+  fieldName: string
+  fileBytes: Uint8Array
+  filename: string
+  contentType: string
+}): Promise<void> {
+  const token = getRequiredEnv("AIRTABLE_TOKEN")
+  const url = `${AIRTABLE_ENDPOINT}/${options.baseId}/${encodeURIComponent(options.tableName)}/${options.recordId}/${encodeURIComponent(options.fieldName)}/uploadAttachment`
+
+  const formData = new FormData()
+  formData.append(
+    "file",
+    new Blob([options.fileBytes], { type: options.contentType }),
+    options.filename,
+  )
+  formData.append("filename", options.filename)
+
+  const response = await fetchWithAirtableRetry(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const message = await response.text()
+    throw new Error(`Airtable attachment upload error (${response.status}): ${message}`)
   }
 }
 

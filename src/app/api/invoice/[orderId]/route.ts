@@ -68,13 +68,45 @@ export async function GET(
       return NextResponse.json({ error: "Order not found" }, { status: 404 })
     }
 
-    const fields = records[0]!.fields
+    const record = records[0]!
+    const fields = record.fields
 
     // Verify the requester is the order's customer
     const orderEmail = String(fields["Customer Email"] || "").toLowerCase().trim()
     if (!orderEmail || orderEmail !== emailParam) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 })
     }
+
+    // Serve from the pre-generated attachment stored on the Airtable record when
+    // available — avoids redundant PDF generation on every download request.
+    // Airtable returns a fresh signed URL on each record query so expiry is not
+    // a concern. Falls through to on-demand generation on any fetch failure.
+    const rawAttachments = fields["Invoice PDF"]
+    if (Array.isArray(rawAttachments) && rawAttachments.length > 0) {
+      const attachmentUrl = (rawAttachments[0] as { url?: string })?.url
+      if (attachmentUrl) {
+        try {
+          const cached = await fetch(attachmentUrl, {
+            cache: "no-store",
+            signal: AbortSignal.timeout(8000),
+          })
+          if (cached.ok) {
+            const pdfBuffer = await cached.arrayBuffer()
+            return new Response(pdfBuffer as any, {
+              status: 200,
+              headers: {
+                "Content-Type": "application/pdf",
+                "Content-Disposition": `attachment; filename="UNHOLY-Invoice-${orderId}.pdf"`,
+                "Cache-Control": "private, no-store, no-cache, must-revalidate",
+              },
+            })
+          }
+        } catch {
+          // Timeout or transient network error — fall through to on-demand generation
+        }
+      }
+    }
+
     const invoiceSeq = Number(fields["Invoice Number"] || 0) || undefined
     const pdfBytes = await generateInvoicePdf({
       orderId,
