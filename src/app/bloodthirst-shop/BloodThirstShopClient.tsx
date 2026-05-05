@@ -4,7 +4,7 @@ import Script from "next/script"
 import dynamic from "next/dynamic"
 import { useEffect, useRef, useState } from "react"
 import Lenis from "lenis"
-import { MotionConfig, motion, useScroll } from "framer-motion"
+import { AnimatePresence, MotionConfig, motion, useScroll } from "framer-motion"
 
 import { useRitualCheckout } from "./hooks/useRitualCheckout"
 import { PhaseArrival } from "./components/PhaseArrival"
@@ -20,6 +20,17 @@ const RitualScene = dynamic(
   { ssr: false }
 )
 
+/** Preview form used when ?preview=close — lets you see the finale without paying */
+const PREVIEW_FORM = {
+  name: "Marked, Anonymous",
+  email: "you@unholy.co",
+  phone: "",
+  address: "Address on file",
+  city: "Bombay",
+  pincode: "400001",
+  state: "Maharashtra",
+}
+
 export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string }) {
   const checkout = useRitualCheckout({ razorpayKey })
   const [previewClose, setPreviewClose] = useState(false)
@@ -33,6 +44,9 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
   const offerRef = useRef<HTMLDivElement>(null)
   const [isMobile, setIsMobile] = useState(false)
   const [reduceMotion, setReduceMotion] = useState(false)
+
+  const isSealed = checkout.isSealed
+  const sealing = isSealed || previewClose
 
   // ── scroll progress as a ref the R3F scene reads each frame ──
   const scrollProgress = useRef(0)
@@ -63,7 +77,7 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
   useEffect(() => {
     if (typeof window === "undefined") return
     const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches
-    if (isTouch || reduceMotion) return
+    if (isTouch || reduceMotion || sealing) return
 
     const lenis = new Lenis({ duration: 1.1, smoothWheel: true })
     let raf = 0
@@ -76,55 +90,28 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
       cancelAnimationFrame(raf)
       lenis.destroy()
     }
-  }, [reduceMotion])
+  }, [reduceMotion, sealing])
 
-  // ── On sealed: jump to top, play close phase, then auto-redirect after a beat ──
-  // NOTE: only depend on isSealed — checkout is recreated each render and would re-fire.
+  // ── On seal: jump to top, lock body scroll while finale plays ──
+  useEffect(() => {
+    if (!sealing) return
+    window.scrollTo({ top: 0, behavior: "instant" })
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = ""
+    }
+  }, [sealing])
+
+  // ── Auto-redirect to receipt 12s after the finale begins ──
   const goToReceipt = checkout.goToReceipt
-  const isSealed = checkout.isSealed
   useEffect(() => {
     if (!isSealed) return
-    window.scrollTo({ top: 0, behavior: "instant" })
     const t = setTimeout(() => goToReceipt(), 12000)
     return () => clearTimeout(t)
   }, [isSealed, goToReceipt])
 
   const skipToOffer = () => {
     offerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-  }
-
-  // ── Sealed (post-payment) OR preview mode → only the close phase ──
-  if (isSealed || previewClose) {
-    return (
-      <MotionConfig reducedMotion="user">
-        <Script
-          src="https://checkout.razorpay.com/v1/checkout.js"
-          strategy="afterInteractive"
-        />
-        <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a]">
-          <BackgroundGlow />
-          <RitualCursor />
-          <MinimalHeader />
-          <PhaseClose
-            selected={checkout.selected}
-            form={
-              previewClose
-                ? {
-                    name: "Marked, Anonymous",
-                    email: "you@unholy.co",
-                    phone: "",
-                    address: "Address on file",
-                    city: "Bombay",
-                    pincode: "400001",
-                    state: "Maharashtra",
-                  }
-                : checkout.form
-            }
-            onContinue={previewClose ? () => history.back() : goToReceipt}
-          />
-        </div>
-      </MotionConfig>
-    )
   }
 
   return (
@@ -140,12 +127,13 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
       <div className="fixed inset-0 z-0 bg-[#0a0a0a]" aria-hidden />
       <BackgroundGlow />
 
-      {/* 3D ritual scene — fixed full-viewport, transparent canvas */}
+      {/* 3D ritual scene — stays mounted across the seal so the finale can play */}
       <div className="pointer-events-none fixed inset-0 z-[5]">
         <RitualScene
           scrollProgress={scrollProgress}
           isMobile={isMobile}
           premium={!reduceMotion}
+          sealed={sealing}
         />
       </div>
 
@@ -159,35 +147,95 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
         }}
       />
 
-      {/* Minimal header — logo only, no nav */}
-      <MinimalHeader onSkip={skipToOffer} />
-
-      {/* Scroll spine */}
-      <div ref={pageRef} className="relative z-10">
-        <PhaseArrival onSkip={skipToOffer} />
-        <PhaseDescent />
-        <PhaseProof />
-        <div ref={offerRef}>
-          <PhaseOffer
-            selected={checkout.selected}
-            onSelect={checkout.selectPack}
-            form={checkout.form}
-            errors={checkout.errors}
-            onChange={checkout.updateField}
-            onBlur={checkout.blurField}
-            onSign={checkout.sign}
-            isSubmitting={checkout.isSubmitting}
-            payError={checkout.payError}
+      {/* Sigil-bloom flash — fires once when the seal begins, sits over the dissolve */}
+      <AnimatePresence>
+        {sealing && (
+          <motion.div
+            key="bloom"
+            aria-hidden
+            initial={{ opacity: 0, scale: 0.4 }}
+            animate={{ opacity: [0, 0.7, 0], scale: [0.4, 1.1, 1.4] }}
+            transition={{ duration: 1.6, times: [0, 0.4, 1], delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="pointer-events-none fixed inset-0 z-[7]"
+            style={{
+              background:
+                "radial-gradient(circle at 50% 50%, rgba(230,57,86,0.55) 0%, rgba(176,0,32,0.25) 28%, transparent 60%)",
+              mixBlendMode: "screen",
+            }}
           />
-        </div>
+        )}
+      </AnimatePresence>
 
-        {/* Bottom whisper — page closes, doesn't end */}
-        <footer className="relative z-10 border-t border-bone/10 px-6 py-12 text-center">
-          <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-bone/35">
-            {FOOTNOTE}
-          </p>
-        </footer>
-      </div>
+      {/* Minimal header — hidden during seal */}
+      <AnimatePresence>
+        {!sealing && (
+          <motion.div
+            key="header"
+            initial={false}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            <MinimalHeader onSkip={skipToOffer} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Scroll spine — fades + blurs out when seal begins */}
+      <AnimatePresence>
+        {!sealing && (
+          <motion.div
+            key="spine"
+            ref={pageRef}
+            initial={false}
+            exit={{ opacity: 0, filter: "blur(8px)" }}
+            transition={{ duration: 0.5 }}
+            className="relative z-10"
+          >
+            <PhaseArrival onSkip={skipToOffer} />
+            <PhaseDescent />
+            <PhaseProof />
+            <div ref={offerRef}>
+              <PhaseOffer
+                selected={checkout.selected}
+                onSelect={checkout.selectPack}
+                form={checkout.form}
+                errors={checkout.errors}
+                onChange={checkout.updateField}
+                onBlur={checkout.blurField}
+                onSign={checkout.sign}
+                isSubmitting={checkout.isSubmitting}
+                payError={checkout.payError}
+              />
+            </div>
+
+            <footer className="relative z-10 border-t border-bone/10 px-6 py-12 text-center">
+              <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-bone/35">
+                {FOOTNOTE}
+              </p>
+            </footer>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* PhaseClose — fades in AFTER the can dissolves (~1.3s) */}
+      <AnimatePresence>
+        {sealing && (
+          <motion.div
+            key="close"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.3, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed inset-0 z-[20] overflow-y-auto"
+          >
+            <MinimalHeader />
+            <PhaseClose
+              selected={checkout.selected}
+              form={previewClose ? PREVIEW_FORM : checkout.form}
+              onContinue={previewClose ? () => history.back() : goToReceipt}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </MotionConfig>
   )
 }
