@@ -468,9 +468,15 @@ function FinaleBurst({
 }
 
 function SceneTone() {
-  const { gl } = useThree()
-  gl.toneMapping = THREE.ACESFilmicToneMapping
-  gl.toneMappingExposure = 1.15
+  const { gl, size } = useThree()
+  useEffect(() => {
+    gl.toneMapping = THREE.ACESFilmicToneMapping
+    // Wider canvases catch more dark portions of the env map reflected on the
+    // can sides — bump exposure on ultrawide aspects so iridescence stays bright.
+    const aspect = size.width / Math.max(size.height, 1)
+    const wideBoost = Math.min(0.17, Math.max(0, (aspect - 1.6) * 0.12))
+    gl.toneMappingExposure = 1.15 + wideBoost
+  }, [gl, size.width, size.height])
   return null
 }
 
@@ -581,7 +587,7 @@ export function RitualScene({
       camera={{ position: [0.1, 0.18, 4.6], fov: 32 }}
       gl={{ antialias: true, alpha: true }}
       style={{ background: "transparent" }}
-      dpr={isMobile ? [1, 1.5] : [1, 1.85]}
+      dpr={isMobile ? [1, 1.5] : [1.25, 2]}
     >
       <SceneTone />
       <CameraRig
