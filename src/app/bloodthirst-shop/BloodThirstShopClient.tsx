@@ -2,6 +2,7 @@
 
 import Script from "next/script"
 import dynamic from "next/dynamic"
+import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import Lenis from "lenis"
 import gsap from "gsap"
@@ -275,13 +276,13 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
 function MinimalHeader({ onSkip }: { onSkip?: () => void }) {
   return (
     <header className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex items-center justify-between px-6 py-5 md:px-10">
-      <a
+      <Link
         href="/"
         data-rune
         className="pointer-events-auto font-cinzel text-xs font-black uppercase tracking-[0.45em] text-offwhite/85 transition-colors hover:text-offwhite"
       >
         UNHOLY CO.
-      </a>
+      </Link>
       <div className="pointer-events-auto flex items-center gap-6">
         {onSkip && (
           <button

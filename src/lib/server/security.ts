@@ -15,7 +15,6 @@ type RateLimitRecord = {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __unholyRateLimitStore: Map<string, RateLimitRecord> | undefined
 }
 

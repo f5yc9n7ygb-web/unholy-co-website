@@ -48,9 +48,9 @@ export function PhaseProof() {
               </span>
               <div>
                 <blockquote className="font-cinzel text-[clamp(1.4rem,3.5vw,2.8rem)] font-black uppercase leading-[1.05] tracking-[-0.005em] text-offwhite">
-                  <span className="text-blood/70">"</span>
+                  <span className="text-blood/70">&quot;</span>
                   {line.quote}
-                  <span className="text-blood/70">"</span>
+                  <span className="text-blood/70">&quot;</span>
                 </blockquote>
                 <div className="mt-3 flex items-center gap-3">
                   <span className="h-px w-10 bg-blood/60 transition-all duration-500 group-hover:w-16" />

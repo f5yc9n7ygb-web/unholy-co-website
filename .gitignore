@@ -18,6 +18,7 @@ out/
 # Cloudflare / tooling
 .wrangler/
 functions/.wrangler/
+open-next.config.ts
 
 # OS / editor
 .DS_Store
@@ -25,9 +26,27 @@ functions/.wrangler/
 .vscode/
 .claude/
 
-# Local zips or exports
+# Agent/tool output
+.agent/
+.agents/
+skills-lock.json
+seo-audit-output/
+
+# Local zips, reports, or exports
 *.zip
 lighthouse-report.json
-open-next.config.ts
 plan.md
 *.tsbuildinfo
+ACTUAL_FIX_SUMMARY.md
+CACHE_PURGE_GUIDE.md
+CLOUDFLARE_ENV_SETUP.md
+COMPLETE_FIX_GUIDE.md
+CRITICAL_ENV_SETUP.md
+DEPLOYMENT_FIX.md
+DEPLOYMENT_VERIFICATION.md
+ENV_VARS_FIX.md
+FINAL_SUMMARY.md
+FIX_BLANK_PAGE.md
+FIX_SUMMARY.md
+QUICK_FIX_SUMMARY.md
+VERIFICATION_GUIDE.md
