@@ -474,6 +474,55 @@ function SceneTone() {
   return null
 }
 
+/* ─── Iridescence hue-shift — Phase 3 (Proof) gives the label a different sheen ─── */
+
+function IridescenceShift({
+  scrollProgress,
+  materialBag,
+}: {
+  scrollProgress: React.RefObject<number>
+  materialBag: React.MutableRefObject<MaterialBag>
+}) {
+  const smooth = useRef(0)
+
+  useFrame((_, raw) => {
+    const dt = clampDelta(raw)
+    const p = scrollProgress.current ?? 0
+    smooth.current = THREE.MathUtils.lerp(smooth.current, p, 1 - Math.exp(-8 * dt))
+
+    // Bell curve peaking at the middle of Phase 3 (0.40–0.55)
+    // Outside the range, weight = 0 → defaults preserved.
+    const center = 0.475
+    const halfWidth = 0.075
+    const dist = Math.abs(smooth.current - center) / halfWidth
+    const weight = Math.max(0, 1 - dist) // triangular bell, peak 1 at center
+
+    const mats = materialBag.current?.list
+    if (!mats) return
+
+    // Default iridescence baked in CanModel: 0.45, IOR 1.6, thickness [120, 720]
+    // Proof peak: push iridescence higher, IOR shifts to 1.85 (different rainbow band),
+    // thickness range tightens for a more pronounced sheen.
+    const irid = 0.45 + weight * 0.30        // 0.45 → 0.75
+    const ior = 1.6 + weight * 0.25          // 1.6 → 1.85
+    const thicknessMin = 120 + weight * 60   // 120 → 180
+    const thicknessMax = 720 + weight * 240  // 720 → 960
+
+    for (let i = 0; i < mats.length; i++) {
+      const m = mats[i] as THREE.MeshPhysicalMaterial
+      if (m.iridescence === undefined) continue // standard material — skip
+      m.iridescence = irid
+      m.iridescenceIOR = ior
+      if (m.iridescenceThicknessRange) {
+        m.iridescenceThicknessRange[0] = thicknessMin
+        m.iridescenceThicknessRange[1] = thicknessMax
+      }
+    }
+  })
+
+  return null
+}
+
 /* ─── Public Scene ─── */
 
 export type RitualSceneProps = {
@@ -557,6 +606,11 @@ export function RitualScene({
         finaleRef={finaleRef}
         materialBag={materialBag}
       />
+
+      {/* Iridescence shifts subtly during Phase 3 (Proof) */}
+      {premium && !isMobile && (
+        <IridescenceShift scrollProgress={scrollProgress} materialBag={materialBag} />
+      )}
 
       {!isMobile && <AmbientParticles count={500} />}
       {isMobile && <AmbientParticles count={150} />}

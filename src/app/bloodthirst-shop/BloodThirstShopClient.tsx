@@ -4,6 +4,8 @@ import Script from "next/script"
 import dynamic from "next/dynamic"
 import { useEffect, useRef, useState } from "react"
 import Lenis from "lenis"
+import gsap from "gsap"
+import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { AnimatePresence, MotionConfig, motion, useScroll } from "framer-motion"
 
 import { useRitualCheckout } from "./hooks/useRitualCheckout"
@@ -73,22 +75,35 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
     return () => mq.removeEventListener("change", update)
   }, [])
 
-  // ── Lenis smooth scroll (desktop only — touch already smooth) ──
+  // ── Lenis smooth scroll + GSAP ScrollTrigger sharing one scroll source ──
   useEffect(() => {
     if (typeof window === "undefined") return
     const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches
-    if (isTouch || reduceMotion || sealing) return
+    if (reduceMotion || sealing) return
+
+    gsap.registerPlugin(ScrollTrigger)
+
+    // On touch, skip Lenis but still register ScrollTrigger so descent pinning works
+    if (isTouch) {
+      ScrollTrigger.refresh()
+      return () => {
+        ScrollTrigger.getAll().forEach((t) => t.kill())
+      }
+    }
 
     const lenis = new Lenis({ duration: 1.1, smoothWheel: true })
-    let raf = 0
-    const tick = (t: number) => {
-      lenis.raf(t)
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
+    // Drive ScrollTrigger off Lenis so pin / scrub stay in sync
+    lenis.on("scroll", ScrollTrigger.update)
+    const tickerCb = (time: number) => lenis.raf(time * 1000)
+    gsap.ticker.add(tickerCb)
+    gsap.ticker.lagSmoothing(0)
+
+    ScrollTrigger.refresh()
+
     return () => {
-      cancelAnimationFrame(raf)
+      gsap.ticker.remove(tickerCb)
       lenis.destroy()
+      ScrollTrigger.getAll().forEach((t) => t.kill())
     }
   }, [reduceMotion, sealing])
 

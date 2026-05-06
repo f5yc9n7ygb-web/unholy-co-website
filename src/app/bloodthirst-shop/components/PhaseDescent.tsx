@@ -1,7 +1,9 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import { motion, useScroll, useTransform } from "framer-motion"
-import { useRef } from "react"
+import gsap from "gsap"
+import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { DESCENT_CARDS } from "@/content/bloodthirst"
 import { DamnationFacts } from "./DamnationFacts"
 
@@ -10,8 +12,12 @@ import { DamnationFacts } from "./DamnationFacts"
  *
  * Three full-viewport scroll panels, alternating sides so the copy never
  * sits over the same area of the can as it orbits. A persistent vertical
- * depth meter on the side tracks scroll progress through the descent —
- * makes it feel like an actual descent.
+ * depth meter on the side tracks scroll progress through the descent.
+ *
+ * Each panel uses GSAP ScrollTrigger with scrub, so the inner content
+ * actively fades / scales in tied to scroll position — content "snaps
+ * into focus" as the user scrolls past each panel and then dismisses
+ * before the next one takes over.
  */
 export function PhaseDescent() {
   const ref = useRef<HTMLElement>(null)
@@ -76,57 +82,75 @@ function DescentPanel({
   const isFacts = index === 2
   const align = side === "right" ? "md:ml-auto md:mr-8 lg:mr-20" : "md:ml-8 md:mr-auto lg:ml-20"
 
+  const panelRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // GSAP ScrollTrigger — scrub the inner content so it snaps into focus
+  // as the user enters the panel, holds, then snaps out before the next.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const panel = panelRef.current
+    const content = contentRef.current
+    if (!panel || !content) return
+
+    gsap.registerPlugin(ScrollTrigger)
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: panel,
+          start: "top bottom",
+          end: "bottom top",
+          scrub: 1,
+        },
+      })
+      // Phase: appear → hold → dismiss across the panel's scroll range.
+      // Numbers are timeline positions (0..1 with sum=1).
+      tl.fromTo(
+        content,
+        { opacity: 0, y: 60, filter: "blur(10px)", scale: 0.96 },
+        { opacity: 1, y: 0, filter: "blur(0px)", scale: 1, duration: 0.35, ease: "power2.out" }
+      )
+        .to(content, { opacity: 1, y: 0, duration: 0.35 })
+        .to(
+          content,
+          { opacity: 0, y: -60, filter: "blur(8px)", scale: 0.96, duration: 0.3, ease: "power2.in" },
+          ">"
+        )
+    }, panel)
+
+    return () => ctx.revert()
+  }, [])
+
   return (
-    <div className="relative flex h-screen w-full items-center">
+    <div ref={panelRef} className="relative flex h-screen w-full items-center">
       <div className="mx-auto w-full max-w-7xl px-6">
         <div
+          ref={contentRef}
           className={`relative max-w-md ${align} ${
             side === "right" ? "md:text-right" : "md:text-left"
           }`}
+          style={{ willChange: "opacity, transform, filter" }}
         >
-          {/* Index counter */}
-          <motion.p
-            initial={{ opacity: 0, y: 14 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.45 }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className="font-mono text-[10px] uppercase tracking-[0.45em] text-blood/80"
-          >
+          <p className="font-mono text-[10px] uppercase tracking-[0.45em] text-blood/80">
             {card.eyebrow}
             <span className="mx-2 text-bone/30">·</span>
             <span className="text-bone/40">
               {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
             </span>
-          </motion.p>
+          </p>
 
-          <motion.h2
-            initial={{ opacity: 0, y: 22, filter: "blur(8px)" }}
-            whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            viewport={{ once: true, amount: 0.45 }}
-            transition={{ delay: 0.12, duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-5 font-cinzel text-[clamp(1.6rem,3.6vw,3rem)] font-black uppercase leading-[1.05] tracking-[-0.005em] text-offwhite"
-          >
+          <h2 className="mt-5 font-cinzel text-[clamp(1.6rem,3.6vw,3rem)] font-black uppercase leading-[1.05] tracking-[-0.005em] text-offwhite">
             {card.line}
-          </motion.h2>
+          </h2>
 
-          <motion.p
-            initial={{ opacity: 0, y: 14 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.45 }}
-            transition={{ delay: 0.22, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-4 max-w-sm text-base leading-relaxed text-bone/65 md:max-w-md md:text-lg"
-          >
+          <p className="mt-4 max-w-sm text-base leading-relaxed text-bone/65 md:max-w-md md:text-lg">
             {card.body}
-          </motion.p>
+          </p>
 
-          {/* Brutalist rule */}
-          <motion.div
-            initial={{ scaleX: 0 }}
-            whileInView={{ scaleX: 1 }}
-            viewport={{ once: true, amount: 0.45 }}
-            transition={{ delay: 0.3, duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-            className={`mt-7 h-px w-24 origin-left bg-blood/60 ${
-              side === "right" ? "md:ml-auto md:origin-right" : "md:origin-left"
+          <div
+            className={`mt-7 h-px w-24 bg-blood/60 ${
+              side === "right" ? "md:ml-auto" : ""
             }`}
           />
 
