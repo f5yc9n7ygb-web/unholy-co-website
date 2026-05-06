@@ -5,7 +5,6 @@ import {
   buildAbandonedCartEmail2Html, buildAbandonedCartEmail2Text,
   type AbandonedCartEmailOptions,
 } from "@/lib/email/abandoned-cart-templates";
-import { Buffer } from "node:buffer";
 import { generateInvoicePdf } from "@/lib/pdf/generate-invoice";
 
 type AirtableOptions = {
@@ -43,6 +42,7 @@ type MailjetOptions = {
 };
 
 const AIRTABLE_ENDPOINT = "https://api.airtable.com/v0";
+const AIRTABLE_CONTENT_ENDPOINT = "https://content.airtable.com/v0";
 const MAILJET_ENDPOINT = "https://api.mailjet.com/v3.1/send";
 
 const defaultTableName = process.env.AIRTABLE_TABLE_NAME || "signups";
@@ -204,7 +204,6 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
     if (paymentRecordId && !hasExistingPdf) {
       await uploadAttachmentToAirtableRecord({
         baseId: ordersBaseId,
-        tableName: "Payments",
         recordId: paymentRecordId,
         fieldName: "Invoice PDF",
         fileBytes: pdfBytes,
@@ -483,12 +482,10 @@ export async function updateAirtableRecord(options: {
 
 /**
  * Upload a file directly to an Airtable attachment field via the content
- * upload API. Uses the table/field name (not IDs) so no schema look-up is
- * needed. Throws on non-2xx so callers can decide whether to swallow errors.
+ * upload API. Throws on non-2xx so callers can decide whether to swallow errors.
  */
 async function uploadAttachmentToAirtableRecord(options: {
   baseId: string
-  tableName: string
   recordId: string
   fieldName: string
   fileBytes: Uint8Array
@@ -496,26 +493,33 @@ async function uploadAttachmentToAirtableRecord(options: {
   contentType: string
 }): Promise<void> {
   const token = getRequiredEnv("AIRTABLE_TOKEN")
-  const url = `${AIRTABLE_ENDPOINT}/${options.baseId}/${encodeURIComponent(options.tableName)}/${options.recordId}/${encodeURIComponent(options.fieldName)}/uploadAttachment`
-
-  const formData = new FormData()
-  formData.append(
-    "file",
-    new Blob([options.fileBytes], { type: options.contentType }),
-    options.filename,
-  )
-  formData.append("filename", options.filename)
+  const url = `${AIRTABLE_CONTENT_ENDPOINT}/${options.baseId}/${options.recordId}/${encodeURIComponent(options.fieldName)}/uploadAttachment`
 
   const response = await fetchWithAirtableRetry(url, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contentType: options.contentType,
+      filename: options.filename,
+      file: uint8ToBase64(options.fileBytes),
+    }),
   })
 
   if (!response.ok) {
     const message = await response.text()
     throw new Error(`Airtable attachment upload error (${response.status}): ${message}`)
   }
+}
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = ""
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
 }
 
 /* ─── Invoice Sequence Helper ─── */
@@ -539,21 +543,24 @@ export async function getNextInvoiceSeq(ordersBaseId: string): Promise<number> {
   const fyStartDate = `${fyStart}-04-01T00:00:00.000Z`;
   const fyEndDate = `${fyStart + 1}-04-01T00:00:00.000Z`;
 
-  const seedFromAirtable = async (): Promise<number> => {
+  const maxInvoiceSeqFromAirtable = async (): Promise<number> => {
     const records = await queryAirtableRecords({
       baseId: ordersBaseId,
       tableName: "Payments",
       filterByFormula: `AND(IS_AFTER({Timestamp}, "${fyStartDate}"), IS_BEFORE({Timestamp}, "${fyEndDate}"), {Invoice Number} != "")`,
       maxRecords: 1000,
     });
-    return records.length;
+    return records.reduce((max, record) => {
+      const seq = Number(record.fields["Invoice Number"] || 0);
+      return Number.isFinite(seq) && seq > max ? seq : max;
+    }, 0);
   };
 
   const { getKVNamespace } = await import("@/lib/server/kv");
   const kv = await getKVNamespace();
   if (!kv) {
     // Local dev: best-effort, non-atomic (acceptable since not GST-critical locally)
-    return (await seedFromAirtable()) + 1;
+    return (await maxInvoiceSeqFromAirtable()) + 1;
   }
 
   const counterKey = `invoice-seq:${fyLabel}`;
@@ -581,12 +588,14 @@ export async function getNextInvoiceSeq(ordersBaseId: string): Promise<number> {
 
   try {
     const rawCounter = await kv.get(counterKey);
-    let current = rawCounter ? Number(rawCounter) : NaN;
-    if (!Number.isFinite(current)) {
-      // First call of the FY — seed from Airtable so we don't restart at 1
-      // if an earlier deploy wrote numbers directly.
-      current = await seedFromAirtable();
-    }
+    const kvCurrent = rawCounter ? Number(rawCounter) : 0;
+    // Always compare KV against Airtable so a stale KV counter can never issue
+    // a duplicate after manual repairs or backfills.
+    const airtableCurrent = await maxInvoiceSeqFromAirtable();
+    const current = Math.max(
+      Number.isFinite(kvCurrent) ? kvCurrent : 0,
+      airtableCurrent,
+    );
     const next = current + 1;
     // FY counters never expire during the FY; give them 400 days to cover rollover.
     await kv.put(counterKey, String(next), { expirationTtl: 400 * 24 * 60 * 60 });
