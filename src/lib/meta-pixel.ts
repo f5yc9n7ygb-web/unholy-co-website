@@ -30,13 +30,11 @@ type PixelParams = {
   content_category?: string
   contents?: Array<{ id: string; quantity: number; item_price?: number }>
   num_items?: number
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any
 }
 
 declare global {
   interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fbq?: ((...args: any[]) => void) & { callMethod?: (...args: unknown[]) => void; queue?: unknown[]; loaded?: boolean }
     _fbq?: unknown
   }

@@ -33,10 +33,10 @@ export const metadata: Metadata = {
  * Shows a countdown page until launch on April 2nd 1:00 PM IST.
  */
 export default function ShopPage() {
-  // TODO: TESTING BYPASS — restore launch gate before deploy!
-  // if (new Date() < LAUNCH_DATE) {
-  //   return <ShopClosedClient />
-  // }
+  if (new Date() < LAUNCH_DATE) {
+    return <ShopClosedClient />
+  }
+
   const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || ""
   return <ShopClient razorpayKey={razorpayKey} />
 }

@@ -12,19 +12,29 @@ export type KVNamespace = {
   delete(key: string): Promise<void>
 }
 
+type OpenNextContext = {
+  env: {
+    UNHOLY_KV?: KVNamespace
+  }
+  ctx?: { waitUntil(p: Promise<unknown>): void }
+}
+
+async function getOpenNextContext(): Promise<OpenNextContext | null> {
+  try {
+    const mod = await import("@opennextjs/cloudflare")
+    return (await mod.getCloudflareContext({ async: true })) as unknown as OpenNextContext
+  } catch {
+    return null
+  }
+}
+
 /**
  * Get the Cloudflare `ExecutionContext` so we can call `waitUntil()` to run
  * background work after the response is returned. Returns null on local dev.
  */
 export async function getExecutionContext(): Promise<{ waitUntil(p: Promise<unknown>): void } | null> {
-  try {
-    // @ts-ignore — resolved at runtime on Cloudflare Pages
-    const mod = await import("@cloudflare/next-on-pages")
-    const ctx = mod.getRequestContext()
-    return ctx.ctx ?? null
-  } catch {
-    return null
-  }
+  const context = await getOpenNextContext()
+  return context?.ctx ?? null
 }
 
 /**
@@ -32,14 +42,6 @@ export async function getExecutionContext(): Promise<{ waitUntil(p: Promise<unkn
  * Returns `null` when running outside Pages (local dev, Node tests, etc.).
  */
 export async function getKVNamespace(): Promise<KVNamespace | null> {
-  try {
-    // @ts-ignore — resolved at runtime on Cloudflare Pages; peer-dep conflict prevents local install
-    const mod = await import("@cloudflare/next-on-pages")
-    const ctx = mod.getRequestContext()
-    const kv = (ctx.env as Record<string, unknown>)["UNHOLY_KV"] as KVNamespace | undefined
-    return kv ?? null
-  } catch {
-    // Expected in local dev — the package isn't loaded.
-    return null
-  }
+  const context = await getOpenNextContext()
+  return context?.env.UNHOLY_KV ?? null
 }

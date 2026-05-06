@@ -48,9 +48,7 @@ type SubscriptionPayload = {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __unholyProcessedPayments: Map<string, number> | undefined
-  // eslint-disable-next-line no-var
   var __unholySingleUseStore: Map<string, number> | undefined
 }
 

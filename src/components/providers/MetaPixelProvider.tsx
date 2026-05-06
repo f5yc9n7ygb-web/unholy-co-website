@@ -69,7 +69,6 @@ export function MetaPixelProvider({ children }: { children: ReactNode }) {
       <Script
         id="meta-pixel"
         strategy="afterInteractive"
-        // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{
           __html: `
             !function(f,b,e,v,n,t,s)
@@ -86,7 +85,6 @@ export function MetaPixelProvider({ children }: { children: ReactNode }) {
         }}
       />
       <noscript>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           height="1"
           width="1"
