@@ -256,9 +256,9 @@ function MinimalHeader({ onSkip }: { onSkip?: () => void }) {
           <button
             data-rune
             onClick={onSkip}
-            className="hidden items-center gap-2 font-mono text-[10px] uppercase tracking-[0.4em] text-bone/45 transition-colors hover:text-blood md:inline-flex"
+            className="inline-flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.4em] text-bone/55 transition-colors hover:text-blood md:text-[10px]"
           >
-            <span>or just buy</span>
+            <span>buy</span>
             <span className="inline-block h-px w-5 bg-bone/40 transition-all duration-300 hover:w-8 hover:bg-blood" />
           </button>
         )}

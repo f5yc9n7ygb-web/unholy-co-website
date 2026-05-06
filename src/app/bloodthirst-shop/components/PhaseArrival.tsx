@@ -117,7 +117,7 @@ export function PhaseArrival({ onSkip }: { onSkip?: () => void }) {
           animate={{ opacity: 1 }}
           transition={{ delay: 2.0, duration: 0.8 }}
           style={{ opacity: hintOpacity }}
-          className="absolute bottom-7 right-6 z-10 hidden items-center gap-2 font-mono text-[9px] uppercase tracking-[0.45em] text-bone/35 transition-colors hover:text-blood md:right-10 md:inline-flex"
+          className="absolute bottom-7 right-6 z-10 inline-flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.45em] text-bone/45 transition-colors hover:text-blood md:right-10 md:text-[10px]"
         >
           <span>skip the ritual</span>
           <span className="inline-block h-px w-5 bg-bone/30 transition-all duration-300 hover:w-8 hover:bg-blood" />
