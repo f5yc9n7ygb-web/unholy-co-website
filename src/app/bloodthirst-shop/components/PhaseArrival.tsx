@@ -1,7 +1,7 @@
 "use client"
 
 import { motion, useScroll, useTransform } from "framer-motion"
-import { useRef } from "react"
+import { Fragment, useRef } from "react"
 import { ARRIVAL } from "@/content/bloodthirst"
 
 /**
@@ -21,7 +21,7 @@ export function PhaseArrival({ onSkip }: { onSkip?: () => void }) {
   const headingY = useTransform(scrollYProgress, [0, 1], [0, -40])
   const hintOpacity = useTransform(scrollYProgress, [0, 0.15], [1, 0])
 
-  const letters = ARRIVAL.tagline.split("")
+  const totalChars = ARRIVAL.tagline.length
 
   return (
     <section
@@ -56,23 +56,34 @@ export function PhaseArrival({ onSkip }: { onSkip?: () => void }) {
         {/* Brutal serif tagline — letter cascade */}
         <h1 className="font-cinzel text-[clamp(2.25rem,7vw,6rem)] font-black uppercase leading-[0.92] tracking-[-0.01em] text-offwhite">
           <span aria-label={ARRIVAL.tagline} className="inline-block">
-            {letters.map((char, i) => (
-              <motion.span
-                key={i}
-                aria-hidden
-                initial={{ opacity: 0, y: 26, filter: "blur(8px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                transition={{
-                  delay: 0.55 + i * 0.04,
-                  duration: 0.7,
-                  ease: [0.16, 1, 0.3, 1],
-                }}
-                className="inline-block"
-                style={{ whiteSpace: char === " " ? "pre" : "normal" }}
-              >
-                {char}
-              </motion.span>
-            ))}
+            {ARRIVAL.tagline.split(" ").map((word, wi, words) => {
+              const beforeChars = words
+                .slice(0, wi)
+                .reduce((sum, w) => sum + w.length + 1, 0)
+              return (
+                <Fragment key={wi}>
+                  {wi > 0 && " "}
+                  <span className="inline-block whitespace-nowrap">
+                    {word.split("").map((char, ci) => (
+                      <motion.span
+                        key={ci}
+                        aria-hidden
+                        initial={{ opacity: 0, y: 26, filter: "blur(8px)" }}
+                        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                        transition={{
+                          delay: 0.55 + (beforeChars + ci) * 0.04,
+                          duration: 0.7,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
+                        className="inline-block"
+                      >
+                        {char}
+                      </motion.span>
+                    ))}
+                  </span>
+                </Fragment>
+              )
+            })}
           </span>
         </h1>
 
@@ -80,7 +91,7 @@ export function PhaseArrival({ onSkip }: { onSkip?: () => void }) {
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.55 + letters.length * 0.04 + 0.15, duration: 0.9 }}
+          transition={{ delay: 0.55 + totalChars * 0.04 + 0.15, duration: 0.9 }}
           className="mt-7 font-mono text-xs uppercase tracking-[0.4em] text-bone/55"
         >
           {ARRIVAL.subline}
@@ -90,7 +101,7 @@ export function PhaseArrival({ onSkip }: { onSkip?: () => void }) {
         <motion.div
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
-          transition={{ delay: 0.55 + letters.length * 0.04 + 0.4, duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ delay: 0.55 + totalChars * 0.04 + 0.4, duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
           className="mx-auto mt-7 h-px w-44 origin-center bg-gradient-to-r from-transparent via-blood to-transparent"
         />
       </motion.div>
