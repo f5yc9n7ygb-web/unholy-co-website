@@ -15,6 +15,7 @@ import { PhaseProof } from "./components/PhaseProof"
 import { PhaseOffer } from "./components/PhaseOffer"
 import { PhaseClose } from "./components/PhaseClose"
 import { RitualCursor } from "./components/RitualCursor"
+import { MobileBuyBar } from "./components/MobileBuyBar"
 import { FOOTNOTE } from "@/content/bloodthirst"
 
 const RitualScene = dynamic(
@@ -92,6 +93,7 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
     }
 
     const lenis = new Lenis({ duration: 1.1, smoothWheel: true })
+    lenisRef.current = lenis
     // Drive ScrollTrigger off Lenis so pin / scrub stay in sync
     lenis.on("scroll", ScrollTrigger.update)
     const tickerCb = (time: number) => lenis.raf(time * 1000)
@@ -103,6 +105,7 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
     return () => {
       gsap.ticker.remove(tickerCb)
       lenis.destroy()
+      lenisRef.current = null
       ScrollTrigger.getAll().forEach((t) => t.kill())
     }
   }, [reduceMotion, sealing])
@@ -125,8 +128,15 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
     return () => clearTimeout(t)
   }, [isSealed, goToReceipt])
 
+  const lenisRef = useRef<Lenis | null>(null)
   const skipToOffer = () => {
-    offerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    const el = offerRef.current
+    if (!el) return
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(el, { offset: -40 })
+    } else {
+      el.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
   }
 
   return (
@@ -231,6 +241,12 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Mobile-only sticky buy bar — surfaces price + CTA so phone users
+          aren't hunting through 6 viewports of lore for the offer. */}
+      {!sealing && (
+        <MobileBuyBar selected={checkout.selected} onTap={skipToOffer} />
+      )}
 
       {/* PhaseClose — fades in AFTER the can dissolves (~1.3s) */}
       <AnimatePresence>
