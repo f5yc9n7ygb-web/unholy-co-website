@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { Environment, useGLTF, useTexture } from "@react-three/drei"
+import {
+  EffectComposer,
+  Bloom,
+  ChromaticAberration,
+  Noise,
+  Vignette,
+} from "@react-three/postprocessing"
+import { BlendFunction } from "postprocessing"
 import * as THREE from "three"
 
 const clampDelta = (delta: number) => Math.min(delta, 0.1)
@@ -127,17 +135,20 @@ function CanModel({
 
       if ((mesh.material as THREE.Material)?.name === "aluminium") {
         if (premium) {
+          // Lived-in aluminium, not a mirror. Higher base roughness + softer
+          // clearcoat reads as a real product photographed under studio light,
+          // instead of a perfect render.
           const mat = new THREE.MeshPhysicalMaterial({
             name: "aluminium",
             map: texture,
-            metalness: 0.85,
-            roughness: 0.22,
-            clearcoat: 1.0,
-            clearcoatRoughness: 0.18,
+            metalness: 0.92,
+            roughness: 0.38,
+            clearcoat: 0.65,
+            clearcoatRoughness: 0.32,
             iridescence: 0.45,
-            iridescenceIOR: 1.6,
+            iridescenceIOR: 1.55,
             iridescenceThicknessRange: [120, 720],
-            envMapIntensity: 1.6,
+            envMapIntensity: 1.35,
             transparent: true,
             opacity: 1,
           })
@@ -622,6 +633,27 @@ export function RitualScene({
       {isMobile && <AmbientParticles count={150} />}
 
       <FinaleBurst finaleRef={finaleRef} count={isMobile ? 180 : 380} />
+
+      {/* Post-processing — gives the render a "shot through a lens" feel
+          rather than a clean CG look. Skipped on mobile for perf. */}
+      {!isMobile && (
+        <EffectComposer multisampling={0}>
+          <Bloom
+            mipmapBlur
+            luminanceThreshold={0.78}
+            luminanceSmoothing={0.4}
+            intensity={0.55}
+            radius={0.75}
+          />
+          <ChromaticAberration
+            offset={new THREE.Vector2(0.0008, 0.0008)}
+            radialModulation={false}
+            modulationOffset={0}
+          />
+          <Noise opacity={0.04} premultiply blendFunction={BlendFunction.OVERLAY} />
+          <Vignette eskil={false} offset={0.42} darkness={0.38} />
+        </EffectComposer>
+      )}
     </Canvas>
   )
 }
