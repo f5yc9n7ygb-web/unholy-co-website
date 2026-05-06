@@ -31,6 +31,8 @@ export type InvoiceData = {
   buyerBusinessName?: string
   /** Sequential invoice number within the financial year */
   invoiceSeq?: number
+  /** Exact invoice number to render when repairing already-issued PDFs */
+  invoiceNumber?: string
 }
 
 /* ─── Indian state name → GST state code ─── */
@@ -52,6 +54,11 @@ const STATE_CODES: Record<string, string> = {
 
 function getStateCode(state: string): string {
   return STATE_CODES[state.toLowerCase().trim()] || ""
+}
+
+function getGstinStateCode(gstin?: string): string {
+  const code = (gstin || "").trim().slice(0, 2)
+  return /^\d{2}$/.test(code) ? code : ""
 }
 
 function formatTaxAmount(amount: number): string {
@@ -92,8 +99,10 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   const basePrice = getBasePrice(amount)
   const gstAmount = getGstAmount(amount)
 
-  // Determine if interstate (IGST) or intra-state (CGST+SGST)
-  const buyerStateCode = shippingState ? getStateCode(shippingState) : ""
+  // Determine if interstate (IGST) or intra-state (CGST+SGST).
+  // We sell from UP. If old/backfilled records are missing a normalized state,
+  // keep them intra-state instead of incorrectly defaulting UP buyers to IGST.
+  const buyerStateCode = (shippingState ? getStateCode(shippingState) : "") || getGstinStateCode(buyerGstNumber)
   const isInterstate = buyerStateCode !== "" && buyerStateCode !== SUPPLIER_STATE_CODE
 
   // Original price before discount (for display)
@@ -159,7 +168,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
 
   // ── Invoice details on right (Rule 46(b), (c)) ──
   let rightY = height - 50 - 18 - 16 - 24
-  const invoiceNo = generateInvoiceNumber(orderId, timestamp, data.invoiceSeq)
+  const invoiceNo = data.invoiceNumber || generateInvoiceNumber(orderId, timestamp, data.invoiceSeq)
   const invoiceDetails: [string, string][] = [
     ["Invoice No:", invoiceNo],
     ["Invoice Date:", formatInvoiceDate(timestamp)],
@@ -287,8 +296,32 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
 
   // ── Totals ──
   y -= 22
-  const totalCol = 370
-  const totalValCol = 460
+  const totalCol = 350
+  const totalValRight = rightEdge - 12
+
+  function drawRightAlignedText(text: string, xRight: number, textY: number, size: number, font: typeof fontRegular, color = black) {
+    page.drawText(text, {
+      x: xRight - font.widthOfTextAtSize(text, size),
+      y: textY,
+      size,
+      font,
+      color,
+    })
+  }
+
+  function drawTotalLabel(label: string, labelY: number) {
+    const labelLines = wrapText(label, 28)
+    for (let i = 0; i < labelLines.length; i++) {
+      page.drawText(labelLines[i]!, {
+        x: totalCol,
+        y: labelY - i * 11,
+        size: 9,
+        font: fontRegular,
+        color: grey,
+      })
+    }
+    return Math.max(18, labelLines.length * 11 + 4)
+  }
 
   const totals: [string, string, boolean?][] = [
     ["Taxable Value", `Rs. ${originalBasePrice.toLocaleString("en-IN")}`],
@@ -297,7 +330,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   // Discount line (Section 15(3) CGST Act — must show on invoice)
   if (discountAmount && discountAmount > 0) {
     const discountLabel = promoCode ? `Discount (${promoCode})` : "Discount"
-    totals.push([discountLabel, `− Rs. ${discountAmount.toLocaleString("en-IN")}`])
+    totals.push([discountLabel, `- Rs. ${discountAmount.toLocaleString("en-IN")}`])
     totals.push(["Taxable Value (after discount)", `Rs. ${basePrice.toLocaleString("en-IN")}`])
   }
 
@@ -311,9 +344,9 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   }
 
   for (const [label, value] of totals) {
-    page.drawText(label, { x: totalCol, y, size: 9, font: fontRegular, color: grey })
-    page.drawText(value, { x: totalValCol, y, size: 9, font: fontRegular, color: black })
-    y -= 18
+    const consumedHeight = drawTotalLabel(label, y)
+    drawRightAlignedText(value, totalValRight, y, 9, fontRegular)
+    y -= consumedHeight
   }
 
   // Grand total line
@@ -323,9 +356,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     thickness: 1, color: bloodRed,
   })
   page.drawText("TOTAL", { x: totalCol, y: y - 8, size: 11, font: fontBold, color: black })
-  page.drawText(`Rs. ${amount.toLocaleString("en-IN")}`, {
-    x: totalValCol, y: y - 8, size: 11, font: fontBold, color: bloodRed,
-  })
+  drawRightAlignedText(`Rs. ${amount.toLocaleString("en-IN")}`, totalValRight, y - 8, 11, fontBold, bloodRed)
 
   // Amount in words
   y -= 28
@@ -353,9 +384,9 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
 }
 
 /**
- * Generate a sequential invoice number per financial year.
- * Format: UHC/YY-YY/SUFFIX/SEQ
- * e.g. UHC/26-27/3EBCV3/1, UHC/26-27/3EBCV3/2, etc.
+ * Generate a GST-safe invoice number.
+ * Rule 46 limits invoice serial numbers to 16 chars. Use a short FY-prefixed
+ * series so FY 2026-27 sequence 34 becomes "UHC26/34".
  */
 function generateInvoiceNumber(orderId: string, timestamp: string, invoiceSeq?: number): string {
   const date = new Date(timestamp)
@@ -363,12 +394,15 @@ function generateInvoiceNumber(orderId: string, timestamp: string, invoiceSeq?: 
   const month = date.getMonth() + 1 // 1-indexed
   // Indian FY: April to March
   const fyStart = month >= 4 ? year : year - 1
-  const fyEnd = fyStart + 1
-  const fy = `${String(fyStart).slice(2)}-${String(fyEnd).slice(2)}`
-  // Use last 6 chars of orderId as the order suffix
-  const suffix = orderId.replace(/^order_/, "").slice(-6).toUpperCase()
-  const seq = invoiceSeq ?? 0
-  return `UHC/${fy}/${suffix}/${seq}`
+  const seq = Number(invoiceSeq)
+  if (!Number.isFinite(seq) || seq < 1) {
+    throw new Error("Invoice sequence is required to generate an invoice number")
+  }
+  const invoiceNo = `UHC${String(fyStart).slice(2)}/${seq}`
+  if (invoiceNo.length > 16) {
+    throw new Error(`Invoice number exceeds GST 16-character limit: ${invoiceNo}`)
+  }
+  return invoiceNo
 }
 
 function formatInvoiceDate(isoString: string): string {

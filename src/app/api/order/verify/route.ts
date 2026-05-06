@@ -361,6 +361,8 @@ export async function POST(request: NextRequest) {
             shippingPincode: orderSession.shipping.pincode,
             promoCode: orderSession.promoCode,
             discountAmount: orderSession.discountAmount,
+            buyerGstNumber: orderSession.shipping.gstNumber,
+            buyerBusinessName: orderSession.shipping.gstBusinessName,
           })
         : Promise.resolve(),
       markCartConvertedAndSupersedeForEmail({

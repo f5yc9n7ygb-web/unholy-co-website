@@ -5,7 +5,6 @@ import {
   buildAbandonedCartEmail2Html, buildAbandonedCartEmail2Text,
   type AbandonedCartEmailOptions,
 } from "@/lib/email/abandoned-cart-templates";
-import { Buffer } from "node:buffer";
 import { generateInvoicePdf } from "@/lib/pdf/generate-invoice";
 
 type AirtableOptions = {
@@ -43,6 +42,7 @@ type MailjetOptions = {
 };
 
 const AIRTABLE_ENDPOINT = "https://api.airtable.com/v0";
+const AIRTABLE_CONTENT_ENDPOINT = "https://content.airtable.com/v0";
 const MAILJET_ENDPOINT = "https://api.mailjet.com/v3.1/send";
 
 const defaultTableName = process.env.AIRTABLE_TABLE_NAME || "signups";
@@ -131,13 +131,16 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
     return;
   }
 
-  // Assign a sequential invoice number and persist it to Airtable
+  const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID");
+
+  // Assign a sequential invoice number, persist it to Airtable, and capture
+  // the record ID + whether a PDF attachment already exists (for idempotency).
   let invoiceSeq: number | undefined;
+  let paymentRecordId: string | undefined;
+  let hasExistingPdf = false;
   try {
-    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID");
     invoiceSeq = await getNextInvoiceSeq(ordersBaseId);
 
-    // Find the payment record and store the invoice number
     const paymentRecords = await queryAirtableRecords({
       baseId: ordersBaseId,
       tableName: "Payments",
@@ -145,10 +148,13 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
       maxRecords: 1,
     });
     if (paymentRecords.length > 0) {
+      paymentRecordId = paymentRecords[0]!.id;
+      const existingAttachments = paymentRecords[0]!.fields["Invoice PDF"];
+      hasExistingPdf = Array.isArray(existingAttachments) && existingAttachments.length > 0;
       await updateAirtableRecord({
         baseId: ordersBaseId,
         tableName: "Payments",
-        recordId: paymentRecords[0]!.id,
+        recordId: paymentRecordId,
         fields: { "Invoice Number": invoiceSeq },
       });
     }
@@ -156,7 +162,8 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
     console.error("Invoice sequence assignment failed:", err);
   }
 
-  // Generate invoice PDF to attach
+  // Generate invoice PDF — attach to the email and store on the Airtable record
+  // so the finance team can download it directly from Airtable.
   let attachments: MailjetAttachment[] = [];
   try {
     const pdfBytes = await generateInvoicePdf({
@@ -175,6 +182,8 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
       timestamp: new Date().toISOString(),
       promoCode: options.promoCode,
       discountAmount: options.discountAmount,
+      buyerGstNumber: options.buyerGstNumber,
+      buyerBusinessName: options.buyerBusinessName,
       invoiceSeq,
     });
 
@@ -190,6 +199,20 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
       Filename: `UNHOLY-Invoice-${options.orderId}.pdf`,
       Base64Content: base64Pdf,
     }];
+
+    // Upload to the Payments record so the finance team can access invoices
+    // directly from Airtable without going through the customer-facing API.
+    // Skipped when an attachment already exists so retries stay idempotent.
+    if (paymentRecordId && !hasExistingPdf) {
+      await uploadAttachmentToAirtableRecord({
+        baseId: ordersBaseId,
+        recordId: paymentRecordId,
+        fieldName: "Invoice PDF",
+        fileBytes: pdfBytes,
+        filename: `UNHOLY-Invoice-${options.orderId}.pdf`,
+        contentType: "application/pdf",
+      }).catch((err) => console.error("Invoice Airtable attachment failed (non-blocking):", err));
+    }
   } catch (err) {
     // Don't block the email if PDF generation fails
     console.error("Invoice PDF generation failed, sending email without attachment:", err);
@@ -394,7 +417,9 @@ export async function logErrorToAirtable(context: string, error: unknown, option
 
 export type AirtableRecord = {
   id: string;
-  fields: AirtableFields;
+  // Unknown values because Airtable can return attachment arrays and other
+  // complex types that don't fit the write-side AirtableFields primitives.
+  fields: Record<string, unknown>;
 };
 
 export async function queryAirtableRecords(options: {
@@ -455,6 +480,50 @@ export async function updateAirtableRecord(options: {
   }
 }
 
+/* ─── Airtable Attachment Upload ─── */
+
+/**
+ * Upload a file directly to an Airtable attachment field via the content
+ * upload API. Throws on non-2xx so callers can decide whether to swallow errors.
+ */
+async function uploadAttachmentToAirtableRecord(options: {
+  baseId: string
+  recordId: string
+  fieldName: string
+  fileBytes: Uint8Array
+  filename: string
+  contentType: string
+}): Promise<void> {
+  const token = getRequiredEnv("AIRTABLE_TOKEN")
+  const url = `${AIRTABLE_CONTENT_ENDPOINT}/${options.baseId}/${options.recordId}/${encodeURIComponent(options.fieldName)}/uploadAttachment`
+
+  const response = await fetchWithAirtableRetry(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contentType: options.contentType,
+      filename: options.filename,
+      file: uint8ToBase64(options.fileBytes),
+    }),
+  })
+
+  if (!response.ok) {
+    const message = await response.text()
+    throw new Error(`Airtable attachment upload error (${response.status}): ${message}`)
+  }
+}
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = ""
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
+}
+
 /* ─── Invoice Sequence Helper ─── */
 
 /**
@@ -476,21 +545,24 @@ export async function getNextInvoiceSeq(ordersBaseId: string): Promise<number> {
   const fyStartDate = `${fyStart}-04-01T00:00:00.000Z`;
   const fyEndDate = `${fyStart + 1}-04-01T00:00:00.000Z`;
 
-  const seedFromAirtable = async (): Promise<number> => {
+  const maxInvoiceSeqFromAirtable = async (): Promise<number> => {
     const records = await queryAirtableRecords({
       baseId: ordersBaseId,
       tableName: "Payments",
       filterByFormula: `AND(IS_AFTER({Timestamp}, "${fyStartDate}"), IS_BEFORE({Timestamp}, "${fyEndDate}"), {Invoice Number} != "")`,
       maxRecords: 1000,
     });
-    return records.length;
+    return records.reduce((max, record) => {
+      const seq = Number(record.fields["Invoice Number"] || 0);
+      return Number.isFinite(seq) && seq > max ? seq : max;
+    }, 0);
   };
 
   const { getKVNamespace } = await import("@/lib/server/kv");
   const kv = await getKVNamespace();
   if (!kv) {
     // Local dev: best-effort, non-atomic (acceptable since not GST-critical locally)
-    return (await seedFromAirtable()) + 1;
+    return (await maxInvoiceSeqFromAirtable()) + 1;
   }
 
   const counterKey = `invoice-seq:${fyLabel}`;
@@ -518,12 +590,14 @@ export async function getNextInvoiceSeq(ordersBaseId: string): Promise<number> {
 
   try {
     const rawCounter = await kv.get(counterKey);
-    let current = rawCounter ? Number(rawCounter) : NaN;
-    if (!Number.isFinite(current)) {
-      // First call of the FY — seed from Airtable so we don't restart at 1
-      // if an earlier deploy wrote numbers directly.
-      current = await seedFromAirtable();
-    }
+    const kvCurrent = rawCounter ? Number(rawCounter) : 0;
+    // Always compare KV against Airtable so a stale KV counter can never issue
+    // a duplicate after manual repairs or backfills.
+    const airtableCurrent = await maxInvoiceSeqFromAirtable();
+    const current = Math.max(
+      Number.isFinite(kvCurrent) ? kvCurrent : 0,
+      airtableCurrent,
+    );
     const next = current + 1;
     // FY counters never expire during the FY; give them 400 days to cover rollover.
     await kv.put(counterKey, String(next), { expirationTtl: 400 * 24 * 60 * 60 });

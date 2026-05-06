@@ -11,6 +11,11 @@ import { getRequiredEnv, queryAirtableRecords } from "@/lib/server/integrations"
 import { getKVNamespace } from "@/lib/server/kv"
 import { trackShipmentByAwb } from "@/lib/server/shiprocket"
 import {
+  getSupabasePaymentByOrderId,
+  getSupabasePaymentsByEmail,
+  type SupabasePayment,
+} from "@/lib/server/supabase"
+import {
   checkRateLimit,
   escapeAirtableValue,
   sanitizeText,
@@ -65,6 +70,35 @@ async function mapRecordToOrder(record: { fields: Record<string, unknown> }, fet
   }
 }
 
+async function mapSupabasePaymentToOrder(payment: SupabasePayment, fetchTracking: boolean) {
+  const awbCode = payment.awb_code || ""
+  const shippingStatus = payment.shipping_status || "Processing"
+
+  let tracking = null
+  if (fetchTracking && awbCode && shouldFetchLiveTracking(shippingStatus)) {
+    try {
+      tracking = await trackShipmentByAwb(awbCode)
+    } catch {
+      // Tracking fetch failed — fall back to stored Supabase status.
+    }
+  }
+
+  return {
+    orderId: payment.order_id || "",
+    customerEmail: payment.customer_email || "",
+    pack: payment.pack || "",
+    quantity: Number(payment.quantity || 0),
+    amount: Number(payment.amount || 0),
+    placedAt: payment.paid_at || "",
+    shippingStatus: tracking?.currentStatus || shippingStatus,
+    awbCode: awbCode || null,
+    courierName: tracking?.courierName || payment.courier_name || null,
+    etd: tracking?.etd || payment.estimated_delivery || null,
+    deliveredAt: tracking?.deliveredDate || payment.delivered_at || null,
+    trackingActivities: tracking?.activities || null,
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const originCheck = validateRequestOrigin(request)
@@ -94,8 +128,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Please enter an order ID or email." }, { status: 400 })
     }
 
-    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
-
     // ── History mode: email + any order ID → return all orders for that email ──
     if (mode === "history") {
       if (!query.includes("@")) {
@@ -123,6 +155,26 @@ export async function POST(request: NextRequest) {
         }
         await kv.put(emailKey, String(count + 1), { expirationTtl: 3600 })
       }
+
+      const supabaseVerify = await getSupabasePaymentByOrderId(orderIdHint)
+      if (supabaseVerify) {
+        const recordEmail = String(supabaseVerify.customer_email || "").toLowerCase().trim()
+        if (recordEmail !== emailLower) {
+          return NextResponse.json({
+            ok: false,
+            error: "Email and order ID don't match. Check your confirmation email for the correct order ID.",
+          }, { status: 404 })
+        }
+
+        const supabasePayments = await getSupabasePaymentsByEmail(emailLower, 20)
+        const orders = await Promise.all(
+          supabasePayments.map((payment, i) => mapSupabasePaymentToOrder(payment, i < 3))
+        )
+
+        return NextResponse.json({ ok: true, orders, mode: "history" }, { headers: NO_STORE_HEADERS })
+      }
+
+      const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
       // Step 1: Verify ownership — email + orderId must match a real record
       const verifyRecords = await queryAirtableRecords({
@@ -163,6 +215,14 @@ export async function POST(request: NextRequest) {
         error: "To look up by email, use the 'My Orders' tab instead.",
       }, { status: 400 })
     }
+
+    const supabasePayment = await getSupabasePaymentByOrderId(query)
+    if (supabasePayment) {
+      const order = await mapSupabasePaymentToOrder(supabasePayment, true)
+      return NextResponse.json({ ok: true, orders: [order], mode: "track" }, { headers: NO_STORE_HEADERS })
+    }
+
+    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
     const records = await queryAirtableRecords({
       baseId: ordersBaseId,

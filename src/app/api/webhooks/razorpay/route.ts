@@ -200,6 +200,8 @@ export async function POST(request: NextRequest) {
     const shippingCity = String(fields["Shipping City"] || "")
     const shippingState = String(fields["Shipping State"] || "")
     const shippingPincode = String(fields["Shipping Pincode"] || "")
+    const buyerGstNumber = String(fields["GST Number"] || fields["GST number"] || orderSession?.shipping.gstNumber || "")
+    const buyerBusinessName = String(fields["GST Business Name"] || orderSession?.shipping.gstBusinessName || "")
     const fullAddress = String(fields["Full Shipping Address"] || "")
     const status = String(fields["Status"] || "")
     const chargedAmount = Number(fields["Amount"] || 0) || payment.amount / 100 || pack.price
@@ -230,6 +232,8 @@ export async function POST(request: NextRequest) {
         "Shipping Status": "Processing",
         ...(promoCode ? { "Promo Code": promoCode } : {}),
         ...(discountAmount ? { "Discount Amount": discountAmount } : {}),
+        ...(buyerGstNumber ? { "GST Number": buyerGstNumber } : {}),
+        ...(buyerBusinessName ? { "GST Business Name": buyerBusinessName } : {}),
       },
       { baseId: ordersBaseId, tableName: "Payments" }
     )
@@ -325,6 +329,8 @@ export async function POST(request: NextRequest) {
           shippingPincode,
           promoCode: promoCode || undefined,
           discountAmount: discountAmount || undefined,
+          buyerGstNumber: buyerGstNumber || undefined,
+          buyerBusinessName: buyerBusinessName || undefined,
         })
       )
     }
