@@ -130,14 +130,14 @@ function CanModel({
           const mat = new THREE.MeshPhysicalMaterial({
             name: "aluminium",
             map: texture,
-            metalness: 0.85,
-            roughness: 0.22,
-            clearcoat: 1.0,
-            clearcoatRoughness: 0.18,
-            iridescence: 0.45,
+            metalness: 0.78,
+            roughness: 0.3,
+            clearcoat: 0.72,
+            clearcoatRoughness: 0.26,
+            iridescence: 0.18,
             iridescenceIOR: 1.6,
-            iridescenceThicknessRange: [120, 720],
-            envMapIntensity: 1.6,
+            iridescenceThicknessRange: [120, 520],
+            envMapIntensity: 1.08,
             transparent: true,
             opacity: 1,
           })
@@ -146,9 +146,9 @@ function CanModel({
         } else {
           const mat = (mesh.material as THREE.MeshStandardMaterial).clone()
           mat.map = texture
-          mat.metalness = 0.85
-          mat.roughness = 0.22
-          mat.envMapIntensity = 1.4
+          mat.metalness = 0.78
+          mat.roughness = 0.3
+          mat.envMapIntensity = 1.05
           mat.transparent = true
           mat.opacity = 1
           mat.needsUpdate = true
@@ -160,7 +160,7 @@ function CanModel({
         src.color = new THREE.Color(0x121212)
         src.metalness = 0.95
         src.roughness = 0.12
-        src.envMapIntensity = 1.8
+        src.envMapIntensity = 1.25
         src.transparent = true
         src.opacity = 1
         src.needsUpdate = true
@@ -468,15 +468,11 @@ function FinaleBurst({
 }
 
 function SceneTone() {
-  const { gl, size } = useThree()
+  const { gl } = useThree()
   useEffect(() => {
     gl.toneMapping = THREE.ACESFilmicToneMapping
-    // Wider canvases catch more dark portions of the env map reflected on the
-    // can sides — bump exposure on ultrawide aspects so iridescence stays bright.
-    const aspect = size.width / Math.max(size.height, 1)
-    const wideBoost = Math.min(0.17, Math.max(0, (aspect - 1.6) * 0.12))
-    gl.toneMappingExposure = 1.15 + wideBoost
-  }, [gl, size.width, size.height])
+    gl.toneMappingExposure = 1.1
+  }, [gl])
   return null
 }
 
@@ -506,13 +502,13 @@ function IridescenceShift({
     const mats = materialBag.current?.list
     if (!mats) return
 
-    // Default iridescence baked in CanModel: 0.45, IOR 1.6, thickness [120, 720]
-    // Proof peak: push iridescence higher, IOR shifts to 1.85 (different rainbow band),
+    // Default iridescence baked in CanModel: 0.18, IOR 1.6, thickness [120, 520]
+    // Proof peak: push iridescence higher, IOR shifts to 1.78 (different rainbow band),
     // thickness range tightens for a more pronounced sheen.
-    const irid = 0.45 + weight * 0.30        // 0.45 → 0.75
-    const ior = 1.6 + weight * 0.25          // 1.6 → 1.85
-    const thicknessMin = 120 + weight * 60   // 120 → 180
-    const thicknessMax = 720 + weight * 240  // 720 → 960
+    const irid = 0.18 + weight * 0.20        // 0.18 → 0.38
+    const ior = 1.6 + weight * 0.18          // 1.6 → 1.78
+    const thicknessMin = 120 + weight * 50   // 120 → 170
+    const thicknessMax = 520 + weight * 180  // 520 → 700
 
     for (let i = 0; i < mats.length; i++) {
       const m = mats[i] as THREE.MeshPhysicalMaterial
@@ -598,8 +594,9 @@ export function RitualScene({
       />
 
       {/* Cool key — top-right, jewel-case feel */}
-      <directionalLight position={[2, 4, 3]} intensity={4.0} color="#f0f4ff" />
-      <directionalLight position={[-3, 1, -2]} intensity={1.2} color="#7fa8c8" />
+      <directionalLight position={[2, 4, 3]} intensity={3.4} color="#f0f4ff" />
+      <directionalLight position={[-3, 1, -2]} intensity={0.9} color="#7fa8c8" />
+      <directionalLight position={[0, 0.5, 4]} intensity={1.15} color="#fff3df" />
       <pointLight position={[-1.6, -0.5, -1.5]} intensity={3.2} color="#B00020" distance={6} decay={2} />
       <ambientLight intensity={0.3} color="#1a1a1f" />
 
