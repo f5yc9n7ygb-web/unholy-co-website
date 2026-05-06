@@ -103,10 +103,10 @@ export function PhaseOffer({
       {/* ── BEAT 3: Signature panel ── */}
       <div className="relative mx-auto w-full max-w-4xl px-6 pb-24 pt-8 md:pb-32">
         <motion.div
-          initial={{ clipPath: "inset(50% 0% 50% 0%)", opacity: 0 }}
-          whileInView={{ clipPath: "inset(0% 0% 0% 0%)", opacity: 1 }}
-          viewport={{ once: true, amount: 0.2 }}
-          transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.15 }}
+          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
           className="relative border border-bone/15 bg-black/65 p-7 backdrop-blur-md md:p-10"
           style={{
             boxShadow:
