@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getRequiredEnv, queryAirtableRecords } from "@/lib/server/integrations"
 import { getKVNamespace } from "@/lib/server/kv"
 import {
+  getSupabasePaymentByOrderId,
+  getSupabasePaymentsByEmail,
+} from "@/lib/server/supabase"
+import {
   FORM_BODY_LIMIT_BYTES,
   checkRateLimit,
   escapeAirtableValue,
@@ -69,8 +73,32 @@ export async function POST(request: NextRequest) {
       await kv.put(emailKey, String(count + 1), { expirationTtl: 3600 })
     }
 
-    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+    const supabaseVerify = await getSupabasePaymentByOrderId(orderId)
+    if (supabaseVerify) {
+      const recordEmail = String(supabaseVerify.customer_email || "").toLowerCase().trim()
+      if (recordEmail !== email) {
+        return NextResponse.json({ ok: false, error: "Email and order ID don't match." }, { status: 404 })
+      }
 
+      const supabasePayments = await getSupabasePaymentsByEmail(email, 50)
+      const orders = supabasePayments.map((payment) => ({
+        orderId: payment.order_id || "",
+        paymentId: payment.payment_id || "",
+        pack: payment.pack || "",
+        quantity: payment.quantity || 0,
+        amount: Number(payment.amount || 0),
+        shippingStatus: payment.shipping_status || "Processing",
+        courierName: payment.courier_name || "",
+        awbCode: payment.awb_code || "",
+        timestamp: payment.paid_at || "",
+        promoCode: payment.promo_code || "",
+        discountAmount: Number(payment.discount_amount || 0),
+      }))
+
+      return NextResponse.json({ ok: true, orders })
+    }
+
+    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
     const records = await queryAirtableRecords({
       baseId: ordersBaseId,
       tableName: "Payments",

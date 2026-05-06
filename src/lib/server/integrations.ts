@@ -182,6 +182,8 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
       timestamp: new Date().toISOString(),
       promoCode: options.promoCode,
       discountAmount: options.discountAmount,
+      buyerGstNumber: options.buyerGstNumber,
+      buyerBusinessName: options.buyerBusinessName,
       invoiceSeq,
     });
 

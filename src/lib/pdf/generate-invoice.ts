@@ -56,6 +56,11 @@ function getStateCode(state: string): string {
   return STATE_CODES[state.toLowerCase().trim()] || ""
 }
 
+function getGstinStateCode(gstin?: string): string {
+  const code = (gstin || "").trim().slice(0, 2)
+  return /^\d{2}$/.test(code) ? code : ""
+}
+
 function formatTaxAmount(amount: number): string {
   const hasFraction = !Number.isInteger(amount)
   return amount.toLocaleString("en-IN", {
@@ -97,7 +102,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   // Determine if interstate (IGST) or intra-state (CGST+SGST).
   // We sell from UP. If old/backfilled records are missing a normalized state,
   // keep them intra-state instead of incorrectly defaulting UP buyers to IGST.
-  const buyerStateCode = shippingState ? getStateCode(shippingState) : ""
+  const buyerStateCode = (shippingState ? getStateCode(shippingState) : "") || getGstinStateCode(buyerGstNumber)
   const isInterstate = buyerStateCode !== "" && buyerStateCode !== SUPPLIER_STATE_CODE
 
   // Original price before discount (for display)
@@ -291,8 +296,32 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
 
   // ── Totals ──
   y -= 22
-  const totalCol = 370
-  const totalValCol = 460
+  const totalCol = 350
+  const totalValRight = rightEdge - 12
+
+  function drawRightAlignedText(text: string, xRight: number, textY: number, size: number, font: typeof fontRegular, color = black) {
+    page.drawText(text, {
+      x: xRight - font.widthOfTextAtSize(text, size),
+      y: textY,
+      size,
+      font,
+      color,
+    })
+  }
+
+  function drawTotalLabel(label: string, labelY: number) {
+    const labelLines = wrapText(label, 28)
+    for (let i = 0; i < labelLines.length; i++) {
+      page.drawText(labelLines[i]!, {
+        x: totalCol,
+        y: labelY - i * 11,
+        size: 9,
+        font: fontRegular,
+        color: grey,
+      })
+    }
+    return Math.max(18, labelLines.length * 11 + 4)
+  }
 
   const totals: [string, string, boolean?][] = [
     ["Taxable Value", `Rs. ${originalBasePrice.toLocaleString("en-IN")}`],
@@ -315,9 +344,9 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   }
 
   for (const [label, value] of totals) {
-    page.drawText(label, { x: totalCol, y, size: 9, font: fontRegular, color: grey })
-    page.drawText(value, { x: totalValCol, y, size: 9, font: fontRegular, color: black })
-    y -= 18
+    const consumedHeight = drawTotalLabel(label, y)
+    drawRightAlignedText(value, totalValRight, y, 9, fontRegular)
+    y -= consumedHeight
   }
 
   // Grand total line
@@ -327,9 +356,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     thickness: 1, color: bloodRed,
   })
   page.drawText("TOTAL", { x: totalCol, y: y - 8, size: 11, font: fontBold, color: black })
-  page.drawText(`Rs. ${amount.toLocaleString("en-IN")}`, {
-    x: totalValCol, y: y - 8, size: 11, font: fontBold, color: bloodRed,
-  })
+  drawRightAlignedText(`Rs. ${amount.toLocaleString("en-IN")}`, totalValRight, y - 8, 11, fontBold, bloodRed)
 
   // Amount in words
   y -= 28

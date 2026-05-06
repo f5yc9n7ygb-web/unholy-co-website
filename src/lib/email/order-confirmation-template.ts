@@ -13,6 +13,8 @@ export type OrderConfirmationOptions = {
   shippingPincode: string
   promoCode?: string
   discountAmount?: number
+  buyerGstNumber?: string
+  buyerBusinessName?: string
 }
 
 const GST_RATE = 0.05

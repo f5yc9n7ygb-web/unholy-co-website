@@ -229,7 +229,7 @@ export async function POST(request: NextRequest) {
       "Full Shipping Address": fullAddress,
       ...(promoCode ? { "Promo Code": promoCode } : {}),
       ...(discountAmount ? { "Discount Amount": discountAmount } : {}),
-      ...(shipping.gstNumber ? { "GST number": shipping.gstNumber } : {}),
+      ...(shipping.gstNumber ? { "GST Number": shipping.gstNumber } : {}),
       ...(shipping.gstBusinessName ? { "GST Business Name": shipping.gstBusinessName } : {}),
       "Status": "pending",
       "Created At": new Date().toISOString().split("T")[0],
@@ -289,6 +289,9 @@ function validateShipping(shipping: ShippingForm) {
   if (!shipping.pincode) return "Pincode is required."
   if (!/^\d{6}$/.test(shipping.pincode)) return "A valid pincode is required."
   if (!shipping.state) return "State is required."
+  if (shipping.gstNumber && !/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/.test(shipping.gstNumber)) {
+    return "A valid GSTIN is required."
+  }
   return null
 }
 

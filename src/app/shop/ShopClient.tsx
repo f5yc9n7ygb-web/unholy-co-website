@@ -11,6 +11,7 @@ import { usePageTransition } from "@/context/TransitionContext"
 
 type FormErrors = Partial<Record<keyof ShippingForm, string>>
 type Step = "select" | "shipping" | "review"
+const GSTIN_REGEX = /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/
 
 /** Supplier is in UP — if buyer is also UP it's intra-state (CGST+SGST), else IGST */
 const SUPPLIER_STATE = "Uttar Pradesh"
@@ -52,6 +53,7 @@ function validateForm(form: ShippingForm): FormErrors {
   if (!form.pincode.trim()) errors.pincode = "Pincode is required"
   else if (!/^\d{6}$/.test(form.pincode.trim())) errors.pincode = "Enter valid 6-digit pincode"
   if (!form.state) errors.state = "State is required"
+  if (form.gstNumber && !GSTIN_REGEX.test(form.gstNumber)) errors.gstNumber = "Enter a valid GSTIN"
   return errors
 }
 
@@ -1083,8 +1085,6 @@ function GstRows({ amount, buyerState }: { amount: number; buyerState: string })
 }
 
 /* ─── GST Lookup Field ─── */
-const GSTIN_REGEX = /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/
-
 function GstLookupField({ value, businessName, onChange, onBlur }: {
   value: string
   businessName: string
