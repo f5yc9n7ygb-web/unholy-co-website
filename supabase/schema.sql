@@ -283,12 +283,18 @@ language sql
 security definer
 set search_path = public
 as $$
+  -- usage_limit = 0 is treated as "unlimited" to match validateResolvedPromo
+  -- in src/lib/shop/promo.ts (`maxUses > 0 && usedCount >= maxUses`).
   with applied_row as (
     update public.promo_codes
     set used_count = promo_codes.used_count + 1
     where promo_codes.code = upper(trim(p_code))
       and promo_codes.is_active = true
-      and (promo_codes.usage_limit is null or promo_codes.used_count < promo_codes.usage_limit)
+      and (
+        promo_codes.usage_limit is null
+        or promo_codes.usage_limit <= 0
+        or promo_codes.used_count < promo_codes.usage_limit
+      )
     returning promo_codes.code, promo_codes.used_count, promo_codes.usage_limit, true as applied
   )
   select * from applied_row

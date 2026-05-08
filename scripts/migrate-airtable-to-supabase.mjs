@@ -21,8 +21,10 @@ loadEnv(".env.local")
 
 const args = parseArgs(process.argv.slice(2))
 const dryRun = args.has("dry-run")
+const skipSchemaCheck = args.has("skip-schema-check")
 const limit = args.has("limit") ? Number(args.get("limit")) : null
 const csvDir = args.has("csv-dir") ? resolve(String(args.get("csv-dir"))) : null
+const allowMissingCsv = csvDir ? args.get("allow-missing-csv") !== "false" : false
 const onlyTables = new Set(
   String(args.get("table") || "")
     .split(",")
@@ -99,13 +101,15 @@ async function main() {
   console.log(`Supabase project: ${new URL(supabaseUrl).host}`)
   if (csvDir) console.log(`CSV directory: ${csvDir}`)
 
-  const schema = await checkSupabaseSchema()
-  if (schema.missing.length > 0) {
-    console.error("\nSupabase is missing required tables:")
-    schema.missing.forEach((table) => console.error(`- ${table}`))
-    console.error("\nRun supabase/schema.sql in the Supabase SQL Editor, then rerun this script.")
-    process.exitCode = 1
-    return
+  if (!skipSchemaCheck) {
+    const schema = await checkSupabaseSchema(requiredTablesForRun())
+    if (schema.missing.length > 0) {
+      console.error("\nSupabase is missing required tables:")
+      schema.missing.forEach((table) => console.error(`- ${table}`))
+      console.error("\nRun supabase/schema.sql in the Supabase SQL Editor, then rerun this script.")
+      process.exitCode = 1
+      return
+    }
   }
 
   for (const spec of specs) {
@@ -124,7 +128,7 @@ async function migrateSpec(spec) {
   console.log(`\n${spec.airtableTable} -> ${spec.supabaseTable}`)
   const records = await fetchSourceRecords(spec)
   if (!records) {
-    console.log("  skipped: source table not found")
+    console.log(`  skipped: source ${csvDir ? "CSV" : "table"} not found`)
     return
   }
 
@@ -140,7 +144,7 @@ async function migrateSignupBase() {
     ? readCsvRecords(defaultTableName, ["Signup", "Signups", "signups", "Leads"])
     : await fetchAirtableRecords(defaultBaseId, defaultTableName, { optional: true })
   if (!records) {
-    console.log("  skipped: source table not found")
+    console.log(`  skipped: source ${csvDir ? "CSV" : "table"} not found`)
     return
   }
 
@@ -187,7 +191,10 @@ async function fetchSourceRecords(spec) {
 
 function readCsvRecords(tableName, aliases = []) {
   const file = findCsvFile(tableName, aliases)
-  if (!file) return null
+  if (!file) {
+    if (allowMissingCsv) return null
+    throw new Error(`Missing CSV for ${tableName} in ${csvDir}`)
+  }
 
   const content = readFileSync(file, "utf8")
   const rows = parseCsv(content)
@@ -215,7 +222,7 @@ function findCsvFile(tableName, aliases = []) {
   const candidates = [tableName, ...aliases].map(normalizeFileStem)
   const match = files
     .map((file) => ({ file, stem: normalizeFileStem(file.replace(/\.csv$/i, "")) }))
-    .find((entry) => candidates.includes(entry.stem))
+    .find((entry) => candidates.some((candidate) => entry.stem === candidate || entry.stem.startsWith(candidate)))
   return match ? join(csvDir, match.file) : null
 }
 
@@ -262,16 +269,23 @@ function parseCsv(content) {
   }
 
   const [headers = [], ...dataRows] = rows
+  const normalizedHeaders = headers.map((header) => stripBom(String(header || "").trim()))
   return dataRows
     .filter((values) => values.some((value) => String(value || "").trim()))
-    .map((values) => Object.fromEntries(headers.map((header, index) => [String(header || "").trim(), values[index] ?? ""])))
+    .map((values) => Object.fromEntries(normalizedHeaders.map((header, index) => [header, values[index] ?? ""])))
 }
 
 function normalizeFileStem(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/\.csv$/i, "")
+    .replace(/gridview$/i, "")
+    .replace(/view$/i, "")
     .replace(/[^a-z0-9]+/g, "")
+}
+
+function stripBom(value) {
+  return String(value || "").replace(/^\uFEFF/, "")
 }
 
 function syntheticRecordId(tableName, fields, index) {
@@ -284,9 +298,21 @@ function syntheticRecordId(tableName, fields, index) {
   return `csv_${normalizeFileStem(tableName)}_${index + 1}_${hash}`
 }
 
-async function checkSupabaseSchema() {
+function requiredTablesForRun() {
+  const tables = specs
+    .filter((spec) => shouldRun(spec.id) || shouldRun(spec.supabaseTable))
+    .map((spec) => spec.supabaseTable)
+
+  if (shouldRun("contact_submissions") || shouldRun("subscriptions") || onlyTables.size === 0) {
+    tables.push("contact_submissions", "subscriptions")
+  }
+
+  return [...new Set(tables)]
+}
+
+async function checkSupabaseSchema(requiredTables = REQUIRED_SUPABASE_TABLES) {
   const missing = []
-  for (const table of REQUIRED_SUPABASE_TABLES) {
+  for (const table of requiredTables) {
     const response = await supabaseFetch(`/rest/v1/${table}?select=*&limit=1`)
     if (response.status === 404) missing.push(table)
   }
@@ -442,7 +468,6 @@ function mapInventory(record) {
 
   return compact({
     pack_id: packId,
-    airtable_record_id: record.id,
     title: stringField(f, "Title", "Pack", "Name") || packId,
     available: numberField(f, "Stock", "Available"),
     reserved: numberField(f, "Reserved"),
@@ -456,13 +481,19 @@ function mapPromoCode(record) {
   const code = stringField(f, "Code").toUpperCase()
   if (!code) return null
 
+  // Airtable "Max Uses = 0" historically meant "unlimited" — store NULL in
+  // Supabase to make that explicit and match the SQL increment function's
+  // `usage_limit IS NULL` branch.
+  const rawUsageLimit = numberOrNullField(f, "Max Uses", "Usage Limit")
+  const usageLimit = rawUsageLimit === null || rawUsageLimit <= 0 ? null : rawUsageLimit
+
   return compact({
     code,
     airtable_record_id: record.id,
     discount_type: normalizeDiscountType(stringField(f, "Discount Type")),
     discount_value: numberField(f, "Discount Value"),
     min_order: numberField(f, "Min Order"),
-    usage_limit: numberOrNullField(f, "Max Uses", "Usage Limit"),
+    usage_limit: usageLimit,
     used_count: numberField(f, "Used Count"),
     starts_at: dateField(f, "Starts At", "Start Date"),
     ends_at: dateField(f, "Expires At", "Ends At", "End Date"),
@@ -497,6 +528,10 @@ function mapRefund(record) {
 
 function mapErrorLog(record) {
   const f = record.fields || {}
+  // The error_logs.created_at column is NOT NULL. Some legacy Airtable rows
+  // have no Timestamp/Created At — fall back to now() for those so the import
+  // doesn't reject the whole batch.
+  const createdAt = dateField(f, "Timestamp", "Created At") || record.createdTime || new Date().toISOString()
   return compact({
     airtable_record_id: record.id,
     context: stringField(f, "Context") || "Airtable Error",
@@ -515,7 +550,7 @@ function mapErrorLog(record) {
       rawDetails: nullableStringField(f, "Details"),
       ...airtablePayload(record, "Errors"),
     }),
-    created_at: dateField(f, "Timestamp", "Created At") || record.createdTime || null,
+    created_at: createdAt,
   })
 }
 
@@ -580,7 +615,7 @@ function shouldRun(id) {
 
 function field(fields, names) {
   for (const name of names) {
-    const value = fields[name]
+    const value = fields[name] ?? fields[stripBom(name)]
     if (value !== undefined && value !== null && value !== "") return value
   }
   return undefined
