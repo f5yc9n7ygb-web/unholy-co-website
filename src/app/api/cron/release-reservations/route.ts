@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import {
-  getRequiredEnv,
+  hasAirtableOrdersConfig,
   queryAirtableRecords,
   updateAirtableRecord,
 } from "@/lib/server/integrations"
 import { isAuthorizedCron } from "@/lib/server/security"
+import { releaseStockByPack } from "@/lib/server/inventory"
+import {
+  getSupabaseOrdersByStatusesBefore,
+  updateSupabaseOrderByRazorpayOrderId,
+} from "@/lib/server/supabase"
 
 /**
  * POST /api/cron/release-reservations
@@ -39,21 +44,63 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+    const ordersBaseId = process.env.AIRTABLE_ORDERS_BASE_ID || ""
     const email2Cutoff = new Date(Date.now() - EMAIL_2_RELEASE_AGE_MS).toISOString()
     const pendingCutoff = new Date(Date.now() - PENDING_SAFETY_AGE_MS).toISOString()
+    const errors: string[] = []
+
+    // pending: created_at > 72h ago (safety net for carts the abandoned-cart cron never processed)
+    // email_2_sent: email_2_sent_at > 24h ago (the abandoned-cart cron stamps this column when
+    //   it sends email 2 — exact parity with the Airtable "Email 2 Sent At" formula).
+    const [pendingSupabaseCarts, email2SupabaseCarts] = await Promise.all([
+      getSupabaseOrdersByStatusesBefore(["pending"], pendingCutoff, 50, "created_at").catch((err) => {
+        errors.push(`supabase pending stale carts: ${err?.message || String(err)}`)
+        return []
+      }),
+      getSupabaseOrdersByStatusesBefore(["email_2_sent"], email2Cutoff, 50, "email_2_sent_at").catch((err) => {
+        errors.push(`supabase email_2_sent stale carts: ${err?.message || String(err)}`)
+        return []
+      }),
+    ])
+    const seenOrderIds = new Set<string>()
+    const staleSupabaseCarts = [...pendingSupabaseCarts, ...email2SupabaseCarts].filter((cart) => {
+      if (seenOrderIds.has(cart.razorpay_order_id)) return false
+      seenOrderIds.add(cart.razorpay_order_id)
+      return true
+    })
+
+    let supabaseCartsExpired = 0
+    for (const cart of staleSupabaseCarts) {
+      const sourcePayload = cart.source_payload || {}
+      const packId = String(sourcePayload.packId || "")
+      const qty = Number(cart.quantity || 0)
+      if (!packId || qty <= 0) continue
+
+      try {
+        await releaseStockByPack(packId, qty)
+        await updateSupabaseOrderByRazorpayOrderId(cart.razorpay_order_id, { status: "expired" })
+        supabaseCartsExpired++
+      } catch (err: any) {
+        errors.push(`supabase cart ${cart.razorpay_order_id}: ${err?.message || String(err)}`)
+      }
+    }
 
     // Normal path: email_2_sent carts given 24h to respond, plus safety net for
     // pending carts the abandoned-cart cron never processed.
-    const staleCarts = await queryAirtableRecords({
-      baseId: ordersBaseId,
-      tableName: "Orders",
-      filterByFormula: `OR(
-        AND({Status} = "email_2_sent", IS_BEFORE({Email 2 Sent At}, "${email2Cutoff}")),
-        AND({Status} = "pending", IS_BEFORE({Created At}, "${pendingCutoff}"))
-      )`,
-      maxRecords: 50,
-    })
+    const staleCarts = ordersBaseId && hasAirtableOrdersConfig()
+      ? await queryAirtableRecords({
+          baseId: ordersBaseId,
+          tableName: "Orders",
+          filterByFormula: `OR(
+            AND({Status} = "email_2_sent", IS_BEFORE({Email 2 Sent At}, "${email2Cutoff}")),
+            AND({Status} = "pending", IS_BEFORE({Created At}, "${pendingCutoff}"))
+          )`,
+          maxRecords: 50,
+        }).catch((err) => {
+          errors.push(`airtable stale carts: ${err?.message || String(err)}`)
+          return [] as Awaited<ReturnType<typeof queryAirtableRecords>>
+        })
+      : []
 
     // Aggregate qty to release per pack so we do one Airtable write per SKU
     const releaseByPack = new Map<string, number>()
@@ -68,25 +115,9 @@ export async function POST(request: NextRequest) {
 
     // Read current Inventory rows and decrement Reserved
     let packsReleased = 0
-    const errors: string[] = []
     for (const [packId, qty] of releaseByPack.entries()) {
       try {
-        const inventoryRows = await queryAirtableRecords({
-          baseId: ordersBaseId,
-          tableName: "Inventory",
-          filterByFormula: `{Pack ID} = "${packId.replace(/"/g, '\\"')}"`,
-          maxRecords: 1,
-        })
-        if (inventoryRows.length === 0) continue
-        const inv = inventoryRows[0]!
-        const currentReserved = Number(inv.fields["Reserved"] || 0)
-        const newReserved = Math.max(0, currentReserved - qty)
-        await updateAirtableRecord({
-          baseId: ordersBaseId,
-          tableName: "Inventory",
-          recordId: inv.id,
-          fields: { Reserved: newReserved },
-        })
+        await releaseStockByPack(packId, qty)
         packsReleased += 1
       } catch (err: any) {
         errors.push(`${packId}: ${err?.message || String(err)}`)
@@ -96,6 +127,7 @@ export async function POST(request: NextRequest) {
     // Flip expired carts so we don't re-process them next run
     for (const cartId of cartsToExpire) {
       try {
+        if (!ordersBaseId || !hasAirtableOrdersConfig()) continue
         await updateAirtableRecord({
           baseId: ordersBaseId,
           tableName: "Orders",
@@ -112,6 +144,7 @@ export async function POST(request: NextRequest) {
       staleCartsFound: staleCarts.length,
       packsReleased,
       cartsExpired: cartsToExpire.length,
+      supabaseCartsExpired,
       errors,
     })
   } catch (error: any) {

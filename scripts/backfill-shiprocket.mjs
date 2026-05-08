@@ -30,7 +30,11 @@ const {
   SHIPROCKET_PASSWORD,
   AIRTABLE_TOKEN,
   AIRTABLE_ORDERS_BASE_ID,
+  SUPABASE_SERVICE_ROLE_KEY,
 } = process.env
+
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "")
+const SUPABASE_ENABLED = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
 
 if (!SHIPROCKET_EMAIL || !SHIPROCKET_PASSWORD) {
   console.error("Missing SHIPROCKET_EMAIL / SHIPROCKET_PASSWORD")
@@ -39,6 +43,9 @@ if (!SHIPROCKET_EMAIL || !SHIPROCKET_PASSWORD) {
 if (!AIRTABLE_TOKEN || !AIRTABLE_ORDERS_BASE_ID) {
   console.error("Missing AIRTABLE_TOKEN / AIRTABLE_ORDERS_BASE_ID")
   process.exit(1)
+}
+if (!SUPABASE_ENABLED) {
+  console.warn("Supabase env vars missing; will only write to Airtable.")
 }
 
 // Status code → label (matches webhook handler's STATUS_MAP)
@@ -148,6 +155,25 @@ async function atBatchUpdate(records) {
   }
 }
 
+// ─── Supabase ────────────────────────────────────────────────────────────────
+async function supabasePatchPaymentByOrderId(orderId, patch) {
+  if (!SUPABASE_ENABLED || !orderId) return
+  const params = new URLSearchParams({ order_id: `eq.${orderId}` })
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/payments?${params}`, {
+    method: "PATCH",
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify(patch),
+  })
+  if (!r.ok) {
+    throw new Error(`Supabase PATCH failed for ${orderId}: ${r.status} ${await r.text()}`)
+  }
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`Mode: ${APPLY ? "APPLY (writing)" : "DRY-RUN (no writes)"}`)
@@ -194,7 +220,11 @@ async function main() {
       console.log(
         `→ ${orderId}  [${currentStatus}] → [${d.statusLabel}]  AWB=${d.awb || "-"}  courier=${d.courier || "-"}`,
       )
-      updates.push({ id: row.id, fields: patch })
+      const supabasePatch = {}
+      if (patch["AWB Code"]) supabasePatch.awb_code = patch["AWB Code"]
+      if (patch["Courier Name"]) supabasePatch.courier_name = patch["Courier Name"]
+      if (patch["Shipping Status"]) supabasePatch.shipping_status = patch["Shipping Status"]
+      updates.push({ id: row.id, fields: patch, orderId, supabasePatch })
     } catch (e) {
       errors.push(`${orderId} (SR#${srOrderId}): ${e.message}`)
     }
@@ -216,8 +246,27 @@ async function main() {
   }
 
   if (updates.length > 0) {
-    await atBatchUpdate(updates)
+    await atBatchUpdate(updates.map(({ id, fields }) => ({ id, fields })))
     console.log(`Wrote ${updates.length} updates to Airtable.`)
+
+    if (SUPABASE_ENABLED) {
+      let supabaseUpdated = 0
+      const supabaseErrors = []
+      for (const { orderId, supabasePatch } of updates) {
+        if (!orderId || Object.keys(supabasePatch).length === 0) continue
+        try {
+          await supabasePatchPaymentByOrderId(orderId, supabasePatch)
+          supabaseUpdated++
+        } catch (e) {
+          supabaseErrors.push(`${orderId}: ${e.message}`)
+        }
+      }
+      console.log(`Wrote ${supabaseUpdated} updates to Supabase.`)
+      if (supabaseErrors.length) {
+        console.log(`Supabase errors (${supabaseErrors.length}):`)
+        for (const e of supabaseErrors) console.log(`  ${e}`)
+      }
+    }
   }
 }
 

@@ -47,7 +47,38 @@ async function generateInvoiceFromSupabase(payment: SupabasePayment) {
     buyerBusinessName: payment.gst_business_name || undefined,
     invoiceSeq: payment.invoice_seq || undefined,
     invoiceNumber: payment.invoice_no || undefined,
+    taxType: payment.tax_type || undefined,
   })
+}
+
+function normalizePhone(value?: string | null) {
+  const digits = String(value || "").replace(/\D/g, "")
+  return digits.length >= 10 ? digits.slice(-10) : digits
+}
+
+async function sha256Hex(value: string) {
+  const bytes = new TextEncoder().encode(value)
+  const digest = await crypto.subtle.digest("SHA-256", bytes)
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+}
+
+function hasMatchingInvoiceIdentifier(options: {
+  emailParam?: string | null
+  phoneParam?: string | null
+  recordEmail?: string | null
+  recordPhone?: string | null
+}) {
+  const emailParam = String(options.emailParam || "").toLowerCase().trim()
+  const recordEmail = String(options.recordEmail || "").toLowerCase().trim()
+  if (emailParam && recordEmail && emailParam === recordEmail) {
+    return true
+  }
+
+  const phoneParam = normalizePhone(options.phoneParam)
+  const recordPhone = normalizePhone(options.recordPhone)
+  return Boolean(phoneParam && recordPhone && phoneParam === recordPhone)
 }
 
 export async function GET(
@@ -60,11 +91,11 @@ export async function GET(
       return NextResponse.json({ error: "Order ID is required" }, { status: 400 })
     }
 
-    // Require the customer's email to prove they own this order
+    // Require one customer identifier that matches the order. Email keeps
+    // existing magic links working; phone is the fallback for imported records
+    // that never had an email.
     const emailParam = request.nextUrl.searchParams.get("email")?.trim().toLowerCase()
-    if (!emailParam) {
-      return NextResponse.json({ error: "Email is required" }, { status: 401 })
-    }
+    const phoneParam = request.nextUrl.searchParams.get("phone")?.trim()
 
     // Rate limit per IP (prevents PDF-generation CPU abuse + brute-force guessing)
     const kv = await getKVNamespace()
@@ -80,9 +111,11 @@ export async function GET(
       )
     }
 
-    // Per-(email, orderId) throttle — prevents guessing orderIds against a known email
+    // Per-(identifier, orderId) throttle — prevents guessing orderIds against a known identifier.
+    // Hash the identifier before writing a KV key so email/phone is not stored raw.
     if (kv) {
-      const comboKey = `rl:invoice-combo:${emailParam}:${orderId}`
+      const identifierHash = await sha256Hex(`${emailParam || ""}:${normalizePhone(phoneParam)}:${orderId}`)
+      const comboKey = `rl:invoice-combo:${identifierHash}`
       const existing = await kv.get(comboKey)
       const count = existing ? Number(existing) || 0 : 0
       if (count >= 5) {
@@ -99,8 +132,13 @@ export async function GET(
     try {
       const supabasePayment = await getSupabasePaymentByOrderId(orderId)
       if (supabasePayment) {
-        const orderEmail = String(supabasePayment.customer_email || "").toLowerCase().trim()
-        if (!orderEmail || orderEmail !== emailParam) {
+        const matchesIdentifier = hasMatchingInvoiceIdentifier({
+          emailParam,
+          phoneParam,
+          recordEmail: supabasePayment.customer_email,
+          recordPhone: supabasePayment.customer_phone,
+        })
+        if (!matchesIdentifier) {
           return NextResponse.json({ error: "Not authorized" }, { status: 403 })
         }
 
@@ -136,8 +174,13 @@ export async function GET(
     const fields = record.fields
 
     // Verify the requester is the order's customer
-    const orderEmail = String(fields["Customer Email"] || "").toLowerCase().trim()
-    if (!orderEmail || orderEmail !== emailParam) {
+    const matchesIdentifier = hasMatchingInvoiceIdentifier({
+      emailParam,
+      phoneParam,
+      recordEmail: String(fields["Customer Email"] || ""),
+      recordPhone: String(fields["Customer Phone"] || ""),
+    })
+    if (!matchesIdentifier) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 })
     }
 

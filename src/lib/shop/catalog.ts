@@ -49,10 +49,10 @@ export const GST_RATE = 0.05
 
 /** Extract GST amount from a GST-inclusive price */
 export function getGstAmount(inclusivePrice: number): number {
-  return Math.round((inclusivePrice * GST_RATE) / (1 + GST_RATE))
+  return Math.round(((inclusivePrice * GST_RATE) / (1 + GST_RATE)) * 100) / 100
 }
 
 /** Get base price (before GST) from a GST-inclusive price */
 export function getBasePrice(inclusivePrice: number): number {
-  return inclusivePrice - getGstAmount(inclusivePrice)
+  return Math.round((inclusivePrice - getGstAmount(inclusivePrice)) * 100) / 100
 }

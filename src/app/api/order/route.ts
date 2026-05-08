@@ -3,9 +3,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
 import type { ShippingForm } from "@/lib/shop/types"
 import { validatePromoCode } from "@/lib/shop/promo"
-import { getRequiredEnv, logErrorToAirtable, saveRecordToAirtable } from "@/lib/server/integrations"
+import { hasAirtableOrdersConfig, getRequiredEnv, logErrorToAirtable, saveRecordToAirtable } from "@/lib/server/integrations"
 import { checkStock, reserveStock } from "@/lib/server/inventory"
 import { getKVNamespace } from "@/lib/server/kv"
+import { upsertSupabaseOrder } from "@/lib/server/supabase"
 import {
   ORDER_SESSION_COOKIE,
   createOrderContextId,
@@ -56,8 +57,6 @@ export async function POST(request: NextRequest) {
         { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
       )
     }
-
-    getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
     const body = await request.text()
     const payload = parseJsonBody<{ packId?: string; shipping?: ShippingForm; promoCode?: string; promoRecordId?: string }>(body, ORDER_BODY_LIMIT_BYTES)
@@ -173,7 +172,7 @@ export async function POST(request: NextRequest) {
       metaAttribution: getMetaAttributionFromRequest(request),
       promoCode: promoCode || undefined,
       promoRecordId: validatedPromoRecordId || undefined,
-      discountAmount: discountAmount || undefined,
+      discountAmount,
     })
 
     const nextResponse = NextResponse.json(
@@ -204,36 +203,87 @@ export async function POST(request: NextRequest) {
       await kv.put(`os:${order.id}`, sessionToken, { expirationTtl: 30 * 60 })
     }
 
-    // Save abandoned cart intent — will be marked "converted" on successful payment
-    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+    // Save abandoned cart intent — will be marked "converted" on successful payment.
+    // Supabase is primary; Airtable remains a best-effort mirror during migration.
     const fullAddress = [
       shipping.address,
       shipping.city,
       shipping.state,
       shipping.pincode,
     ].filter(Boolean).join(", ")
-    await saveRecordToAirtable({
-      "Razorpay Order ID": String(order.id || ""),
-      "Pack": pack.title,
-      "Pack ID": pack.id,
-      "Quantity": pack.qty,
-      "Price": pack.price,
-      "Amount": finalPrice,
-      "Customer Name": shipping.name,
-      "Customer Email": shipping.email,
-      "Customer Phone": shipping.phone,
-      "Shipping Address": shipping.address,
-      "Shipping City": shipping.city,
-      "Shipping State": shipping.state,
-      "Shipping Pincode": shipping.pincode,
-      "Full Shipping Address": fullAddress,
-      ...(promoCode ? { "Promo Code": promoCode } : {}),
-      ...(discountAmount ? { "Discount Amount": discountAmount } : {}),
-      ...(shipping.gstNumber ? { "GST Number": shipping.gstNumber } : {}),
-      ...(shipping.gstBusinessName ? { "GST Business Name": shipping.gstBusinessName } : {}),
-      "Status": "pending",
-      "Created At": new Date().toISOString().split("T")[0],
-    }, { baseId: ordersBaseId, tableName: "Orders" })
+    const cartPayload = {
+      razorpay_order_id: String(order.id || ""),
+      customer_email: shipping.email,
+      customer_name: shipping.name,
+      customer_phone: shipping.phone,
+      pack: pack.title,
+      quantity: pack.qty,
+      amount: finalPrice,
+      status: "pending",
+      shipping: {
+        name: shipping.name,
+        email: shipping.email,
+        phone: shipping.phone,
+        address: shipping.address,
+        city: shipping.city,
+        state: shipping.state,
+        pincode: shipping.pincode,
+        fullAddress,
+        gstNumber: shipping.gstNumber || null,
+        gstBusinessName: shipping.gstBusinessName || null,
+      },
+      source_payload: {
+        packId: pack.id,
+        price: pack.price,
+        promoCode: promoCode || null,
+        promoRecordId: validatedPromoRecordId || null,
+        discountAmount,
+        receipt,
+      },
+    }
+    let persistedCart = false
+    try {
+      await upsertSupabaseOrder(cartPayload)
+      persistedCart = true
+    } catch (err) {
+      console.error("Supabase cart persist failed, trying Airtable mirror:", err)
+    }
+
+    if (hasAirtableOrdersConfig()) {
+      const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+      try {
+        await saveRecordToAirtable({
+          "Razorpay Order ID": String(order.id || ""),
+          "Pack": pack.title,
+          "Pack ID": pack.id,
+          "Quantity": pack.qty,
+          "Price": pack.price,
+          "Amount": finalPrice,
+          "Customer Name": shipping.name,
+          "Customer Email": shipping.email,
+          "Customer Phone": shipping.phone,
+          "Shipping Address": shipping.address,
+          "Shipping City": shipping.city,
+          "Shipping State": shipping.state,
+          "Shipping Pincode": shipping.pincode,
+          "Full Shipping Address": fullAddress,
+          ...(promoCode ? { "Promo Code": promoCode } : {}),
+          "Discount Amount": discountAmount,
+          ...(shipping.gstNumber ? { "GST Number": shipping.gstNumber } : {}),
+          ...(shipping.gstBusinessName ? { "GST Business Name": shipping.gstBusinessName } : {}),
+          "Status": "pending",
+          "Created At": new Date().toISOString().split("T")[0],
+        }, { baseId: ordersBaseId, tableName: "Orders" })
+        persistedCart = true
+      } catch (err) {
+        console.error("Airtable cart mirror failed:", err)
+        if (!persistedCart) throw err
+      }
+    }
+
+    if (!persistedCart) {
+      throw new Error("No backend store is configured for pending cart persistence.")
+    }
 
     return nextResponse
   } catch (error: any) {

@@ -1,8 +1,13 @@
 import {
+  hasAirtableOrdersConfig,
   queryAirtableRecords,
   updateAirtableRecord,
 } from "@/lib/server/integrations"
 import { escapeAirtableValue } from "@/lib/server/security"
+import {
+  getSupabaseOrdersByEmailAndStatuses,
+  updateSupabaseOrderByRazorpayOrderId,
+} from "@/lib/server/supabase"
 
 /**
  * Mark the cart row for a completed payment as converted, and supersede any
@@ -28,7 +33,7 @@ import { escapeAirtableValue } from "@/lib/server/security"
  *     from the cron filter so semantically it's a match)
  */
 export async function markCartConvertedAndSupersedeForEmail(options: {
-  ordersBaseId: string
+  ordersBaseId?: string
   orderId: string
   customerEmail?: string
   /** Optional: skip the primary `mark converted` step if the caller already did it. */
@@ -36,7 +41,32 @@ export async function markCartConvertedAndSupersedeForEmail(options: {
 }): Promise<{ convertedRecordId: string | null; supersededCount: number }> {
   const { ordersBaseId, orderId, customerEmail, skipConvertedUpdate } = options
 
-  // 1) Find and update the row for the paid order
+  const convertedAt = new Date().toISOString()
+
+  if (!skipConvertedUpdate) {
+    await updateSupabaseOrderByRazorpayOrderId(orderId, {
+      status: "converted",
+      converted_at: convertedAt,
+    }).catch((err) => {
+      console.error(`Failed to mark Supabase cart ${orderId} converted:`, err)
+    })
+  }
+
+  if (customerEmail) {
+    const supabaseSiblings = await getSupabaseOrdersByEmailAndStatuses(customerEmail, ["pending", "email_1_sent"])
+      .catch(() => [])
+    for (const sibling of supabaseSiblings) {
+      if (sibling.razorpay_order_id === orderId) continue
+      await updateSupabaseOrderByRazorpayOrderId(sibling.razorpay_order_id, { status: "expired" })
+        .catch((err) => console.error(`Failed to expire Supabase sibling cart ${sibling.razorpay_order_id}:`, err))
+    }
+  }
+
+  if (!ordersBaseId || !hasAirtableOrdersConfig()) {
+    return { convertedRecordId: null, supersededCount: 0 }
+  }
+
+  // 1) Find and update the Airtable mirror row for the paid order
   const records = await queryAirtableRecords({
     baseId: ordersBaseId,
     tableName: "Orders",

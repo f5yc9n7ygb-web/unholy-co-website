@@ -104,9 +104,11 @@ type MaterialBag = {
 
 function CanModel({
   premium,
+  isMobile,
   materialBag,
 }: {
   premium: boolean
+  isMobile: boolean
   materialBag: React.MutableRefObject<MaterialBag>
 }) {
   const { scene } = useGLTF("/bloodthirst.glb")
@@ -145,10 +147,14 @@ function CanModel({
           collected.push(mat)
         } else {
           const mat = (mesh.material as THREE.MeshStandardMaterial).clone()
+          mat.color = new THREE.Color(0xffffff)
           mat.map = texture
-          mat.metalness = 0.78
-          mat.roughness = 0.3
-          mat.envMapIntensity = 1.05
+          mat.metalness = isMobile ? 0.5 : 0.78
+          mat.roughness = isMobile ? 0.42 : 0.3
+          mat.envMapIntensity = isMobile ? 1.06 : 1.05
+          mat.emissive = new THREE.Color(isMobile ? 0x302522 : 0xffffff)
+          mat.emissiveMap = isMobile ? null : texture
+          mat.emissiveIntensity = isMobile ? 0.44 : 0.025
           mat.transparent = true
           mat.opacity = 1
           mat.needsUpdate = true
@@ -170,7 +176,7 @@ function CanModel({
     })
     materialBag.current = { list: collected }
     return clone
-  }, [scene, texture, premium, materialBag])
+  }, [scene, texture, premium, isMobile, materialBag])
 
   return <primitive object={cloned} />
 }
@@ -258,12 +264,14 @@ function CanGroup({
   scrollProgress,
   kfs,
   premium,
+  isMobile,
   finaleRef,
   materialBag,
 }: {
   scrollProgress: React.RefObject<number>
   kfs: Keyframe[]
   premium: boolean
+  isMobile: boolean
   finaleRef: React.RefObject<FinaleState>
   materialBag: React.MutableRefObject<MaterialBag>
 }) {
@@ -346,7 +354,7 @@ function CanGroup({
 
   return (
     <group ref={ref} position={[0, -1.29, 0]}>
-      <CanModel premium={premium} materialBag={materialBag} />
+      <CanModel premium={premium} isMobile={isMobile} materialBag={materialBag} />
     </group>
   )
 }
@@ -596,9 +604,10 @@ export function RitualScene({
       {/* Cool key — top-right, jewel-case feel */}
       <directionalLight position={[2, 4, 3]} intensity={3.4} color="#f0f4ff" />
       <directionalLight position={[-3, 1, -2]} intensity={0.9} color="#7fa8c8" />
-      <directionalLight position={[0, 0.5, 4]} intensity={1.15} color="#fff3df" />
+      <directionalLight position={[0, 0.5, 4]} intensity={isMobile ? 1.75 : 1.15} color="#fff3df" />
       <pointLight position={[-1.6, -0.5, -1.5]} intensity={3.2} color="#B00020" distance={6} decay={2} />
-      <ambientLight intensity={0.3} color="#1a1a1f" />
+      {isMobile && <pointLight position={[-1.65, -0.8, 2.0]} intensity={1.45} color="#B00020" distance={4.2} decay={2} />}
+      <ambientLight intensity={isMobile ? 0.42 : 0.3} color="#1a1a1f" />
 
       <Environment files="/env.hdr" background={false} />
 
@@ -606,6 +615,7 @@ export function RitualScene({
         scrollProgress={scrollProgress}
         kfs={kfs}
         premium={premium && !isMobile}
+        isMobile={isMobile}
         finaleRef={finaleRef}
         materialBag={materialBag}
       />

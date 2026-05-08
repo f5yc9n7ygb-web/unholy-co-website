@@ -18,8 +18,11 @@ export type OrderConfirmationOptions = {
 }
 
 const GST_RATE = 0.05
-function getGstAmount(price: number) { return Math.round((price * GST_RATE) / (1 + GST_RATE)) }
-function getBasePrice(price: number) { return price - getGstAmount(price) }
+function getGstAmount(price: number) { return Math.round(((price * GST_RATE) / (1 + GST_RATE)) * 100) / 100 }
+function getBasePrice(price: number) { return Math.round((price - getGstAmount(price)) * 100) / 100 }
+function formatCurrency(price: number) {
+  return price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
 
 export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string {
   const customerFirstName = escapeHtml(o.customerName.split(" ")[0] || "Customer")
@@ -31,9 +34,9 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
   const textMuted = "#888888"
   const textDim = "#555555"
 
-  const priceFormatted = `₹${o.packPrice.toLocaleString("en-IN")}`
-  const gstFormatted = `₹${getGstAmount(o.packPrice).toLocaleString("en-IN")}`
-  const basePriceFormatted = `₹${getBasePrice(o.packPrice).toLocaleString("en-IN")}`
+  const priceFormatted = `₹${formatCurrency(o.packPrice)}`
+  const gstFormatted = `₹${formatCurrency(getGstAmount(o.packPrice))}`
+  const basePriceFormatted = `₹${formatCurrency(getBasePrice(o.packPrice))}`
   const addressBlock = [o.shippingAddress, o.shippingCity, o.shippingState, o.shippingPincode]
     .filter(Boolean)
     .join(", ")
@@ -179,9 +182,9 @@ ORDER DETAILS
 -------------
 Product:    ${o.packTitle}
 Quantity:   ${o.packQty} cans
-Subtotal:   ₹${getBasePrice(o.packPrice).toLocaleString("en-IN")}
-GST (5%):  ₹${getGstAmount(o.packPrice).toLocaleString("en-IN")}
-Total Paid: ₹${o.packPrice.toLocaleString("en-IN")}
+Subtotal:   ₹${formatCurrency(getBasePrice(o.packPrice))}
+GST (5%):  ₹${formatCurrency(getGstAmount(o.packPrice))}
+Total Paid: ₹${formatCurrency(o.packPrice)}
 Order ID:   ${o.orderId}
 Payment ID: ${o.paymentId}
 

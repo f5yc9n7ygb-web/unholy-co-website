@@ -13,10 +13,15 @@
  */
 
 import {
+  hasAirtableOrdersConfig,
   getRequiredEnv,
   queryAirtableRecords,
   updateAirtableRecord,
 } from "@/lib/server/integrations"
+import {
+  getSupabaseInventory,
+  updateSupabaseInventory,
+} from "@/lib/server/supabase"
 import { escapeAirtableValue } from "@/lib/server/security"
 import type { KVNamespace } from "@/lib/server/kv"
 
@@ -86,6 +91,22 @@ async function withInventoryLock<T>(
  */
 async function getInventoryRecord(packId: string) {
   try {
+    const inv = await getSupabaseInventory(packId)
+    if (inv) {
+      return {
+        source: "supabase" as const,
+        recordId: packId,
+        stock: Number(inv.available || 0),
+        reserved: Number(inv.reserved || 0),
+        sold: Number(inv.sold || 0),
+      }
+    }
+  } catch (err) {
+    console.warn("Supabase inventory check failed, falling back to Airtable:", err)
+  }
+
+  try {
+    if (!hasAirtableOrdersConfig()) return null
     const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
     const records = await queryAirtableRecords({
       baseId,
@@ -96,13 +117,70 @@ async function getInventoryRecord(packId: string) {
     if (records.length === 0) return null
     const record = records[0]!
     return {
+      source: "airtable" as const,
       recordId: record.id,
       stock: Number(record.fields["Stock"] || 0),
       reserved: Number(record.fields["Reserved"] || 0),
+      sold: Number(record.fields["Sold"] || 0),
     }
   } catch {
     console.warn("Inventory check skipped (table may not exist)")
     return null
+  }
+}
+
+/**
+ * Patch the Airtable Inventory row for a pack. If the user's Airtable schema
+ * doesn't have the `Sold` column the first PATCH 422s — retry without `Sold`
+ * so Stock/Reserved still land. Quietly returns when the row doesn't exist
+ * (graceful skip for envs that haven't seeded the table).
+ */
+async function patchAirtableInventoryRow(
+  baseId: string,
+  recordId: string,
+  fields: Record<string, number | string | boolean>,
+) {
+  try {
+    await updateAirtableRecord({
+      baseId,
+      tableName: INVENTORY_TABLE,
+      recordId,
+      fields,
+    })
+  } catch (err: any) {
+    const message = String(err?.message || err || "")
+    const isUnknownSold = "Sold" in fields && (
+      message.includes("UNKNOWN_FIELD_NAME") ||
+      (message.includes("422") && message.includes("Sold"))
+    )
+    if (!isUnknownSold) throw err
+    const { Sold: _Sold, ...withoutSold } = fields
+    await updateAirtableRecord({
+      baseId,
+      tableName: INVENTORY_TABLE,
+      recordId,
+      fields: withoutSold,
+    })
+  }
+}
+
+async function updateAirtableInventoryMirror(packId: string, fields: Record<string, number | string | boolean>) {
+  if (!hasAirtableOrdersConfig()) return
+
+  try {
+    const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+    const records = await queryAirtableRecords({
+      baseId,
+      tableName: INVENTORY_TABLE,
+      filterByFormula: `{Pack ID} = "${escapeAirtableValue(packId)}"`,
+      maxRecords: 1,
+    })
+    const record = records[0]
+    if (!record) return
+
+    await patchAirtableInventoryRow(baseId, record.id, fields)
+  } catch (err) {
+    console.error(`Inventory Airtable mirror update failed for ${packId}:`, err)
   }
 }
 
@@ -146,21 +224,26 @@ export async function reserveStock(
       const effectiveStock = inv.stock - inv.reserved
       if (effectiveStock < qty) return false
 
-      const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
       const newReserved = inv.reserved + qty
 
-      await updateAirtableRecord({
-        baseId,
-        tableName: INVENTORY_TABLE,
-        recordId: inv.recordId,
-        fields: { Reserved: newReserved },
-      })
+      if (inv.source === "supabase") {
+        await updateSupabaseInventory(packId, { reserved: newReserved })
+        await updateAirtableInventoryMirror(packId, { Reserved: newReserved })
+      } else {
+        const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+        await updateAirtableRecord({
+          baseId,
+          tableName: INVENTORY_TABLE,
+          recordId: inv.recordId,
+          fields: { Reserved: newReserved },
+        })
+      }
 
       // Track reservation in KV for cleanup (auto-expires in 15 min)
       if (kv) {
         await kv.put(
           `stock-reserve:${orderId}`,
-          JSON.stringify({ packId, qty, recordId: inv.recordId }),
+          JSON.stringify({ packId, qty, recordId: inv.recordId, source: inv.source }),
           { expirationTtl: 15 * 60 },
         )
       }
@@ -185,28 +268,68 @@ export async function releaseStockReservation(
   const raw = await kv.get(`stock-reserve:${orderId}`).catch(() => null)
   if (!raw) return
 
-  const { packId, qty, recordId } = JSON.parse(raw) as {
-    packId: string; qty: number; recordId: string
+  const { packId, qty, recordId, source } = JSON.parse(raw) as {
+    packId: string; qty: number; recordId: string; source?: "supabase" | "airtable"
   }
 
   await withInventoryLock(packId, kv, async () => {
     try {
       const inv = await getInventoryRecord(packId)
       if (!inv) return
-      const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
       const newReserved = Math.max(0, inv.reserved - qty)
-      await updateAirtableRecord({
-        baseId,
-        tableName: INVENTORY_TABLE,
-        recordId,
-        fields: { Reserved: newReserved },
-      })
+      if ((source || inv.source) === "supabase") {
+        await updateSupabaseInventory(packId, { reserved: newReserved })
+        await updateAirtableInventoryMirror(packId, { Reserved: newReserved })
+      } else {
+        const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+        await updateAirtableRecord({
+          baseId,
+          tableName: INVENTORY_TABLE,
+          recordId,
+          fields: { Reserved: newReserved },
+        })
+      }
     } catch (err) {
       console.error("Failed to release stock reservation:", err)
     }
   }, undefined)
 
   await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})
+}
+
+/**
+ * Release reserved stock when the reservation key is not known anymore.
+ * Used by payment-failed webhooks and stale-cart cleanup during the migration.
+ */
+export async function releaseStockByPack(
+  packId: string,
+  qty: number,
+  kv?: KVNamespace | null,
+): Promise<void> {
+  if (!packId || qty <= 0) return
+
+  await withInventoryLock(packId, kv, async () => {
+    try {
+      const inv = await getInventoryRecord(packId)
+      if (!inv) return
+
+      const newReserved = Math.max(0, inv.reserved - qty)
+      if (inv.source === "supabase") {
+        await updateSupabaseInventory(packId, { reserved: newReserved })
+        await updateAirtableInventoryMirror(packId, { Reserved: newReserved })
+      } else {
+        const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+        await updateAirtableRecord({
+          baseId,
+          tableName: INVENTORY_TABLE,
+          recordId: inv.recordId,
+          fields: { Reserved: newReserved },
+        })
+      }
+    } catch (err) {
+      console.error("Failed to release stock by pack:", err)
+    }
+  }, undefined)
 }
 
 /**
@@ -221,20 +344,33 @@ export async function decrementStock(packId: string, qty: number, orderId?: stri
       const inv = await getInventoryRecord(packId)
       if (!inv) return
 
-      const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
       const newStock = Math.max(0, inv.stock - qty)
       const newReserved = Math.max(0, inv.reserved - qty)
+      const newSold = Math.max(0, inv.sold + qty)
       if (inv.stock - qty < 0) {
         // Oversell detected — log loudly so ops can reconcile
         console.error(`Inventory OVERSELL: ${packId} qty=${qty} stock=${inv.stock}`)
       }
 
-      await updateAirtableRecord({
-        baseId,
-        tableName: INVENTORY_TABLE,
-        recordId: inv.recordId,
-        fields: { Stock: newStock, Reserved: newReserved },
-      })
+      if (inv.source === "supabase") {
+        await updateSupabaseInventory(packId, {
+          available: newStock,
+          reserved: newReserved,
+          sold: newSold,
+        })
+        await updateAirtableInventoryMirror(packId, {
+          Stock: newStock,
+          Reserved: newReserved,
+          Sold: newSold,
+        })
+      } else {
+        const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+        await patchAirtableInventoryRow(baseId, inv.recordId, {
+          Stock: newStock,
+          Reserved: newReserved,
+          Sold: newSold,
+        })
+      }
 
       if (orderId && kv) {
         await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})

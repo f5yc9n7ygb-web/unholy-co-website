@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import {
-  getRequiredEnv,
+  hasAirtableOrdersConfig,
   queryAirtableRecords,
   saveRecordToAirtable,
   sendMailjetEmail,
@@ -29,6 +29,11 @@ import {
   buildRefundRequestHtml,
   buildRefundRequestText,
 } from "@/lib/email/refund-request-template"
+import {
+  getSupabasePaymentByOrderId,
+  getSupabaseRefundByOrderId,
+  insertSupabaseRefund,
+} from "@/lib/server/supabase"
 
 const REFUND_REASONS = [
   "Damaged on arrival",
@@ -80,39 +85,47 @@ export async function POST(request: NextRequest) {
     if (!email || !isValidEmail(email)) return NextResponse.json({ ok: false, error: "A valid email is required." }, { status: 400 })
     if (!reason) return NextResponse.json({ ok: false, error: "Please select a reason." }, { status: 400 })
 
-    // Verify the order exists and belongs to this email
-    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
-    const orderRecords = await queryAirtableRecords({
-      baseId: ordersBaseId,
-      tableName: "Payments",
-      filterByFormula: `AND({Order ID} = "${escapeAirtableValue(orderId)}", LOWER({Customer Email}) = "${escapeAirtableValue(email)}")`,
-      maxRecords: 1,
-    })
+    // Verify the order exists and belongs to this email. Supabase is primary;
+    // Airtable remains a fallback for records that have not been migrated.
+    const ordersBaseId = process.env.AIRTABLE_ORDERS_BASE_ID || ""
+    const supabaseOrder = await getSupabasePaymentByOrderId(orderId).catch(() => null)
+    const supabaseEmail = String(supabaseOrder?.customer_email || "").toLowerCase().trim()
+    const orderRecords = supabaseOrder || !ordersBaseId || !hasAirtableOrdersConfig()
+      ? []
+      : await queryAirtableRecords({
+          baseId: ordersBaseId,
+          tableName: "Payments",
+          filterByFormula: `AND({Order ID} = "${escapeAirtableValue(orderId)}", LOWER({Customer Email}) = "${escapeAirtableValue(email)}")`,
+          maxRecords: 1,
+        })
 
-    if (orderRecords.length === 0) {
+    if ((!supabaseOrder || supabaseEmail !== email) && orderRecords.length === 0) {
       return NextResponse.json({
         ok: false,
         error: "No order found matching this ID and email. Please check your confirmation email for the correct order ID.",
       }, { status: 404 })
     }
 
-    const order = orderRecords[0]!
-    const customerName = String(order.fields["Customer Name"] || "")
-    const pack = String(order.fields["Pack"] || "")
-    const quantity = Number(order.fields["Quantity"] || 0)
-    const amount = Number(order.fields["Amount"] || 0)
+    const order = orderRecords[0]
+    const customerName = String(supabaseOrder?.customer_name || order?.fields["Customer Name"] || "")
+    const pack = String(supabaseOrder?.pack || order?.fields["Pack"] || "")
+    const quantity = Number(supabaseOrder?.quantity || order?.fields["Quantity"] || 0)
+    const amount = Number(supabaseOrder?.amount || order?.fields["Amount"] || 0)
 
     // Check if a refund request already exists for this order
     try {
-      const existingRefunds = await queryAirtableRecords({
-        baseId: ordersBaseId,
-        tableName: "Refunds",
-        filterByFormula: `{Order ID} = "${escapeAirtableValue(orderId)}"`,
-        maxRecords: 1,
-      })
+      const existingSupabaseRefund = await getSupabaseRefundByOrderId(orderId).catch(() => null)
+      const existingRefunds = existingSupabaseRefund || !ordersBaseId || !hasAirtableOrdersConfig()
+        ? []
+        : await queryAirtableRecords({
+            baseId: ordersBaseId,
+            tableName: "Refunds",
+            filterByFormula: `{Order ID} = "${escapeAirtableValue(orderId)}"`,
+            maxRecords: 1,
+          })
 
-      if (existingRefunds.length > 0) {
-        const existingStatus = String(existingRefunds[0]!.fields["Status"] || "")
+      if (existingSupabaseRefund || existingRefunds.length > 0) {
+        const existingStatus = String(existingSupabaseRefund?.status || existingRefunds[0]?.fields["Status"] || "")
         if (existingStatus !== "Rejected") {
           return NextResponse.json({
             ok: false,
@@ -124,19 +137,47 @@ export async function POST(request: NextRequest) {
       // Refunds table may not exist yet — continue
     }
 
-    // Save refund request
-    await saveRecordToAirtable({
-      "Order ID": orderId,
-      "Customer Name": customerName,
-      "Customer Email": email,
-      "Pack": pack,
-      "Quantity": quantity,
-      "Amount": amount,
-      "Reason": reason,
-      "Details": details || "",
-      "Status": "Pending",
-      "Requested At": new Date().toISOString(),
-    }, { baseId: ordersBaseId, tableName: "Refunds" })
+    // Save refund request to Supabase, then mirror to Airtable.
+    const supabaseRefund = await insertSupabaseRefund({
+      order_id: orderId,
+      payment_id: supabaseOrder?.payment_id || null,
+      customer_name: customerName,
+      customer_email: email,
+      amount,
+      reason,
+      details: details || "",
+      status: "Pending",
+      source_payload: { pack, quantity },
+    }).catch((err) => {
+      console.error("Supabase refund persist failed, trying Airtable mirror:", err)
+      return null
+    })
+
+    let airtableRefundSaved = false
+    if (ordersBaseId && hasAirtableOrdersConfig()) {
+      try {
+        await saveRecordToAirtable({
+          "Order ID": orderId,
+          "Customer Name": customerName,
+          "Customer Email": email,
+          "Pack": pack,
+          "Quantity": quantity,
+          "Amount": amount,
+          "Reason": reason,
+          "Details": details || "",
+          "Status": "Pending",
+          "Requested At": new Date().toISOString(),
+        }, { baseId: ordersBaseId, tableName: "Refunds" })
+        airtableRefundSaved = true
+      } catch (err) {
+        console.error("Airtable refund mirror failed:", err)
+        if (!supabaseRefund) throw err
+      }
+    }
+
+    if (!supabaseRefund && !airtableRefundSaved) {
+      throw new Error("No backend store is configured for refund requests.")
+    }
 
     // Send confirmation to customer
     const siteUrl = process.env.PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://theunholy.co"

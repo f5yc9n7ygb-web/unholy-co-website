@@ -57,6 +57,7 @@ async function mapRecordToOrder(record: { fields: Record<string, unknown> }, fet
   return {
     orderId: String(fields["Order ID"] || ""),
     customerEmail: String(fields["Customer Email"] || ""),
+    customerPhone: String(fields["Customer Phone"] || ""),
     pack: String(fields["Pack"] || ""),
     quantity: Number(fields["Quantity"] || 0),
     amount: Number(fields["Amount"] || 0),
@@ -86,6 +87,7 @@ async function mapSupabasePaymentToOrder(payment: SupabasePayment, fetchTracking
   return {
     orderId: payment.order_id || "",
     customerEmail: payment.customer_email || "",
+    customerPhone: payment.customer_phone || "",
     pack: payment.pack || "",
     quantity: Number(payment.quantity || 0),
     amount: Number(payment.amount || 0),
@@ -156,22 +158,24 @@ export async function POST(request: NextRequest) {
         await kv.put(emailKey, String(count + 1), { expirationTtl: 3600 })
       }
 
-      const supabaseVerify = await getSupabasePaymentByOrderId(orderIdHint)
-      if (supabaseVerify) {
-        const recordEmail = String(supabaseVerify.customer_email || "").toLowerCase().trim()
-        if (recordEmail !== emailLower) {
-          return NextResponse.json({
-            ok: false,
-            error: "Email and order ID don't match. Check your confirmation email for the correct order ID.",
-          }, { status: 404 })
+      const supabaseVerify = await getSupabasePaymentByOrderId(orderIdHint).catch((err) => {
+        console.error("Supabase order history verify failed, falling back to Airtable:", err)
+        return null
+      })
+      const supabaseEmailMatches = supabaseVerify
+        ? String(supabaseVerify.customer_email || "").toLowerCase().trim() === emailLower
+        : false
+      if (supabaseVerify && supabaseEmailMatches) {
+        try {
+          const supabasePayments = await getSupabasePaymentsByEmail(emailLower, 20)
+          const orders = await Promise.all(
+            supabasePayments.map((payment, i) => mapSupabasePaymentToOrder(payment, i < 3))
+          )
+
+          return NextResponse.json({ ok: true, orders, mode: "history" }, { headers: NO_STORE_HEADERS })
+        } catch (err) {
+          console.error("Supabase order history lookup failed, falling back to Airtable:", err)
         }
-
-        const supabasePayments = await getSupabasePaymentsByEmail(emailLower, 20)
-        const orders = await Promise.all(
-          supabasePayments.map((payment, i) => mapSupabasePaymentToOrder(payment, i < 3))
-        )
-
-        return NextResponse.json({ ok: true, orders, mode: "history" }, { headers: NO_STORE_HEADERS })
       }
 
       const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
@@ -216,7 +220,10 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const supabasePayment = await getSupabasePaymentByOrderId(query)
+    const supabasePayment = await getSupabasePaymentByOrderId(query).catch((err) => {
+      console.error("Supabase order track lookup failed, falling back to Airtable:", err)
+      return null
+    })
     if (supabasePayment) {
       const order = await mapSupabasePaymentToOrder(supabasePayment, true)
       return NextResponse.json({ ok: true, orders: [order], mode: "track" }, { headers: NO_STORE_HEADERS })

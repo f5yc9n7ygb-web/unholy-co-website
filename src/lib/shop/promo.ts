@@ -15,11 +15,17 @@
  */
 
 import {
+  hasAirtableOrdersConfig,
   getRequiredEnv,
   queryAirtableRecords,
   updateAirtableRecord,
 } from "@/lib/server/integrations"
 import { escapeAirtableValue } from "@/lib/server/security"
+import {
+  getSupabasePromoCode,
+  updateSupabasePromoCode,
+  type SupabasePromoCode,
+} from "@/lib/server/supabase"
 
 const PROMO_TABLE = "Promo Codes"
 
@@ -56,6 +62,19 @@ export async function validatePromoCode(
   }
 
   try {
+    const supabasePromo = await getSupabasePromoCode(normalized)
+    if (supabasePromo) {
+      return validateResolvedPromo(mapSupabasePromoCode(supabasePromo), orderTotal)
+    }
+  } catch (err) {
+    console.warn("Supabase promo lookup failed, falling back to Airtable:", err)
+  }
+
+  try {
+    if (!hasAirtableOrdersConfig()) {
+      return { valid: false, error: "Invalid promo code." }
+    }
+
     const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
 
     const records = await queryAirtableRecords({
@@ -84,29 +103,7 @@ export async function validatePromoCode(
       recordId: record.id,
     }
 
-    if (!promo.active) {
-      return { valid: false, error: "This promo code is no longer active." }
-    }
-
-    if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) {
-      return { valid: false, error: "This promo code has expired." }
-    }
-
-    if (promo.maxUses > 0 && promo.usedCount >= promo.maxUses) {
-      return { valid: false, error: "This promo code has reached its usage limit." }
-    }
-
-    if (orderTotal < promo.minOrder) {
-      return {
-        valid: false,
-        error: `Minimum order of ₹${promo.minOrder.toLocaleString("en-IN")} required for this code.`,
-      }
-    }
-
-    const discountAmount = calculateDiscount(promo, orderTotal)
-    const finalPrice = Math.max(0, orderTotal - discountAmount)
-
-    return { valid: true, promo, discountAmount, finalPrice }
+    return validateResolvedPromo(promo, orderTotal)
   } catch {
     // Table doesn't exist or query failed
     return { valid: false, error: "Invalid promo code." }
@@ -118,6 +115,11 @@ export async function validatePromoCode(
  * Uses optimistic retry to reduce race window on concurrent redemptions.
  */
 export async function incrementPromoUsage(recordId: string): Promise<void> {
+  if (recordId.startsWith("supabase:")) {
+    await incrementSupabasePromoUsage(recordId.replace(/^supabase:/, ""))
+    return
+  }
+
   const MAX_RETRIES = 3
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
@@ -192,6 +194,17 @@ export async function incrementPromoUsageByCode(code: string): Promise<void> {
   
   const normalized = code.trim().toUpperCase()
   try {
+    const promo = await getSupabasePromoCode(normalized)
+    if (promo) {
+      await incrementSupabasePromoUsage(normalized, promo)
+      return
+    }
+  } catch (err) {
+    console.warn(`Failed to increment Supabase promo usage for code ${code}: `, err)
+  }
+
+  try {
+    if (!hasAirtableOrdersConfig()) return
     const baseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
     const records = await queryAirtableRecords({
       baseId,
@@ -206,4 +219,64 @@ export async function incrementPromoUsageByCode(code: string): Promise<void> {
   } catch (err) {
     console.warn(`Failed to increment promo usage for code ${code}: `, err)
   }
+}
+
+function validateResolvedPromo(promo: PromoCode, orderTotal: number): PromoResult {
+  if (!promo.active) {
+    return { valid: false, error: "This promo code is no longer active." }
+  }
+
+  if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) {
+    return { valid: false, error: "This promo code has expired." }
+  }
+
+  if (promo.maxUses > 0 && promo.usedCount >= promo.maxUses) {
+    return { valid: false, error: "This promo code has reached its usage limit." }
+  }
+
+  if (orderTotal < promo.minOrder) {
+    return {
+      valid: false,
+      error: `Minimum order of ₹${promo.minOrder.toLocaleString("en-IN")} required for this code.`,
+    }
+  }
+
+  const discountAmount = calculateDiscount(promo, orderTotal)
+  const finalPrice = Math.max(0, orderTotal - discountAmount)
+
+  return { valid: true, promo, discountAmount, finalPrice }
+}
+
+function mapSupabasePromoCode(row: SupabasePromoCode): PromoCode {
+  const metadata = row.metadata || {}
+  const rawDiscountType = String(row.discount_type || "percentage").toLowerCase()
+  const discountType = rawDiscountType === "amount" || rawDiscountType === "flat"
+    ? "flat"
+    : "percentage"
+
+  return {
+    code: row.code,
+    discountType,
+    discountValue: Number(row.discount_value || 0),
+    minOrder: Number(row.min_order ?? metadata.min_order ?? 0),
+    maxUses: Number(row.usage_limit || 0),
+    usedCount: Number(row.used_count || 0),
+    active: Boolean(row.is_active),
+    expiresAt: row.ends_at || null,
+    recordId: `supabase:${row.code}`,
+  }
+}
+
+async function incrementSupabasePromoUsage(code: string, knownPromo?: SupabasePromoCode): Promise<void> {
+  const promo = knownPromo || await getSupabasePromoCode(code)
+  if (!promo) return
+
+  const current = Number(promo.used_count || 0)
+  const maxUses = Number(promo.usage_limit || 0)
+  if (maxUses > 0 && current >= maxUses) {
+    console.warn(`Promo ${code}: usage limit reached at increment (current=${current}, max=${maxUses})`)
+    return
+  }
+
+  await updateSupabasePromoCode(code, { used_count: current + 1 })
 }

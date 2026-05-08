@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { parseRequestBody } from "@/lib/server/parse-body"
 import { saveRecordToAirtable, sendMailjetEmail } from "@/lib/server/integrations"
 import { getKVNamespace } from "@/lib/server/kv"
+import { insertSupabaseContactSubmission } from "@/lib/server/supabase"
 import {
   FORM_BODY_LIMIT_BYTES,
   checkRateLimit,
@@ -68,26 +69,55 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    await saveRecordToAirtable({
-      Type: "Contact",
-      Name: name,
-      Email: email,
-      Phone: phone || null,
-      Message: message,
-      "Inquiry Type": inquiryType || null,
-      Source: source,
-      SubmittedAt: new Date().toISOString(),
-    })
-
-    // Notify team and send auto-response in parallel (best-effort)
+    let supabasePersisted = false
     try {
-      await Promise.all([
-        notifyTeam({ name, email, message, phone, source, inquiryType }),
-        sendAutoResponse(name, email),
-      ])
-    } catch (notificationError) {
-      console.error("Contact notification error:", notificationError)
+      const inserted = await insertSupabaseContactSubmission({
+        name,
+        email,
+        phone: phone || null,
+        message,
+        inquiry_type: inquiryType || null,
+        source: source || null,
+      })
+      supabasePersisted = Boolean(inserted)
+    } catch (err) {
+      console.error("Supabase contact persist failed, trying Airtable mirror:", err)
     }
+
+    let airtablePersisted = false
+    try {
+      await saveRecordToAirtable({
+        Type: "Contact",
+        Name: name,
+        Email: email,
+        Phone: phone || null,
+        Message: message,
+        "Inquiry Type": inquiryType || null,
+        Source: source,
+        SubmittedAt: new Date().toISOString(),
+      })
+      airtablePersisted = true
+    } catch (err) {
+      console.error("Airtable contact mirror failed:", err)
+      if (!supabasePersisted) throw err
+    }
+
+    if (!supabasePersisted && !airtablePersisted) {
+      throw new Error("No backend store is configured for contact submissions.")
+    }
+
+    // Notify team and send auto-response in parallel (best-effort).
+    // allSettled so a failure in one doesn't mask the other's outcome.
+    const notifyResults = await Promise.allSettled([
+      notifyTeam({ name, email, message, phone, source, inquiryType }),
+      sendAutoResponse(name, email),
+    ])
+    const notifyLabels = ["team-notification", "auto-response"] as const
+    notifyResults.forEach((result, idx) => {
+      if (result.status === "rejected") {
+        console.error(`Contact ${notifyLabels[idx]} failed:`, result.reason)
+      }
+    })
 
     return NextResponse.json({ ok: true }, { status: 200 })
   } catch (error) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { claimSingleUseKey, readSubscriptionToken } from "@/lib/server/order-session"
 import { saveRecordToAirtable, sendWelcomeEmail } from "@/lib/server/integrations"
 import { getKVNamespace } from "@/lib/server/kv"
+import { upsertSupabaseSubscription } from "@/lib/server/supabase"
 
 export async function GET(request: NextRequest) {
   const siteUrl = process.env.PUBLIC_SITE_URL || request.nextUrl.origin
@@ -20,6 +21,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  let supabasePersisted = false
+  try {
+    const inserted = await upsertSupabaseSubscription({
+      email: payload.email,
+      name: payload.name || null,
+      source: payload.source || null,
+      status: "confirmed",
+      source_payload: { source: payload.source || "website" },
+      confirmed_at: new Date().toISOString(),
+    })
+    supabasePersisted = Boolean(inserted)
+  } catch (err) {
+    console.error("Supabase subscription persist failed, trying Airtable mirror:", err)
+  }
+
+  let airtablePersisted = false
   try {
     await saveRecordToAirtable({
       Type: "Subscription",
@@ -28,14 +45,23 @@ export async function GET(request: NextRequest) {
       Source: payload.source,
       SubmittedAt: new Date().toISOString(),
     })
+    airtablePersisted = true
+  } catch (err) {
+    console.error("Airtable subscription mirror failed:", err)
+  }
 
-    await sendWelcomeEmail(payload.email)
-
-    redirectUrl.searchParams.set("subscribed", "1")
-    return NextResponse.redirect(redirectUrl)
-  } catch (error) {
-    console.error("Subscribe confirmation error:", error)
+  if (!supabasePersisted && !airtablePersisted) {
+    console.error("No backend store accepted the subscription.")
     redirectUrl.searchParams.set("subscribed", "error")
     return NextResponse.redirect(redirectUrl)
   }
+
+  try {
+    await sendWelcomeEmail(payload.email)
+  } catch (error) {
+    console.error("Welcome email failed:", error)
+  }
+
+  redirectUrl.searchParams.set("subscribed", "1")
+  return NextResponse.redirect(redirectUrl)
 }

@@ -73,29 +73,34 @@ export async function POST(request: NextRequest) {
       await kv.put(emailKey, String(count + 1), { expirationTtl: 3600 })
     }
 
-    const supabaseVerify = await getSupabasePaymentByOrderId(orderId)
-    if (supabaseVerify) {
-      const recordEmail = String(supabaseVerify.customer_email || "").toLowerCase().trim()
-      if (recordEmail !== email) {
-        return NextResponse.json({ ok: false, error: "Email and order ID don't match." }, { status: 404 })
+    const supabaseVerify = await getSupabasePaymentByOrderId(orderId).catch((err) => {
+      console.error("Supabase order ownership verify failed, falling back to Airtable:", err)
+      return null
+    })
+    const supabaseEmailMatches = supabaseVerify
+      ? String(supabaseVerify.customer_email || "").toLowerCase().trim() === email
+      : false
+    if (supabaseVerify && supabaseEmailMatches) {
+      try {
+        const supabasePayments = await getSupabasePaymentsByEmail(email, 50)
+        const orders = supabasePayments.map((payment) => ({
+          orderId: payment.order_id || "",
+          paymentId: payment.payment_id || "",
+          pack: payment.pack || "",
+          quantity: payment.quantity || 0,
+          amount: Number(payment.amount || 0),
+          shippingStatus: payment.shipping_status || "Processing",
+          courierName: payment.courier_name || "",
+          awbCode: payment.awb_code || "",
+          timestamp: payment.paid_at || "",
+          promoCode: payment.promo_code || "",
+          discountAmount: Number(payment.discount_amount || 0),
+        }))
+
+        return NextResponse.json({ ok: true, orders })
+      } catch (err) {
+        console.error("Supabase orders lookup failed, falling back to Airtable:", err)
       }
-
-      const supabasePayments = await getSupabasePaymentsByEmail(email, 50)
-      const orders = supabasePayments.map((payment) => ({
-        orderId: payment.order_id || "",
-        paymentId: payment.payment_id || "",
-        pack: payment.pack || "",
-        quantity: payment.quantity || 0,
-        amount: Number(payment.amount || 0),
-        shippingStatus: payment.shipping_status || "Processing",
-        courierName: payment.courier_name || "",
-        awbCode: payment.awb_code || "",
-        timestamp: payment.paid_at || "",
-        promoCode: payment.promo_code || "",
-        discountAmount: Number(payment.discount_amount || 0),
-      }))
-
-      return NextResponse.json({ ok: true, orders })
     }
 
     const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")

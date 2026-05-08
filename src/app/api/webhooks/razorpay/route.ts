@@ -18,7 +18,7 @@ import { Buffer } from "node:buffer"
 import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
 import {
-  getRequiredEnv,
+  hasAirtableOrdersConfig,
   saveRecordToAirtable,
   sendOrderConfirmationEmail,
   sendMailjetEmail,
@@ -31,10 +31,17 @@ import { getKVNamespace, getExecutionContext } from "@/lib/server/kv"
 import { escapeAirtableValue } from "@/lib/server/security"
 import { claimProcessedPayment, readOrderSessionToken, releaseProcessedPayment } from "@/lib/server/order-session"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
-import { decrementStock } from "@/lib/server/inventory"
+import { decrementStock, releaseStockByPack } from "@/lib/server/inventory"
 import { incrementPromoUsageByCode } from "@/lib/shop/promo"
 import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
 import { sendMetaPurchaseEvent } from "@/lib/server/meta-capi"
+import {
+  getSupabaseOrderByRazorpayOrderId,
+  getSupabasePaymentByPaymentId,
+  updateSupabaseOrderByRazorpayOrderId,
+  updateSupabasePaymentByOrderId,
+  upsertSupabasePayment,
+} from "@/lib/server/supabase"
 
 export async function POST(request: NextRequest) {
   try {
@@ -83,8 +90,28 @@ export async function POST(request: NextRequest) {
     if (event.event === "payment.failed") {
       const failedPayment = event.payload?.payment?.entity
       if (failedPayment) {
+        let failedEmailQueued = false
+        let failedStockReleased = false
+        const kv = await getKVNamespace()
+        const supabaseCart = await getSupabaseOrderByRazorpayOrderId(failedPayment.order_id).catch(() => null)
+        if (supabaseCart) {
+          updateSupabaseOrderByRazorpayOrderId(failedPayment.order_id, { status: "payment_failed" })
+            .catch((err) => console.error("Webhook: Supabase cart failure update failed:", err))
+          const sourcePayload = supabaseCart.source_payload || {}
+          const packId = String(sourcePayload.packId || "")
+          const qty = Number(supabaseCart.quantity || 0)
+          if (packId && qty > 0) {
+            try {
+              await releaseStockByPack(packId, qty, kv)
+              failedStockReleased = true
+            } catch (err) {
+              console.error("Webhook: Supabase release stock by pack failed:", err)
+            }
+          }
+        }
+
         const ordersBaseId = process.env.AIRTABLE_ORDERS_BASE_ID
-        if (ordersBaseId) {
+        if (ordersBaseId && hasAirtableOrdersConfig()) {
           const cartRecords = await queryAirtableRecords({
             baseId: ordersBaseId,
             tableName: "Orders",
@@ -111,6 +138,18 @@ export async function POST(request: NextRequest) {
             const customerName = String(cf["Customer Name"] || "Customer")
             const packTitle = String(cf["Pack"] || "BloodThirst")
             const siteUrl = process.env.PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://theunholy.co"
+            if (!failedStockReleased) {
+              const packId = String(cf["Pack ID"] || "")
+              const qty = Number(cf["Quantity"] || 0)
+              if (packId && qty > 0) {
+                try {
+                  await releaseStockByPack(packId, qty, kv)
+                  failedStockReleased = true
+                } catch (err) {
+                  console.error("Webhook: Airtable release stock by pack failed:", err)
+                }
+              }
+            }
 
             if (customerEmail) {
               sendMailjetEmail({
@@ -119,8 +158,23 @@ export async function POST(request: NextRequest) {
                 html: buildPaymentFailedHtml({ customerName, packTitle, shopUrl: `${siteUrl}/shop` }),
                 text: buildPaymentFailedText({ customerName, packTitle, shopUrl: `${siteUrl}/shop` }),
               }).catch((err) => console.error("Webhook: payment failed email error:", err))
+              failedEmailQueued = true
             }
           }
+        }
+
+        if (supabaseCart?.customer_email && !failedEmailQueued) {
+          const sourcePayload = (supabaseCart.source_payload || {}) as Record<string, unknown>
+          const customerName = supabaseCart.customer_name || "Customer"
+          const packTitle = supabaseCart.pack || "BloodThirst"
+          const siteUrl = process.env.PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://theunholy.co"
+
+          sendMailjetEmail({
+            to: supabaseCart.customer_email,
+            subject: "Your payment didn't go through.",
+            html: buildPaymentFailedHtml({ customerName, packTitle: String(sourcePayload.packTitle || packTitle), shopUrl: `${siteUrl}/shop` }),
+            text: buildPaymentFailedText({ customerName, packTitle: String(sourcePayload.packTitle || packTitle), shopUrl: `${siteUrl}/shop` }),
+          }).catch((err) => console.error("Webhook: payment failed email error:", err))
         }
       }
       return NextResponse.json({ ok: true, event: "payment.failed" })
@@ -145,29 +199,35 @@ export async function POST(request: NextRequest) {
     }
     const orderSession = readOrderSessionToken(kv ? await kv.get(`os:${orderId}`) : null)
 
-    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+    const ordersBaseId = process.env.AIRTABLE_ORDERS_BASE_ID || ""
 
-    // Idempotency layer 2 — Airtable dedup check as fallback for KV race window
-    const existingPayment = await queryAirtableRecords({
-      baseId: ordersBaseId,
-      tableName: "Payments",
-      filterByFormula: `{Payment ID} = "${escapeAirtableValue(paymentId)}"`,
-      maxRecords: 1,
-    }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
+    // Idempotency layer 2 — Supabase primary dedup, Airtable as mirror fallback.
+    const existingSupabasePayment = await getSupabasePaymentByPaymentId(paymentId).catch(() => null)
+    const existingPayment = existingSupabasePayment || !ordersBaseId || !hasAirtableOrdersConfig()
+      ? []
+      : await queryAirtableRecords({
+          baseId: ordersBaseId,
+          tableName: "Payments",
+          filterByFormula: `{Payment ID} = "${escapeAirtableValue(paymentId)}"`,
+          maxRecords: 1,
+        }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
 
-    if (existingPayment.length > 0) {
+    if (existingSupabasePayment || existingPayment.length > 0) {
       return NextResponse.json({ ok: true, message: "Already processed (dedup)" })
     }
 
-    // Look up the abandoned cart record to get order details
-    const cartRecords = await queryAirtableRecords({
-      baseId: ordersBaseId,
-      tableName: "Orders",
-      filterByFormula: `{Razorpay Order ID} = "${escapeAirtableValue(orderId)}"`,
-      maxRecords: 1,
-    })
+    // Look up the abandoned cart record to get order details.
+    const supabaseCart = await getSupabaseOrderByRazorpayOrderId(orderId).catch(() => null)
+    const cartRecords = supabaseCart || !ordersBaseId || !hasAirtableOrdersConfig()
+      ? []
+      : await queryAirtableRecords({
+          baseId: ordersBaseId,
+          tableName: "Orders",
+          filterByFormula: `{Razorpay Order ID} = "${escapeAirtableValue(orderId)}"`,
+          maxRecords: 1,
+        })
 
-    if (cartRecords.length === 0) {
+    if (!supabaseCart && cartRecords.length === 0) {
       console.error(`Webhook: No abandoned cart found for order ${orderId}, payment ${paymentId}`)
       await logErrorToAirtable(`Razorpay Webhook Missing Cart (Order: ${orderId})`, `Payment ${paymentId} captured but no Orders row exists for ${orderId}. Releasing claim so Razorpay retry can process it.`, {
         route: "/api/webhooks/razorpay",
@@ -183,9 +243,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Cart record not found, retry expected" }, { status: 500 })
     }
 
-    const cart = cartRecords[0]!
-    const fields = cart.fields
-    const packId = String(fields["Pack ID"] || "")
+    const cart = cartRecords[0]
+    const fields = cart?.fields || {}
+    const shipping = (supabaseCart?.shipping || {}) as Record<string, unknown>
+    const sourcePayload = (supabaseCart?.source_payload || {}) as Record<string, unknown>
+    const packId = String(sourcePayload.packId || fields["Pack ID"] || "")
     const pack = getPackById(packId)
 
     if (!pack) {
@@ -193,50 +255,94 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, message: "Invalid pack" })
     }
 
-    const customerName = String(fields["Customer Name"] || "")
-    const customerEmail = String(fields["Customer Email"] || "")
-    const customerPhone = String(fields["Customer Phone"] || "")
-    const shippingAddress = String(fields["Shipping Address"] || "")
-    const shippingCity = String(fields["Shipping City"] || "")
-    const shippingState = String(fields["Shipping State"] || "")
-    const shippingPincode = String(fields["Shipping Pincode"] || "")
+    const customerName = String(supabaseCart?.customer_name || fields["Customer Name"] || shipping.name || "")
+    const customerEmail = String(supabaseCart?.customer_email || fields["Customer Email"] || shipping.email || "")
+    const customerPhone = String(supabaseCart?.customer_phone || fields["Customer Phone"] || shipping.phone || "")
+    const shippingAddress = String(shipping.address || fields["Shipping Address"] || "")
+    const shippingCity = String(shipping.city || fields["Shipping City"] || "")
+    const shippingState = String(shipping.state || fields["Shipping State"] || "")
+    const shippingPincode = String(shipping.pincode || fields["Shipping Pincode"] || "")
     const buyerGstNumber = String(fields["GST Number"] || fields["GST number"] || orderSession?.shipping.gstNumber || "")
     const buyerBusinessName = String(fields["GST Business Name"] || orderSession?.shipping.gstBusinessName || "")
-    const fullAddress = String(fields["Full Shipping Address"] || "")
-    const status = String(fields["Status"] || "")
-    const chargedAmount = Number(fields["Amount"] || 0) || payment.amount / 100 || pack.price
-    const promoCode = String(fields["Promo Code"] || "")
-    const discountAmount = Number(fields["Discount Amount"] || 0) || 0
+    const fullAddress = String(shipping.fullAddress || fields["Full Shipping Address"] || "")
+    const status = String(supabaseCart?.status || fields["Status"] || "")
+    const chargedAmount = Number(supabaseCart?.amount || fields["Amount"] || 0) || payment.amount / 100 || pack.price
+    const promoCode = String(sourcePayload.promoCode || fields["Promo Code"] || "")
+    const discountAmount = Number(sourcePayload.discountAmount || fields["Discount Amount"] || 0) || 0
 
     // Only process if not already converted
     if (status === "converted") {
       return NextResponse.json({ ok: true, message: "Already converted" })
     }
 
-    const { id: paymentRecordId } = await saveRecordToAirtable(
-      {
-        "Payment ID": paymentId,
-        "Order ID": orderId,
-        "Pack": pack.title,
-        "Quantity": pack.qty,
-        "Amount": chargedAmount,
-        "Customer Name": customerName,
-        "Customer Email": customerEmail,
-        "Customer Phone": customerPhone,
-        "Shipping Address": shippingAddress,
-        "Shipping City": shippingCity,
-        "Shipping State": shippingState,
-        "Shipping Pincode": shippingPincode,
-        "Full Shipping Address": fullAddress,
-        "Timestamp": new Date().toISOString(),
-        "Shipping Status": "Processing",
-        ...(promoCode ? { "Promo Code": promoCode } : {}),
-        ...(discountAmount ? { "Discount Amount": discountAmount } : {}),
-        ...(buyerGstNumber ? { "GST Number": buyerGstNumber } : {}),
-        ...(buyerBusinessName ? { "GST Business Name": buyerBusinessName } : {}),
+    const paidAt = new Date().toISOString()
+    const supabasePayment = await upsertSupabasePayment({
+      payment_id: paymentId,
+      order_id: orderId,
+      pack: pack.title,
+      quantity: pack.qty,
+      amount: chargedAmount,
+      customer_name: customerName,
+      customer_email: customerEmail,
+      customer_phone: customerPhone,
+      shipping_address: shippingAddress,
+      shipping_city: shippingCity,
+      shipping_state: shippingState,
+      shipping_pincode: shippingPincode,
+      full_shipping_address: fullAddress,
+      paid_at: paidAt,
+      shipping_status: "Processing",
+      promo_code: promoCode || null,
+      discount_amount: discountAmount,
+      gst_number: buyerGstNumber || null,
+      gst_business_name: buyerBusinessName || null,
+      migrated_from: "razorpay_webhook",
+      source_payload: {
+        razorpayPayment: payment,
+        cart: supabaseCart || fields,
       },
-      { baseId: ordersBaseId, tableName: "Payments" }
-    )
+    }).catch((err) => {
+      console.error("Webhook: Supabase payment persist failed, trying Airtable mirror:", err)
+      return null
+    })
+
+    let paymentRecordId: string | null = null
+    if (ordersBaseId && hasAirtableOrdersConfig()) {
+      try {
+        const airtablePayment = await saveRecordToAirtable(
+          {
+            "Payment ID": paymentId,
+            "Order ID": orderId,
+            "Pack": pack.title,
+            "Quantity": pack.qty,
+            "Amount": chargedAmount,
+            "Customer Name": customerName,
+            "Customer Email": customerEmail,
+            "Customer Phone": customerPhone,
+            "Shipping Address": shippingAddress,
+            "Shipping City": shippingCity,
+            "Shipping State": shippingState,
+            "Shipping Pincode": shippingPincode,
+            "Full Shipping Address": fullAddress,
+            "Timestamp": paidAt,
+            "Shipping Status": "Processing",
+            ...(promoCode ? { "Promo Code": promoCode } : {}),
+            "Discount Amount": discountAmount,
+            ...(buyerGstNumber ? { "GST Number": buyerGstNumber } : {}),
+            ...(buyerBusinessName ? { "GST Business Name": buyerBusinessName } : {}),
+          },
+          { baseId: ordersBaseId, tableName: "Payments" }
+        )
+        paymentRecordId = airtablePayment.id
+      } catch (err) {
+        console.error("Webhook: Airtable payment mirror failed:", err)
+        if (!supabasePayment) throw err
+      }
+    }
+
+    if (!supabasePayment && !paymentRecordId) {
+      throw new Error("No backend store is configured for captured payment persistence.")
+    }
 
     // ── Critical path: stock + promo (must succeed before fulfillment) ────────
     // These are awaited sequentially so a promo increment never lands without
@@ -302,14 +408,15 @@ export async function POST(request: NextRequest) {
         customerEmail,
       }).catch((err) => {
         console.error("Webhook: cart conversion/supersede failed:", err)
-        // Fall back to the original inline update if the helper errored before
-        // marking the row. Beats leaving the paid cart stuck in `pending`.
+        updateSupabaseOrderByRazorpayOrderId(orderId, { status: "converted" })
+          .catch((e) => console.error("Webhook: fallback Supabase conversion update failed:", e))
+        if (!ordersBaseId || !cart || !hasAirtableOrdersConfig()) return Promise.resolve()
         return updateAirtableRecord({
           baseId: ordersBaseId,
           tableName: "Orders",
           recordId: cart.id,
           fields: { Status: "converted", "Converted At": new Date().toISOString().split("T")[0]! },
-        }).catch((e) => console.error("Webhook: fallback conversion update failed:", e))
+        }).catch((e) => console.error("Webhook: fallback Airtable conversion update failed:", e))
       }),
     ]
     if (shouldSendEmail) {
@@ -353,22 +460,32 @@ export async function POST(request: NextRequest) {
           weight: pack.qty * 0.5,
         }).then(async (result) => {
           if (result) {
-            await updateAirtableRecord({
-              baseId: ordersBaseId,
-              tableName: "Payments",
-              recordId: paymentRecordId,
-              fields: {
-                "Shiprocket Order ID": result.orderId,
-                "Shipment ID": result.shipmentId,
-                "AWB Code": result.awbCode || "",
-                "Courier Name": result.courierName || "",
-                "Shipping Status": result.pickupRequested
-                  ? "Pickup Requested"
-                  : result.awbCode
-                    ? "AWB Assigned"
-                    : "Processing",
-              },
-            }).catch((err) => console.error("Webhook: Failed to update status on success:", err))
+            const shippingStatus = result.pickupRequested
+              ? "Pickup Requested"
+              : result.awbCode
+                ? "AWB Assigned"
+                : "Processing"
+            await updateSupabasePaymentByOrderId(orderId, {
+              shiprocket_order_id: result.orderId,
+              shipment_id: result.shipmentId,
+              awb_code: result.awbCode || "",
+              courier_name: result.courierName || "",
+              shipping_status: shippingStatus,
+            }).catch((err) => console.error("Webhook: Failed to update Supabase status on success:", err))
+            if (ordersBaseId && paymentRecordId && hasAirtableOrdersConfig()) {
+              await updateAirtableRecord({
+                baseId: ordersBaseId,
+                tableName: "Payments",
+                recordId: paymentRecordId,
+                fields: {
+                  "Shiprocket Order ID": result.orderId,
+                  "Shipment ID": result.shipmentId,
+                  "AWB Code": result.awbCode || "",
+                  "Courier Name": result.courierName || "",
+                  "Shipping Status": shippingStatus,
+                },
+              }).catch((err) => console.error("Webhook: Failed to update Airtable status on success:", err))
+            }
           }
         }).catch(async (err) => {
           console.error("Webhook: Shiprocket order creation failed:", err)
@@ -378,14 +495,18 @@ export async function POST(request: NextRequest) {
             stage: "create-order",
             orderId,
             paymentId,
-            recordId: paymentRecordId,
+            recordId: paymentRecordId || undefined,
           }).catch(() => {})
-          await updateAirtableRecord({
-            baseId: ordersBaseId,
-            tableName: "Payments",
-            recordId: paymentRecordId,
-            fields: { "Shipping Status": "Shiprocket Failed" },
-          }).catch((err) => console.error("Webhook: Failed to update status on error:", err))
+          await updateSupabasePaymentByOrderId(orderId, { shipping_status: "Shiprocket Failed" })
+            .catch((updateErr) => console.error("Webhook: Failed to update Supabase status on error:", updateErr))
+          if (ordersBaseId && paymentRecordId && hasAirtableOrdersConfig()) {
+            await updateAirtableRecord({
+              baseId: ordersBaseId,
+              tableName: "Payments",
+              recordId: paymentRecordId,
+              fields: { "Shipping Status": "Shiprocket Failed" },
+            }).catch((updateErr) => console.error("Webhook: Failed to update Airtable status on error:", updateErr))
+          }
         })
       )
     } else {

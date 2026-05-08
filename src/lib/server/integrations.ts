@@ -6,6 +6,13 @@ import {
   type AbandonedCartEmailOptions,
 } from "@/lib/email/abandoned-cart-templates";
 import { generateInvoicePdf } from "@/lib/pdf/generate-invoice";
+import {
+  getNextSupabaseInvoiceSeq,
+  isSupabaseConfigured,
+  logErrorToSupabase,
+  updateSupabasePaymentByOrderId,
+  uploadSupabaseInvoice,
+} from "@/lib/server/supabase";
 
 type AirtableOptions = {
   tableName?: string;
@@ -57,6 +64,10 @@ export function getRequiredEnv(name: string) {
 
 function hasMailjetConfig() {
   return Boolean(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET);
+}
+
+export function hasAirtableOrdersConfig() {
+  return Boolean(process.env.AIRTABLE_ORDERS_BASE_ID && process.env.AIRTABLE_TOKEN);
 }
 
 export async function saveRecordToAirtable(
@@ -131,32 +142,49 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
     return;
   }
 
-  const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID");
+  const ordersBaseId = process.env.AIRTABLE_ORDERS_BASE_ID;
 
-  // Assign a sequential invoice number, persist it to Airtable, and capture
-  // the record ID + whether a PDF attachment already exists (for idempotency).
+  // Assign a sequential invoice number, persist it to Supabase first, and then
+  // mirror it to Airtable when that mirror is configured.
   let invoiceSeq: number | undefined;
   let paymentRecordId: string | undefined;
   let hasExistingPdf = false;
   try {
-    invoiceSeq = await getNextInvoiceSeq(ordersBaseId);
+    invoiceSeq = (await getNextSupabaseInvoiceSeq().catch((err) => {
+      console.error("Supabase invoice sequence assignment failed, falling back to Airtable:", err);
+      return null;
+    })) || undefined;
+    if (!invoiceSeq && ordersBaseId && process.env.AIRTABLE_TOKEN) {
+      invoiceSeq = await getNextInvoiceSeq(ordersBaseId);
+    }
 
-    const paymentRecords = await queryAirtableRecords({
-      baseId: ordersBaseId,
-      tableName: "Payments",
-      filterByFormula: `{Order ID} = "${options.orderId.replace(/"/g, '\\"')}"`,
-      maxRecords: 1,
-    });
-    if (paymentRecords.length > 0) {
-      paymentRecordId = paymentRecords[0]!.id;
-      const existingAttachments = paymentRecords[0]!.fields["Invoice PDF"];
-      hasExistingPdf = Array.isArray(existingAttachments) && existingAttachments.length > 0;
-      await updateAirtableRecord({
+    if (invoiceSeq && isSupabaseConfigured()) {
+      await updateSupabasePaymentByOrderId(options.orderId, {
+        invoice_seq: invoiceSeq,
+        invoice_no: formatInvoiceNumberForStorage(invoiceSeq),
+      }).catch((err) => console.error("Supabase invoice sequence mirror failed:", err));
+    }
+
+    if (ordersBaseId && process.env.AIRTABLE_TOKEN) {
+      const paymentRecords = await queryAirtableRecords({
         baseId: ordersBaseId,
         tableName: "Payments",
-        recordId: paymentRecordId,
-        fields: { "Invoice Number": invoiceSeq },
+        filterByFormula: `{Order ID} = "${options.orderId.replace(/"/g, '\\"')}"`,
+        maxRecords: 1,
       });
+      if (paymentRecords.length > 0) {
+        paymentRecordId = paymentRecords[0]!.id;
+        const existingAttachments = paymentRecords[0]!.fields["Invoice PDF"];
+        hasExistingPdf = Array.isArray(existingAttachments) && existingAttachments.length > 0;
+        if (invoiceSeq) {
+          await updateAirtableRecord({
+            baseId: ordersBaseId,
+            tableName: "Payments",
+            recordId: paymentRecordId,
+            fields: { "Invoice Number": invoiceSeq },
+          });
+        }
+      }
     }
   } catch (err) {
     console.error("Invoice sequence assignment failed:", err);
@@ -200,10 +228,17 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
       Base64Content: base64Pdf,
     }];
 
-    // Upload to the Payments record so the finance team can access invoices
-    // directly from Airtable without going through the customer-facing API.
+    if (isSupabaseConfigured()) {
+      const storagePath = `${String(invoiceSeq || Date.now()).padStart(4, "0")}-${options.orderId}.pdf`;
+      await uploadSupabaseInvoice(storagePath, pdfBytes)
+        .then(() => updateSupabasePaymentByOrderId(options.orderId, { invoice_storage_path: storagePath }))
+        .catch((err) => console.error("Invoice Supabase upload failed (non-blocking):", err));
+    }
+
+    // Upload to the Airtable mirror so the finance team can still access
+    // invoices directly from Airtable during the migration.
     // Skipped when an attachment already exists so retries stay idempotent.
-    if (paymentRecordId && !hasExistingPdf) {
+    if (ordersBaseId && paymentRecordId && !hasExistingPdf) {
       await uploadAttachmentToAirtableRecord({
         baseId: ordersBaseId,
         recordId: paymentRecordId,
@@ -374,6 +409,18 @@ function serializeErrorForLog(error: unknown) {
  */
 export async function logErrorToAirtable(context: string, error: unknown, options: ErrorLogOptions = {}) {
   try {
+    await logErrorToSupabase(context, error, {
+      route: options.route,
+      service: options.service,
+      stage: options.stage,
+      orderId: options.orderId,
+      paymentId: options.paymentId,
+      recordId: options.recordId,
+      severity: options.severity || "error",
+      httpStatus: options.httpStatus,
+      ...(options.extra || {}),
+    });
+
     const baseId = options.baseId || process.env.AIRTABLE_ORDERS_BASE_ID;
     const token = process.env.AIRTABLE_TOKEN;
     if (!baseId || !token) return;
@@ -522,6 +569,12 @@ function uint8ToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i])
   }
   return btoa(binary)
+}
+
+function formatInvoiceNumberForStorage(invoiceSeq: number) {
+  const now = new Date();
+  const fyStart = now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  return `UHC${String(fyStart).slice(2)}/${invoiceSeq}`;
 }
 
 /* ─── Invoice Sequence Helper ─── */

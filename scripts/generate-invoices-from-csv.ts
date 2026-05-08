@@ -9,6 +9,19 @@ const DEFAULT_INPUT = "/Users/aakashsingh/Downloads/Payments-Grid view.csv"
 const DEFAULT_OUTPUT = "/Users/aakashsingh/Downloads/corrected-unholy-invoices"
 
 type CsvRow = Record<string, string>
+type ParsedAddress = {
+  address: string
+  city: string
+  state: string
+  pincode: string
+  phone?: string
+}
+
+const HISTORICAL_GROSS_AMOUNTS: Record<string, number> = {
+  "Starter Ritual:6": 1200,
+  "Weekend Coven:12": 2220,
+  "True Believer:24": 4056,
+}
 
 const INDIAN_STATES = [
   "Andaman and Nicobar Islands",
@@ -105,6 +118,15 @@ function parseAmount(value: string): number {
   return Number(clean) || 0
 }
 
+function historicalDiscountAmount(row: CsvRow): number {
+  const explicit = parseAmount(row["Discount Amount"] || "")
+  if (explicit > 0) return explicit
+
+  const gross = HISTORICAL_GROSS_AMOUNTS[`${row.Pack}:${row.Quantity}`]
+  const paid = parseAmount(row.Amount)
+  return gross && paid > 0 && gross > paid ? gross - paid : 0
+}
+
 function parseDate(value: string): Date {
   const raw = value.trim()
   const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})(am|pm)$/i)
@@ -138,7 +160,23 @@ function sequenceDate(row: CsvRow, index: number): Date {
   throw new Error(`Missing Timestamp for row: ${JSON.stringify(row)}`)
 }
 
-function parseAddress(row: CsvRow) {
+function knownAddressOverride(row: CsvRow): ParsedAddress | null {
+  if (row["Order ID"] === "order_SYc2pxUSNVSjEx") {
+    return {
+      address: "Bajrang Gadh, 20, Ball Bairathi Nagar 2nd",
+      city: "Mahesh Nagar, Jaipur",
+      state: "Rajasthan",
+      pincode: "302015",
+      phone: "9929307024",
+    }
+  }
+  return null
+}
+
+function parseAddress(row: CsvRow): ParsedAddress {
+  const override = knownAddressOverride(row)
+  if (override) return override
+
   const full = row["Full Shipping Address"] || ""
   const parts = full.split(",").map((p) => p.trim()).filter(Boolean)
   const pincode = row["Shipping Pincode"] || full.match(/\b\d{6}\b/)?.[0] || ""
@@ -232,14 +270,14 @@ async function main() {
       amount: parseAmount(row.Amount),
       customerName: row["Customer Name"],
       customerEmail: row["Customer Email"],
-      customerPhone: row["Customer Phone"] || undefined,
+      customerPhone: address.phone || row["Customer Phone"] || undefined,
       shippingAddress: address.address,
       shippingCity: address.city || undefined,
       shippingState: address.state || undefined,
       shippingPincode: address.pincode || undefined,
       timestamp: date.toISOString(),
       promoCode: row["Promo Code"] || undefined,
-      discountAmount: parseAmount(row["Discount Amount"] || ""),
+      discountAmount: historicalDiscountAmount(row),
       buyerGstNumber: gst.gstNumber || undefined,
       buyerBusinessName: gst.businessName || undefined,
       invoiceSeq,

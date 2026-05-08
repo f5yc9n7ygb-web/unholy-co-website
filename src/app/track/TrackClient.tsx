@@ -14,6 +14,7 @@ type TrackingActivity = {
 type Order = {
   orderId: string
   customerEmail: string
+  customerPhone?: string
   pack: string
   quantity: number
   amount: number
@@ -87,6 +88,12 @@ function OrderCard({ order, defaultExpanded = false, showTrackingProgress = true
 }) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
   const stepIndex = getStepIndex(order.shippingStatus)
+  const invoiceIdentifier = order.customerEmail
+    ? `email=${encodeURIComponent(order.customerEmail)}`
+    : order.customerPhone
+      ? `phone=${encodeURIComponent(order.customerPhone)}`
+      : ""
+  const invoiceHref = `/api/invoice/${encodeURIComponent(order.orderId)}${invoiceIdentifier ? `?${invoiceIdentifier}` : ""}`
 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
@@ -213,7 +220,7 @@ function OrderCard({ order, defaultExpanded = false, showTrackingProgress = true
                   Reorder
                 </a>
                 <a
-                  href={`/api/invoice/${encodeURIComponent(order.orderId)}?email=${encodeURIComponent(order.customerEmail)}`}
+                  href={invoiceHref}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-ghost px-5 py-2.5 text-xs"

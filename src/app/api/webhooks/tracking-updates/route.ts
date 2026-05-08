@@ -12,7 +12,7 @@ import { Buffer } from "node:buffer"
 import { timingSafeEqual } from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
 import {
-  getRequiredEnv,
+  hasAirtableOrdersConfig,
   queryAirtableRecords,
   updateAirtableRecord,
   sendMailjetEmail,
@@ -21,6 +21,11 @@ import { escapeAirtableValue } from "@/lib/server/security"
 import { buildShippingUpdateHtml, buildShippingUpdateText } from "@/lib/email/shipping-update-template"
 import { getKVNamespace } from "@/lib/server/kv"
 import { getShiprocketOrderDetails } from "@/lib/server/shiprocket"
+import {
+  getSupabasePaymentByAwb,
+  getSupabasePaymentByOrderId,
+  updateSupabasePaymentByOrderId,
+} from "@/lib/server/supabase"
 
 /** Shiprocket sr-status code → human-readable status */
 const STATUS_MAP: Record<number, string> = {
@@ -124,7 +129,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Missing order_id or awb" }, { status: 400 })
     }
 
-    const ordersBaseId = getRequiredEnv("AIRTABLE_ORDERS_BASE_ID")
+    const ordersBaseId = process.env.AIRTABLE_ORDERS_BASE_ID || ""
     const effectiveStatusId = current_status_id || shipment_status_id
     const statusLabel = current_status ||
       (effectiveStatusId ? STATUS_MAP[effectiveStatusId] : null) ||
@@ -135,20 +140,30 @@ export async function POST(request: NextRequest) {
       ? `{Order ID} = "${escapeAirtableValue(razorpayOrderId)}"`
       : `{AWB Code} = "${escapeAirtableValue(awb || "")}"`
 
-    const records = await queryAirtableRecords({
-      baseId: ordersBaseId,
-      tableName: "Payments",
-      filterByFormula: filterFormula,
-      maxRecords: 1,
-    })
+    const supabasePayment = razorpayOrderId
+      ? await getSupabasePaymentByOrderId(razorpayOrderId).catch(() => null)
+      : awb
+        ? await getSupabasePaymentByAwb(awb).catch(() => null)
+        : null
+    const records = !ordersBaseId || !hasAirtableOrdersConfig()
+      ? []
+      : await queryAirtableRecords({
+          baseId: ordersBaseId,
+          tableName: "Payments",
+          filterByFormula: filterFormula,
+          maxRecords: 1,
+        }).catch((err) => {
+          console.error("Shipping webhook: Airtable mirror lookup failed:", err)
+          return [] as Awaited<ReturnType<typeof queryAirtableRecords>>
+        })
 
-    if (records.length === 0) {
+    if (!supabasePayment && records.length === 0) {
       console.warn(`Shipping webhook: No payment record found for ${razorpayOrderId || awb}`)
       return NextResponse.json({ ok: true, message: "No matching record" })
     }
 
-    const record = records[0]!
-    const fields = record.fields
+    const record = records[0]
+    const fields = record?.fields || {}
 
     // Idempotency applies to email sends only — Airtable writes are idempotent
     // assignments and dropping them caused AWBs to go missing when Shiprocket
@@ -156,7 +171,7 @@ export async function POST(request: NextRequest) {
     const kv = await getKVNamespace()
     let alreadyEmailed = false
     if (kv && effectiveStatusId) {
-      const dedupKey = `sr_evt:${record.id}:${effectiveStatusId}`
+      const dedupKey = `sr_evt:${supabasePayment?.order_id || record?.id || razorpayOrderId || awb}:${effectiveStatusId}`
       alreadyEmailed = Boolean(await kv.get(dedupKey))
     }
 
@@ -165,8 +180,8 @@ export async function POST(request: NextRequest) {
       "Shipping Status": statusLabel,
     }
 
-    let effectiveAwb = awb || String(fields["AWB Code"] || "")
-    let effectiveCourier = courier_name || String(fields["Courier Name"] || "")
+    let effectiveAwb = awb || String(supabasePayment?.awb_code || fields["AWB Code"] || "")
+    let effectiveCourier = courier_name || String(supabasePayment?.courier_name || fields["Courier Name"] || "")
 
     if (awb && !fields["AWB Code"]) {
       updateFields["AWB Code"] = awb
@@ -182,7 +197,7 @@ export async function POST(request: NextRequest) {
     // fetch it directly from Shiprocket. Shiprocket frequently sends status
     // updates without the `awb` field, leaving AWB Code empty forever.
     if (!effectiveAwb) {
-      const shiprocketOrderId = Number(fields["Shiprocket Order ID"])
+      const shiprocketOrderId = Number(supabasePayment?.shiprocket_order_id || fields["Shiprocket Order ID"])
       if (shiprocketOrderId) {
         try {
           const details = await getShiprocketOrderDetails(shiprocketOrderId)
@@ -205,24 +220,38 @@ export async function POST(request: NextRequest) {
       updateFields["Delivered At"] = new Date().toISOString()
     }
 
-    await updateAirtableRecord({
-      baseId: ordersBaseId,
-      tableName: "Payments",
-      recordId: record.id,
-      fields: updateFields,
-    })
+    const supabaseUpdateFields = {
+      shipping_status: statusLabel,
+      ...(updateFields["AWB Code"] ? { awb_code: String(updateFields["AWB Code"]) } : {}),
+      ...(updateFields["Courier Name"] ? { courier_name: String(updateFields["Courier Name"]) } : {}),
+      ...(updateFields["Estimated Delivery"] ? { estimated_delivery: String(updateFields["Estimated Delivery"]) } : {}),
+      ...(updateFields["Delivered At"] ? { delivered_at: String(updateFields["Delivered At"]) } : {}),
+    }
+    if (supabasePayment?.order_id || razorpayOrderId) {
+      await updateSupabasePaymentByOrderId(supabasePayment?.order_id || razorpayOrderId || "", supabaseUpdateFields)
+        .catch((err) => console.error("Shipping webhook: Supabase update failed:", err))
+    }
+
+    if (ordersBaseId && record && hasAirtableOrdersConfig()) {
+      await updateAirtableRecord({
+        baseId: ordersBaseId,
+        tableName: "Payments",
+        recordId: record.id,
+        fields: updateFields,
+      })
+    }
 
     // Claim the idempotency key now that we've applied the update so future
     // duplicate events skip the email but can still re-sync Airtable.
     if (kv && effectiveStatusId && !alreadyEmailed) {
-      const dedupKey = `sr_evt:${record.id}:${effectiveStatusId}`
+      const dedupKey = `sr_evt:${supabasePayment?.order_id || record?.id || razorpayOrderId}:${effectiveStatusId}`
       await kv.put(dedupKey, "1", { expirationTtl: 48 * 60 * 60 }).catch(() => {})
     }
 
     // Send email notification for key status changes
-    const customerEmail = String(fields["Customer Email"] || "")
-    const customerName = String(fields["Customer Name"] || "")
-    const orderId = String(fields["Order ID"] || razorpayOrderId || "")
+    const customerEmail = String(supabasePayment?.customer_email || fields["Customer Email"] || "")
+    const customerName = String(supabasePayment?.customer_name || fields["Customer Name"] || "")
+    const orderId = String(supabasePayment?.order_id || fields["Order ID"] || razorpayOrderId || "")
     // Notify on: Shipped(6), In Transit(18), Out for Delivery(17), Delivered(7), Picked Up(42)
     const shouldNotify = [6, 7, 17, 18, 42].includes(effectiveStatusId || 0) && !alreadyEmailed
     const isDelivered = effectiveStatusId === 7

@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
-import { getGstAmount, getBasePrice, GST_RATE } from "@/lib/shop/catalog"
+import { GST_RATE } from "@/lib/shop/catalog"
 import {
   COMPANY_GSTIN,
   COMPANY_LEGAL_NAME,
@@ -33,6 +33,13 @@ export type InvoiceData = {
   invoiceSeq?: number
   /** Exact invoice number to render when repairing already-issued PDFs */
   invoiceNumber?: string
+  /**
+   * Override the interstate/intra-state determination. Used when reissuing an
+   * invoice for a migrated row whose state was corrected after the original
+   * invoice was issued — we keep the original tax treatment to avoid changing
+   * a stamped CGST+SGST invoice into IGST on reprint.
+   */
+  taxType?: "CGST+SGST" | "IGST"
 }
 
 /* ─── Indian state name → GST state code ─── */
@@ -61,12 +68,35 @@ function getGstinStateCode(gstin?: string): string {
   return /^\d{2}$/.test(code) ? code : ""
 }
 
-function formatTaxAmount(amount: number): string {
-  const hasFraction = !Number.isInteger(amount)
+function getStateNameByCode(code: string): string {
+  return Object.entries(STATE_CODES).find(([, stateCode]) => stateCode === code)?.[0]
+    ?.split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ") || ""
+}
+
+function toPaise(amount: number): number {
+  return Math.round(amount * 100)
+}
+
+function fromPaise(paise: number): number {
+  return paise / 100
+}
+
+function taxExclusivePaise(inclusivePaise: number): number {
+  return Math.round(inclusivePaise / (1 + GST_RATE))
+}
+
+function formatMoney(amount: number): string {
   return amount.toLocaleString("en-IN", {
-    minimumFractionDigits: hasFraction ? 2 : 0,
-    maximumFractionDigits: hasFraction ? 2 : 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })
+}
+
+function splitTaxPaise(totalTaxPaise: number): [number, number] {
+  const firstHalf = Math.floor(totalTaxPaise / 2)
+  return [firstHalf, totalTaxPaise - firstHalf]
 }
 
 /** Supplier state — Uttar Pradesh */
@@ -96,18 +126,22 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     timestamp, promoCode, discountAmount, buyerGstNumber, buyerBusinessName,
   } = data
 
-  const basePrice = getBasePrice(amount)
-  const gstAmount = getGstAmount(amount)
+  const amountPaise = toPaise(amount)
+  const discountPaise = toPaise(discountAmount || 0)
+  const originalAmountPaise = amountPaise + discountPaise
+  const grossTaxablePaise = taxExclusivePaise(originalAmountPaise)
+  const taxablePaise = taxExclusivePaise(amountPaise)
+  const discountTaxablePaise = Math.max(0, grossTaxablePaise - taxablePaise)
+  const gstPaise = amountPaise - taxablePaise
 
   // Determine if interstate (IGST) or intra-state (CGST+SGST).
   // We sell from UP. If old/backfilled records are missing a normalized state,
   // keep them intra-state instead of incorrectly defaulting UP buyers to IGST.
   const buyerStateCode = (shippingState ? getStateCode(shippingState) : "") || getGstinStateCode(buyerGstNumber)
-  const isInterstate = buyerStateCode !== "" && buyerStateCode !== SUPPLIER_STATE_CODE
-
-  // Original price before discount (for display)
-  const originalAmount = discountAmount ? amount + discountAmount : amount
-  const originalBasePrice = discountAmount ? getBasePrice(originalAmount) : basePrice
+  const buyerStateName = shippingState || getStateNameByCode(buyerStateCode)
+  const isInterstate = data.taxType
+    ? data.taxType === "IGST"
+    : buyerStateCode !== "" && buyerStateCode !== SUPPLIER_STATE_CODE
 
   const pdf = await PDFDocument.create()
   const page = pdf.addPage([595.28, 841.89]) // A4
@@ -176,9 +210,8 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   ]
 
   // Place of Supply (Rule 46(l))
-  if (shippingState) {
-    const code = getStateCode(shippingState)
-    invoiceDetails.push(["Place of Supply:", `${shippingState}${code ? ` (${code})` : ""}`])
+  if (buyerStateName) {
+    invoiceDetails.push(["Place of Supply:", `${buyerStateName}${buyerStateCode ? ` (${buyerStateCode})` : ""}`])
   }
 
   for (const [label, value] of invoiceDetails) {
@@ -209,7 +242,9 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     })
     y -= 14
   }
-  page.drawText(customerEmail, { x: leftMargin, y, size: 9, font: fontRegular, color: grey })
+  if (customerEmail) {
+    page.drawText(customerEmail, { x: leftMargin, y, size: 9, font: fontRegular, color: grey })
+  }
   if (customerPhone) {
     y -= 14
     page.drawText(`Phone: ${customerPhone}`, { x: leftMargin, y, size: 9, font: fontRegular, color: grey })
@@ -225,8 +260,8 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     }
   }
   // Buyer state name & code (Rule 46(e))
-  if (shippingState && buyerStateCode) {
-    page.drawText(`State: ${shippingState} (${buyerStateCode})`, {
+  if (buyerStateName && buyerStateCode) {
+    page.drawText(`State: ${buyerStateName} (${buyerStateCode})`, {
       x: leftMargin, y, size: 9, font: fontRegular, color: grey,
     })
     y -= 14
@@ -247,39 +282,63 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   })
 
   // ── Items Table (Rule 46(f)–(k)) ──
-  y -= 20
+  y -= 24
   page.drawRectangle({
     x: leftMargin, y: y - 4, width: rightEdge - leftMargin, height: 22,
     color: rgb(0.95, 0.95, 0.95),
   })
 
-  const cols = [
-    { label: "Description", x: leftMargin + 8 },
-    { label: "HSN", x: 240 },
-    { label: "Qty", x: 295 },
-    { label: "Unit", x: 335 },
-    { label: "Rate (Rs.)", x: 380 },
-    { label: "Taxable Val (Rs.)", x: 440 },
-  ]
+  const cols = discountPaise > 0
+    ? [
+        { label: "Description", x: leftMargin + 8, right: 228, align: "left" as const },
+        { label: "HSN", x: 238, right: 260, align: "left" as const },
+        { label: "Qty", x: 278, right: 292, align: "right" as const },
+        { label: "Unit", x: 305, right: 326, align: "left" as const },
+        { label: "Rate", x: 344, right: 378, align: "right" as const },
+        { label: "Gross Txbl", x: 390, right: 432, align: "right" as const },
+        { label: "Disc.", x: 446, right: 482, align: "right" as const },
+        { label: "Net Txbl", x: 496, right: 538, align: "right" as const },
+      ]
+    : [
+        { label: "Description", x: leftMargin + 8, right: 228, align: "left" as const },
+        { label: "HSN", x: 240, right: 270, align: "left" as const },
+        { label: "Qty", x: 295, right: 312, align: "right" as const },
+        { label: "Unit", x: 335, right: 360, align: "left" as const },
+        { label: "Rate (Rs.)", x: 380, right: 424, align: "right" as const },
+        { label: "Taxable Val (Rs.)", x: 440, right: 532, align: "right" as const },
+      ]
+
+  function drawCell(text: string, col: { x: number; right: number; align: "left" | "right" }, textY: number, size = 7.5, font = fontRegular, color = black) {
+    page.drawText(text, {
+      x: col.align === "right" ? col.right - font.widthOfTextAtSize(text, size) : col.x,
+      y: textY,
+      size,
+      font,
+      color,
+    })
+  }
+
   for (const col of cols) {
-    page.drawText(col.label, { x: col.x, y: y + 2, size: 7.5, font: fontBold, color: grey })
+    drawCell(col.label, col, y + 2, 7, fontBold, grey)
   }
 
   // Table row
   y -= 26
   page.drawText(`BloodThirst — ${pack}`, {
-    x: cols[0]!.x, y, size: 9, font: fontRegular, color: black,
+    x: cols[0]!.x, y, size: 8.5, font: fontRegular, color: black,
   })
-  page.drawText("2201", { x: cols[1]!.x, y, size: 9, font: fontRegular, color: black })
-  page.drawText(String(quantity), { x: cols[2]!.x, y, size: 9, font: fontRegular, color: black })
-  page.drawText("Can", { x: cols[3]!.x, y, size: 9, font: fontRegular, color: black })
-  const perUnit = originalBasePrice / quantity
-  page.drawText(perUnit.toFixed(2), {
-    x: cols[4]!.x, y, size: 9, font: fontRegular, color: black,
-  })
-  page.drawText(originalBasePrice.toLocaleString("en-IN"), {
-    x: cols[5]!.x, y, size: 9, font: fontRegular, color: black,
-  })
+  drawCell("2201", cols[1]!, y, 8.5)
+  drawCell(String(quantity), cols[2]!, y, 8.5)
+  drawCell("Can", cols[3]!, y, 8.5)
+  const perUnit = quantity > 0 ? fromPaise(grossTaxablePaise) / quantity : 0
+  drawCell(formatMoney(perUnit), cols[4]!, y, 8.5)
+  if (discountPaise > 0) {
+    drawCell(formatMoney(fromPaise(grossTaxablePaise)), cols[5]!, y, 8.5)
+    drawCell(formatMoney(fromPaise(discountTaxablePaise)), cols[6]!, y, 8.5)
+    drawCell(formatMoney(fromPaise(taxablePaise)), cols[7]!, y, 8.5)
+  } else {
+    drawCell(formatMoney(fromPaise(taxablePaise)), cols[5]!, y, 8.5)
+  }
 
   // HSN/SAC sub-label
   y -= 14
@@ -323,24 +382,26 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     return Math.max(18, labelLines.length * 11 + 4)
   }
 
-  const totals: [string, string, boolean?][] = [
-    ["Taxable Value", `Rs. ${originalBasePrice.toLocaleString("en-IN")}`],
-  ]
+  const totals: [string, string, boolean?][] = []
 
   // Discount line (Section 15(3) CGST Act — must show on invoice)
-  if (discountAmount && discountAmount > 0) {
-    const discountLabel = promoCode ? `Discount (${promoCode})` : "Discount"
-    totals.push([discountLabel, `- Rs. ${discountAmount.toLocaleString("en-IN")}`])
-    totals.push(["Taxable Value (after discount)", `Rs. ${basePrice.toLocaleString("en-IN")}`])
+  if (discountPaise > 0) {
+    totals.push(["Gross Value (incl. GST)", `Rs. ${formatMoney(fromPaise(originalAmountPaise))}`])
+    const discountLabel = promoCode ? `Discount (${promoCode}, incl. GST)` : "Discount (incl. GST)"
+    totals.push([discountLabel, `- Rs. ${formatMoney(fromPaise(discountPaise))}`])
+    totals.push(["Net Value (incl. GST)", `Rs. ${formatMoney(amount)}`])
+    totals.push(["Gross Taxable Value", `Rs. ${formatMoney(fromPaise(grossTaxablePaise))}`])
+    totals.push(["Taxable Discount", `- Rs. ${formatMoney(fromPaise(discountTaxablePaise))}`])
   }
+  totals.push(["Taxable Value", `Rs. ${formatMoney(fromPaise(taxablePaise))}`])
 
   // Tax breakdown — IGST for interstate, CGST+SGST for intra-state
   if (isInterstate) {
-    totals.push([`IGST (${GST_RATE * 100}%)`, `Rs. ${formatTaxAmount(gstAmount)}`])
+    totals.push([`IGST (${GST_RATE * 100}%)`, `Rs. ${formatMoney(fromPaise(gstPaise))}`])
   } else {
-    const halfGst = gstAmount / 2
-    totals.push([`CGST (${(GST_RATE * 100) / 2}%)`, `Rs. ${formatTaxAmount(halfGst)}`])
-    totals.push([`SGST (${(GST_RATE * 100) / 2}%)`, `Rs. ${formatTaxAmount(halfGst)}`])
+    const [cgstPaise, sgstPaise] = splitTaxPaise(gstPaise)
+    totals.push([`CGST (${(GST_RATE * 100) / 2}%)`, `Rs. ${formatMoney(fromPaise(cgstPaise))}`])
+    totals.push([`SGST (${(GST_RATE * 100) / 2}%)`, `Rs. ${formatMoney(fromPaise(sgstPaise))}`])
   }
 
   for (const [label, value] of totals) {
@@ -356,7 +417,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     thickness: 1, color: bloodRed,
   })
   page.drawText("TOTAL", { x: totalCol, y: y - 8, size: 11, font: fontBold, color: black })
-  drawRightAlignedText(`Rs. ${amount.toLocaleString("en-IN")}`, totalValRight, y - 8, 11, fontBold, bloodRed)
+  drawRightAlignedText(`Rs. ${formatMoney(amount)}`, totalValRight, y - 8, 11, fontBold, bloodRed)
 
   // Amount in words
   y -= 28

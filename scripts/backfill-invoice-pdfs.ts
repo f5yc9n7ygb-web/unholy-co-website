@@ -155,6 +155,64 @@ async function uploadPdf(
   }
 }
 
+// ─── Supabase mirror ─────────────────────────────────────────────────────────
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "")
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+const SUPABASE_BUCKET = process.env.SUPABASE_INVOICE_BUCKET || "invoices"
+const SUPABASE_ENABLED = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+
+async function supabaseUploadInvoicePdf(storagePath: string, pdfBytes: Uint8Array): Promise<void> {
+  if (!SUPABASE_ENABLED) return
+  const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/")
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(SUPABASE_BUCKET)}/${encodedPath}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/pdf",
+      "x-upsert": "true",
+    },
+    body: pdfBytes as any,
+  })
+  if (!res.ok) {
+    throw new Error(`Supabase storage upload failed (${res.status}): ${await res.text()}`)
+  }
+}
+
+async function supabasePaymentRowExists(orderId: string): Promise<boolean> {
+  if (!SUPABASE_ENABLED || !orderId) return false
+  const params = new URLSearchParams({ select: "order_id", order_id: `eq.${orderId}`, limit: "1" })
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/payments?${params}`, {
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  })
+  if (!res.ok) {
+    throw new Error(`Supabase payments lookup failed for ${orderId}: ${res.status} ${await res.text()}`)
+  }
+  const rows = (await res.json()) as Array<{ order_id: string }>
+  return rows.length > 0
+}
+
+async function supabasePatchPaymentByOrderId(orderId: string, patch: Record<string, unknown>): Promise<void> {
+  if (!SUPABASE_ENABLED || !orderId) return
+  const params = new URLSearchParams({ order_id: `eq.${orderId}` })
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/payments?${params}`, {
+    method: "PATCH",
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) {
+    throw new Error(`Supabase payments PATCH failed for ${orderId}: ${res.status} ${await res.text()}`)
+  }
+}
+
 // ---------------------------------------------------------------------------
 
 async function main() {
@@ -233,6 +291,27 @@ async function main() {
       })
 
       await uploadPdf(baseId, token, recordId, `UNHOLY-Invoice-${orderId}.pdf`, pdfBytes)
+
+      if (SUPABASE_ENABLED) {
+        try {
+          // Skip Supabase upload entirely if the payments row hasn't been migrated yet —
+          // otherwise the storage object is orphaned with no row to reference it.
+          if (!(await supabasePaymentRowExists(orderId))) {
+            process.stdout.write("(supabase row missing, skipped) ")
+          } else {
+            const storagePath = `${String(invoiceSeq).padStart(4, "0")}-${orderId}.pdf`
+            await supabaseUploadInvoicePdf(storagePath, pdfBytes)
+            await supabasePatchPaymentByOrderId(orderId, {
+              invoice_seq: invoiceSeq,
+              invoice_storage_path: storagePath,
+            })
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          process.stdout.write(`(supabase skipped: ${msg}) `)
+        }
+      }
+
       process.stdout.write("✓\n")
       succeeded++
     } catch (err) {
