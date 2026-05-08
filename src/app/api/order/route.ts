@@ -4,7 +4,7 @@ import { getPackById } from "@/lib/shop/catalog"
 import type { ShippingForm } from "@/lib/shop/types"
 import { validatePromoCode } from "@/lib/shop/promo"
 import { hasAirtableOrdersConfig, getRequiredEnv, logErrorToAirtable, saveRecordToAirtable } from "@/lib/server/integrations"
-import { checkStock, reserveStock } from "@/lib/server/inventory"
+import { checkStock, releaseStockReservation, reserveStock } from "@/lib/server/inventory"
 import { getKVNamespace } from "@/lib/server/kv"
 import { upsertSupabaseOrder } from "@/lib/server/supabase"
 import {
@@ -34,6 +34,11 @@ const RAZORPAY_ENDPOINT = "https://api.razorpay.com/v1/orders"
  * @returns {Promise<NextResponse>} A JSON response with the created order or an error message.
  */
 export async function POST(request: NextRequest) {
+  // Hoisted out of the try block so the outer catch can release the inventory
+  // reservation if anything between reserveStock() and cart persistence throws.
+  const kv = await getKVNamespace()
+  let reservationKey: string | null = null
+  let reservationCommitted = false
   try {
     const originCheck = validateRequestOrigin(request)
     if (!originCheck.ok) {
@@ -45,7 +50,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Submission is too large." }, { status: 413 })
     }
 
-    const kv = await getKVNamespace()
     const rateLimit = await checkRateLimit(request, {
       bucket: "order-create",
       limit: 6,
@@ -81,13 +85,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check stock availability (checkStock is called inside reserveStock)
-    const stockAvailable = await reserveStock(pack.id, pack.qty, `pre-${Date.now()}`, kv)
+    // Check stock availability (checkStock is called inside reserveStock).
+    // The reservation key is hoisted to function scope so any early-return path
+    // (or the outer catch) can roll the reservation back — without that, a
+    // failed checkout leaks `Reserved` counters until the 15-min KV TTL expires
+    // and the row counter never decrements unless `decrementStock` runs.
+    reservationKey = `pre-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const stockAvailable = await reserveStock(pack.id, pack.qty, reservationKey, kv)
     if (!stockAvailable) {
+      reservationKey = null
       return NextResponse.json(
         { ok: false, error: `${pack.title} is currently out of stock. Please try a different pack.` },
         { status: 409 }
       )
+    }
+
+    const releaseReservationOnExit = async () => {
+      if (reservationCommitted || !reservationKey) return
+      try {
+        await releaseStockReservation(reservationKey, kv)
+      } catch (err) {
+        console.error("Order: failed to release leaked reservation:", err)
+      }
     }
 
     // Validate and apply promo code if provided
@@ -99,6 +118,7 @@ export async function POST(request: NextRequest) {
         discountAmount = promoResult.discountAmount
         validatedPromoRecordId = promoResult.promo.recordId
       } else {
+        await releaseReservationOnExit()
         return NextResponse.json(
           { ok: false, error: `Promo code "${promoCode}" is no longer valid. Please remove it and try again.` },
           { status: 400 }
@@ -156,6 +176,7 @@ export async function POST(request: NextRequest) {
 
     if (!response || !response.ok || !order) {
       console.error("Razorpay create-order failed after retries:", lastError)
+      await releaseReservationOnExit()
       return NextResponse.json(
         { ok: false, error: "Payment gateway is slow right now. Please try again.", retryable: true },
         { status: 503 }
@@ -282,12 +303,23 @@ export async function POST(request: NextRequest) {
     }
 
     if (!persistedCart) {
+      await releaseReservationOnExit()
       throw new Error("No backend store is configured for pending cart persistence.")
     }
+
+    // From here on the cart row owns the reservation — the release-reservations
+    // cron is the only thing that should roll it back if the customer doesn't
+    // pay. Don't release on the cookie-set path below.
+    reservationCommitted = true
 
     return nextResponse
   } catch (error: any) {
     console.error("Order API error:", error?.message || error)
+    if (!reservationCommitted && reservationKey) {
+      await releaseStockReservation(reservationKey, kv).catch((err) => {
+        console.error("Order: failed to release reservation on outer catch:", err)
+      })
+    }
     await logErrorToAirtable("Order API", error, {
       route: "/api/order",
       service: "checkout",

@@ -102,10 +102,21 @@ export async function POST(request: NextRequest) {
         })
       : []
 
-    // Aggregate qty to release per pack so we do one Airtable write per SKU
+    // Aggregate qty to release per pack so we do one Airtable write per SKU.
+    // Skip carts the Supabase pass already released (matched on Razorpay Order ID),
+    // otherwise a mirrored cart's qty gets subtracted from `reserved` twice.
     const releaseByPack = new Map<string, number>()
     const cartsToExpire: string[] = []
+    let supabaseDuplicatesSkipped = 0
     for (const cart of staleCarts) {
+      const razorpayOrderId = String(cart.fields["Razorpay Order ID"] || "")
+      if (razorpayOrderId && seenOrderIds.has(razorpayOrderId)) {
+        // Already handled in the Supabase pass — flip Airtable status so we don't
+        // see it again next run, but don't decrement Reserved a second time.
+        cartsToExpire.push(cart.id)
+        supabaseDuplicatesSkipped++
+        continue
+      }
       const packId = String(cart.fields["Pack ID"] || "")
       const qty = Number(cart.fields["Quantity"] || 0)
       if (!packId || qty <= 0) continue
@@ -145,6 +156,7 @@ export async function POST(request: NextRequest) {
       packsReleased,
       cartsExpired: cartsToExpire.length,
       supabaseCartsExpired,
+      supabaseDuplicatesSkipped,
       errors,
     })
   } catch (error: any) {

@@ -455,6 +455,34 @@ export async function updateSupabasePromoCode(
   return rows?.[0] || null
 }
 
+export type SupabasePromoIncrementResult = {
+  code: string
+  used_count: number
+  usage_limit: number | null
+  applied: boolean
+}
+
+/**
+ * Atomically redeem a promo code via the `increment_promo_usage` Postgres
+ * function. The function does the limit check and the bump in a single
+ * statement, so concurrent redemptions can't both pass a stale check.
+ *
+ * Returns:
+ *   - { applied: true, … }  → the increment landed
+ *   - { applied: false, … } → row exists but didn't qualify (inactive or limit reached)
+ *   - null                  → code not found, or Supabase not configured
+ */
+export async function incrementSupabasePromoUsageAtomic(
+  code: string,
+): Promise<SupabasePromoIncrementResult | null> {
+  const result = await supabaseJson<SupabasePromoIncrementResult[]>("/rest/v1/rpc/increment_promo_usage", {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ p_code: code }),
+  })
+  return result?.[0] || null
+}
+
 export async function getSupabaseRefundByOrderId(orderId: string): Promise<SupabaseRefund | null> {
   const params = new URLSearchParams({
     select: "*",

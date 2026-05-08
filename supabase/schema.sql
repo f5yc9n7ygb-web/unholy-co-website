@@ -15,6 +15,7 @@ $$;
 
 create table if not exists public.payments (
   id uuid primary key default gen_random_uuid(),
+  airtable_record_id text,
   payment_id text unique,
   order_id text not null unique,
   pack text not null default '',
@@ -64,6 +65,7 @@ for each row execute function public.set_updated_at();
 
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
+  airtable_record_id text,
   razorpay_order_id text unique,
   customer_email text,
   customer_name text,
@@ -82,9 +84,13 @@ create table if not exists public.orders (
 );
 
 -- Idempotent column adds for environments where the table already exists.
+alter table public.payments add column if not exists airtable_record_id text;
+alter table public.orders add column if not exists airtable_record_id text;
 alter table public.orders add column if not exists email_1_sent_at timestamptz;
 alter table public.orders add column if not exists email_2_sent_at timestamptz;
 alter table public.orders add column if not exists converted_at timestamptz;
+create unique index if not exists payments_airtable_record_id_idx on public.payments (airtable_record_id);
+create unique index if not exists orders_airtable_record_id_idx on public.orders (airtable_record_id);
 
 -- Backfill the timestamp columns from updated_at for any pre-existing rows so
 -- the cron's `<column> < cutoff` filter (which excludes NULL) doesn't trap them.
@@ -110,6 +116,7 @@ for each row execute function public.set_updated_at();
 
 create table if not exists public.inventory (
   pack_id text primary key,
+  airtable_record_id text,
   title text not null,
   available integer not null default 0,
   reserved integer not null default 0,
@@ -119,6 +126,9 @@ create table if not exists public.inventory (
   updated_at timestamptz not null default now()
 );
 
+alter table public.inventory add column if not exists airtable_record_id text;
+create unique index if not exists inventory_airtable_record_id_idx on public.inventory (airtable_record_id);
+
 drop trigger if exists inventory_set_updated_at on public.inventory;
 create trigger inventory_set_updated_at
 before update on public.inventory
@@ -126,6 +136,7 @@ for each row execute function public.set_updated_at();
 
 create table if not exists public.promo_codes (
   code text primary key,
+  airtable_record_id text,
   discount_type text not null default 'flat',
   discount_value numeric(12, 2) not null default 0,
   min_order numeric(12, 2) not null default 0,
@@ -139,6 +150,9 @@ create table if not exists public.promo_codes (
   updated_at timestamptz not null default now()
 );
 
+alter table public.promo_codes add column if not exists airtable_record_id text;
+create unique index if not exists promo_codes_airtable_record_id_idx on public.promo_codes (airtable_record_id);
+
 drop trigger if exists promo_codes_set_updated_at on public.promo_codes;
 create trigger promo_codes_set_updated_at
 before update on public.promo_codes
@@ -146,6 +160,7 @@ for each row execute function public.set_updated_at();
 
 create table if not exists public.refunds (
   id uuid primary key default gen_random_uuid(),
+  airtable_record_id text,
   order_id text not null,
   payment_id text,
   customer_email text,
@@ -159,6 +174,9 @@ create table if not exists public.refunds (
   updated_at timestamptz not null default now()
 );
 
+alter table public.refunds add column if not exists airtable_record_id text;
+create unique index if not exists refunds_airtable_record_id_idx on public.refunds (airtable_record_id);
+
 drop trigger if exists refunds_set_updated_at on public.refunds;
 create trigger refunds_set_updated_at
 before update on public.refunds
@@ -166,6 +184,7 @@ for each row execute function public.set_updated_at();
 
 create table if not exists public.contact_submissions (
   id uuid primary key default gen_random_uuid(),
+  airtable_record_id text,
   name text not null,
   email text not null,
   phone text,
@@ -178,9 +197,12 @@ create table if not exists public.contact_submissions (
 
 create index if not exists contact_submissions_email_idx on public.contact_submissions (lower(email));
 create index if not exists contact_submissions_created_at_idx on public.contact_submissions (created_at desc);
+alter table public.contact_submissions add column if not exists airtable_record_id text;
+create unique index if not exists contact_submissions_airtable_record_id_idx on public.contact_submissions (airtable_record_id);
 
 create table if not exists public.subscriptions (
   id uuid primary key default gen_random_uuid(),
+  airtable_record_id text,
   email text not null unique,
   name text,
   source text,
@@ -191,6 +213,9 @@ create table if not exists public.subscriptions (
   updated_at timestamptz not null default now()
 );
 
+alter table public.subscriptions add column if not exists airtable_record_id text;
+create unique index if not exists subscriptions_airtable_record_id_idx on public.subscriptions (airtable_record_id);
+
 drop trigger if exists subscriptions_set_updated_at on public.subscriptions;
 create trigger subscriptions_set_updated_at
 before update on public.subscriptions
@@ -198,6 +223,7 @@ for each row execute function public.set_updated_at();
 
 create table if not exists public.error_logs (
   id uuid primary key default gen_random_uuid(),
+  airtable_record_id text,
   context text not null,
   severity text not null default 'error',
   message text,
@@ -205,6 +231,9 @@ create table if not exists public.error_logs (
   details jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+
+alter table public.error_logs add column if not exists airtable_record_id text;
+create unique index if not exists error_logs_airtable_record_id_idx on public.error_logs (airtable_record_id);
 
 create table if not exists public.invoice_counters (
   id text primary key,
@@ -239,6 +268,37 @@ begin
 end;
 $$;
 
+-- Atomic promo redemption. Increments used_count only if the row is active and
+-- still under its usage_limit. Returns the row state and whether the increment
+-- actually applied. Replaces the old read-then-write pattern that lost
+-- increments under concurrent redemptions.
+create or replace function public.increment_promo_usage(p_code text)
+returns table (
+  code text,
+  used_count integer,
+  usage_limit integer,
+  applied boolean
+)
+language sql
+security definer
+set search_path = public
+as $$
+  with applied_row as (
+    update public.promo_codes
+    set used_count = promo_codes.used_count + 1
+    where promo_codes.code = upper(trim(p_code))
+      and promo_codes.is_active = true
+      and (promo_codes.usage_limit is null or promo_codes.used_count < promo_codes.usage_limit)
+    returning promo_codes.code, promo_codes.used_count, promo_codes.usage_limit, true as applied
+  )
+  select * from applied_row
+  union all
+  select pc.code, pc.used_count, pc.usage_limit, false as applied
+  from public.promo_codes pc
+  where pc.code = upper(trim(p_code))
+    and not exists (select 1 from applied_row);
+$$;
+
 alter table public.payments enable row level security;
 alter table public.orders enable row level security;
 alter table public.inventory enable row level security;
@@ -260,6 +320,7 @@ grant select, insert, update, delete on public.invoice_counters to service_role;
 grant select, insert, update, delete on public.contact_submissions to service_role;
 grant select, insert, update, delete on public.subscriptions to service_role;
 grant execute on function public.next_invoice_seq() to service_role;
+grant execute on function public.increment_promo_usage(text) to service_role;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('invoices', 'invoices', false, 5242880, array['application/pdf'])

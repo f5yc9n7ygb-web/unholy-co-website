@@ -93,6 +93,20 @@ export async function POST(request: NextRequest) {
         let failedEmailQueued = false
         let failedStockReleased = false
         const kv = await getKVNamespace()
+
+        // Per-payment idempotency: Razorpay can re-deliver the same failed
+        // event (network retries, manual replay from dashboard). Without a
+        // claim, each delivery decrements `reserved` again and would eat into
+        // someone else's active reservation for the same pack.
+        if (kv) {
+          const failedClaimKey = `payfail:${failedPayment.id}`
+          const alreadyHandled = await kv.get(failedClaimKey)
+          if (alreadyHandled) {
+            return NextResponse.json({ ok: true, event: "payment.failed", deduped: true })
+          }
+          await kv.put(failedClaimKey, "1", { expirationTtl: 24 * 60 * 60 })
+        }
+
         const supabaseCart = await getSupabaseOrderByRazorpayOrderId(failedPayment.order_id).catch(() => null)
         if (supabaseCart) {
           updateSupabaseOrderByRazorpayOrderId(failedPayment.order_id, { status: "payment_failed" })

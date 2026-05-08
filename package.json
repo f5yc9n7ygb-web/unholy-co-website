@@ -7,6 +7,10 @@
     "build": "next build",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
+    "migrate:airtable:supabase": "node scripts/migrate-airtable-to-supabase.mjs",
+    "migrate:airtable:supabase:dry-run": "node scripts/migrate-airtable-to-supabase.mjs --dry-run",
+    "migrate:airtable-csv:supabase": "node scripts/migrate-airtable-to-supabase.mjs --csv-dir=./airtable-export",
+    "migrate:airtable-csv:supabase:dry-run": "node scripts/migrate-airtable-to-supabase.mjs --csv-dir=./airtable-export --dry-run",
     "cf:bundle": "node scripts/create-opennext-config.mjs && next build && node scripts/copy-instrumentation-to-standalone.mjs && opennextjs-cloudflare build --skipNextBuild && node scripts/cf-postbuild.mjs",
     "preview": "wrangler dev --local",
     "deploy": "npm run cf:bundle && npx wrangler pages deploy .open-next"

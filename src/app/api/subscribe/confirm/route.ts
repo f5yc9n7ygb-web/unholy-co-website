@@ -15,12 +15,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  const kv = await getKVNamespace()
-  if (!(await claimSingleUseKey("subscription", payload.email.toLowerCase(), kv))) {
-    redirectUrl.searchParams.set("subscribed", "1")
-    return NextResponse.redirect(redirectUrl)
-  }
-
+  // Persist BEFORE consuming the single-use key. If both stores fail we leave
+  // the confirmation link usable so the customer can retry from the same email.
+  // Supabase upsert + Airtable insert are both safe under double-click — the
+  // subsequent claimSingleUseKey is what gates the welcome email.
   let supabasePersisted = false
   try {
     const inserted = await upsertSupabaseSubscription({
@@ -56,10 +54,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  try {
-    await sendWelcomeEmail(payload.email)
-  } catch (error) {
-    console.error("Welcome email failed:", error)
+  // Single-use guard: only the first confirmation through this code path sends
+  // the welcome email. A double-click or token replay sees subscribed=1 but no
+  // duplicate email. Persistence already happened above (idempotent), so we're
+  // not racing the storage write.
+  const kv = await getKVNamespace()
+  const firstConfirmation = await claimSingleUseKey("subscription", payload.email.toLowerCase(), kv)
+
+  if (firstConfirmation) {
+    try {
+      await sendWelcomeEmail(payload.email)
+    } catch (error) {
+      console.error("Welcome email failed:", error)
+    }
   }
 
   redirectUrl.searchParams.set("subscribed", "1")

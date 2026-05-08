@@ -23,6 +23,7 @@ import {
 import { escapeAirtableValue } from "@/lib/server/security"
 import {
   getSupabasePromoCode,
+  incrementSupabasePromoUsageAtomic,
   updateSupabasePromoCode,
   type SupabasePromoCode,
 } from "@/lib/server/supabase"
@@ -267,16 +268,18 @@ function mapSupabasePromoCode(row: SupabasePromoCode): PromoCode {
   }
 }
 
-async function incrementSupabasePromoUsage(code: string, knownPromo?: SupabasePromoCode): Promise<void> {
-  const promo = knownPromo || await getSupabasePromoCode(code)
-  if (!promo) return
-
-  const current = Number(promo.used_count || 0)
-  const maxUses = Number(promo.usage_limit || 0)
-  if (maxUses > 0 && current >= maxUses) {
-    console.warn(`Promo ${code}: usage limit reached at increment (current=${current}, max=${maxUses})`)
+async function incrementSupabasePromoUsage(code: string, _knownPromo?: SupabasePromoCode): Promise<void> {
+  // Atomic single-statement increment under a guarded WHERE clause. Concurrent
+  // redemptions can't both pass the limit check the way the old read-then-write
+  // could.
+  const result = await incrementSupabasePromoUsageAtomic(code)
+  if (!result) {
+    console.warn(`Promo ${code}: row not found in Supabase, increment skipped`)
     return
   }
-
-  await updateSupabasePromoCode(code, { used_count: current + 1 })
+  if (!result.applied) {
+    console.warn(
+      `Promo ${code}: increment did not apply (used_count=${result.used_count}, usage_limit=${result.usage_limit ?? "unlimited"}) — likely inactive or at limit`
+    )
+  }
 }
