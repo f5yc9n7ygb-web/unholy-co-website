@@ -37,8 +37,8 @@ export type StockInfo = {
  * Distributed mutex for inventory mutations.
  *
  * Cloudflare KV has no native CAS, so this uses a put-then-verify pattern:
- * write our token, re-read, and only proceed if our token won. 5s TTL
- * prevents a crashed worker from holding the lock forever.
+ * write our token, re-read, and only proceed if our token won. The TTL uses
+ * Cloudflare KV's 60s minimum so a crashed worker cannot hold it indefinitely.
  *
  * Under very high contention (1000+ concurrent drops) a true Durable Object
  * is better, but this closes the ~500ms read-modify-write race window that
@@ -58,7 +58,7 @@ async function withInventoryLock<T>(
   for (let attempt = 0; attempt < 15; attempt++) {
     const existing = await kv.get(lockKey)
     if (!existing) {
-      await kv.put(lockKey, token, { expirationTtl: 5 })
+      await kv.put(lockKey, token, { expirationTtl: 60 })
       const verify = await kv.get(lockKey)
       if (verify === token) {
         acquired = true
@@ -294,7 +294,7 @@ export async function releaseStockReservation(
     }
   }, undefined)
 
-  await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})
+  await kv.delete(`stock-reserve:${orderId}`).catch(() => {})
 }
 
 /**
@@ -373,7 +373,7 @@ export async function decrementStock(packId: string, qty: number, orderId?: stri
       }
 
       if (orderId && kv) {
-        await kv.put(`stock-reserve:${orderId}`, "", { expirationTtl: 1 }).catch(() => {})
+        await kv.delete(`stock-reserve:${orderId}`).catch(() => {})
       }
     } catch (err) {
       console.error("Inventory decrement failed:", err)

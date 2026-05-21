@@ -1,13 +1,15 @@
 "use client"
 
 import { motion } from "framer-motion"
-import type { Pack } from "@/lib/shop/catalog"
+import Link from "next/link"
+import { useState } from "react"
+import { getBasePrice, getGstAmount, type Pack } from "@/lib/shop/catalog"
 import type { ShippingForm } from "@/lib/shop/types"
 import { OFFER } from "@/content/bloodthirst"
 import { QuantityWeapon } from "./QuantityWeapon"
 import { RitualButton } from "./RitualButton"
 import { RitualForm } from "./RitualForm"
-import type { FormErrors } from "../hooks/useRitualCheckout"
+import type { AppliedPromo, FormErrors } from "../hooks/useRitualCheckout"
 
 /**
  * Phase 4 — THE OFFER.
@@ -27,6 +29,10 @@ export function PhaseOffer({
   onSign,
   isSubmitting,
   payError,
+  appliedPromo,
+  effectiveTotal,
+  onApplyPromo,
+  onRemovePromo,
 }: {
   selected: Pack
   onSelect: (p: Pack) => void
@@ -37,6 +43,10 @@ export function PhaseOffer({
   onSign: () => void
   isSubmitting: boolean
   payError: string | null
+  appliedPromo: AppliedPromo | null
+  effectiveTotal: number
+  onApplyPromo: (promo: AppliedPromo) => void
+  onRemovePromo: () => void
 }) {
   return (
     <section data-phase="offer" className="relative w-full">
@@ -142,9 +152,20 @@ export function PhaseOffer({
               <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-bone/45">
                 {selected.title}
               </p>
-              <p className="mt-2 font-cinzel text-5xl font-black tabular-nums leading-none text-offwhite md:text-6xl">
-                ₹{selected.price.toLocaleString("en-IN")}
-              </p>
+              {appliedPromo && appliedPromo.discountAmount > 0 ? (
+                <div className="mt-2 flex flex-wrap items-baseline gap-x-3 md:justify-end">
+                  <span className="font-cinzel text-2xl font-black tabular-nums text-bone/40 line-through md:text-3xl">
+                    ₹{selected.price.toLocaleString("en-IN")}
+                  </span>
+                  <span className="font-cinzel text-5xl font-black tabular-nums leading-none text-offwhite md:text-6xl">
+                    ₹{effectiveTotal.toLocaleString("en-IN")}
+                  </span>
+                </div>
+              ) : (
+                <p className="mt-2 font-cinzel text-5xl font-black tabular-nums leading-none text-offwhite md:text-6xl">
+                  ₹{selected.price.toLocaleString("en-IN")}
+                </p>
+              )}
               <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.3em] text-bone/45">
                 Incl. all taxes · Free across India
               </p>
@@ -163,6 +184,17 @@ export function PhaseOffer({
 
           <div className="my-9 h-px w-full bg-bone/12" />
 
+          <RitualPricing
+            selected={selected}
+            buyerState={form.state}
+            appliedPromo={appliedPromo}
+            effectiveTotal={effectiveTotal}
+            onApplyPromo={onApplyPromo}
+            onRemovePromo={onRemovePromo}
+          />
+
+          <div className="my-9 h-px w-full bg-bone/12" />
+
           {/* CTA */}
           <div className="flex flex-col items-center gap-5">
             <RitualButton
@@ -176,14 +208,22 @@ export function PhaseOffer({
             </p>
 
             {payError && (
-              <motion.p
+              <motion.div
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-1 max-w-md text-center font-mono text-[11px] uppercase tracking-[0.2em] text-blood"
+                className="mt-1 max-w-md text-center"
                 role="alert"
               >
-                {payError}
-              </motion.p>
+                <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-blood">
+                  {payError}
+                </p>
+                <Link
+                  href="/contact"
+                  className="mt-2 inline-block font-mono text-[10px] uppercase tracking-[0.28em] text-bone/50 underline decoration-bone/30 underline-offset-4 transition-colors hover:text-offwhite"
+                >
+                  Contact support
+                </Link>
+              </motion.div>
             )}
 
             {/* trust strip */}
@@ -203,4 +243,177 @@ export function PhaseOffer({
       </div>
     </section>
   )
+}
+
+const SUPPLIER_STATE = "Uttar Pradesh"
+
+function RitualPricing({
+  selected,
+  buyerState,
+  appliedPromo,
+  effectiveTotal,
+  onApplyPromo,
+  onRemovePromo,
+}: {
+  selected: Pack
+  buyerState: string
+  appliedPromo: AppliedPromo | null
+  effectiveTotal: number
+  onApplyPromo: (promo: AppliedPromo) => void
+  onRemovePromo: () => void
+}) {
+  const [promoInput, setPromoInput] = useState("")
+  const [promoLoading, setPromoLoading] = useState(false)
+  const [promoError, setPromoError] = useState<string | null>(null)
+
+  const applyPromo = async () => {
+    if (!promoInput.trim() || promoLoading) return
+    setPromoLoading(true)
+    setPromoError(null)
+    try {
+      const res = await fetch("/api/promo/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoInput.trim(), orderTotal: selected.price }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data?.ok) {
+        setPromoError(data?.error || "Invalid promo code.")
+        return
+      }
+      onApplyPromo({
+        code: data.code,
+        discountType: data.discountType,
+        discountValue: data.discountValue,
+        discountAmount: data.discountAmount,
+        finalPrice: data.finalPrice,
+        promoRecordId: data.promoRecordId,
+      })
+      setPromoInput("")
+    } catch {
+      setPromoError("Unable to validate code right now.")
+    } finally {
+      setPromoLoading(false)
+    }
+  }
+
+  return (
+    <div className="grid gap-6 md:grid-cols-[1fr,1fr] md:items-start">
+      <div>
+        <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.4em] text-bone/45">
+          Promo code
+        </p>
+        {appliedPromo ? (
+          <div className="border border-green-500/20 bg-green-500/[0.06] px-4 py-3 font-mono text-xs uppercase tracking-[0.2em] text-green-400">
+            <div className="flex items-center justify-between gap-3">
+              <span>{appliedPromo.code} applied</span>
+              <button
+                type="button"
+                onClick={onRemovePromo}
+                className="text-[10px] text-bone/55 transition-colors hover:text-offwhite"
+              >
+                Remove
+              </button>
+            </div>
+            <p className="mt-2 text-[10px] tracking-[0.22em]">
+              Saves INR {appliedPromo.discountAmount.toLocaleString("en-IN")}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={promoInput}
+                onChange={(e) => {
+                  setPromoInput(e.target.value.toUpperCase())
+                  setPromoError(null)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applyPromo()
+                }}
+                placeholder="Promo code"
+                className="min-w-0 flex-1 border border-bone/15 bg-black/60 px-4 py-3 font-mono text-sm uppercase tracking-wider text-offwhite placeholder:text-bone/25 outline-none transition-colors focus:border-blood/70"
+              />
+              <button
+                type="button"
+                onClick={applyPromo}
+                disabled={promoLoading || !promoInput.trim()}
+                className="min-w-[5.5rem] border border-blood/40 bg-blood/10 px-4 font-mono text-[10px] uppercase tracking-[0.3em] text-blood transition-colors hover:bg-blood/20 disabled:opacity-40"
+              >
+                {promoLoading ? "..." : "Apply"}
+              </button>
+            </div>
+            {promoError && (
+              <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-blood" role="alert">
+                {promoError}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="border border-bone/10 bg-black/35 px-4 py-4">
+        <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.4em] text-bone/45">
+          Payment summary
+        </p>
+        <div className="space-y-2 font-mono text-[11px] uppercase tracking-[0.18em] text-bone/55">
+          <PriceRow
+            label={`${selected.title} (${selected.qty} cans)`}
+            value={`INR ${selected.price.toLocaleString("en-IN")}`}
+          />
+          {appliedPromo && (
+            <PriceRow
+              label={`Discount ${appliedPromo.code}`}
+              value={`-INR ${appliedPromo.discountAmount.toLocaleString("en-IN")}`}
+              accent
+            />
+          )}
+          <PriceRow label="Shipping" value="Free" accent />
+        </div>
+        <div className="mt-4 border-t border-bone/10 pt-4">
+          <div className="flex items-end justify-between gap-4">
+            <span className="font-mono text-[10px] uppercase tracking-[0.35em] text-bone/45">
+              Total (incl. GST)
+            </span>
+            <span className="font-cinzel text-3xl font-black tabular-nums text-offwhite">
+              INR {effectiveTotal.toLocaleString("en-IN")}
+            </span>
+          </div>
+          <div className="mt-1.5 text-right font-mono text-[10px] text-bone/40">
+            {!buyerState && "Tax (5%) — determined by state"}
+            {buyerState && buyerState === SUPPLIER_STATE && `Includes CGST 2.5% + SGST 2.5% · INR ${formatTaxAmount(getGstAmount(effectiveTotal))}`}
+            {buyerState && buyerState !== SUPPLIER_STATE && `Includes IGST 5% · INR ${formatTaxAmount(getGstAmount(effectiveTotal))}`}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PriceRow({
+  label,
+  value,
+  accent,
+}: {
+  label: string
+  value: string
+  accent?: boolean
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span>{label}</span>
+      <span className={`text-right tabular-nums ${accent ? "text-green-400" : "text-offwhite/80"}`}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function formatTaxAmount(amount: number) {
+  const hasFraction = !Number.isInteger(amount)
+  return amount.toLocaleString("en-IN", {
+    minimumFractionDigits: hasFraction ? 2 : 0,
+    maximumFractionDigits: hasFraction ? 2 : 0,
+  })
 }

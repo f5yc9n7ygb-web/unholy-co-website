@@ -141,8 +141,7 @@ export async function claimProcessedPayment(paymentId: string, kv?: KVNamespace 
 export async function releaseProcessedPayment(paymentId: string, kv?: KVNamespace | null) {
   const kvKey = `pay:${paymentId}`
   if (kv) {
-    // Expire the key immediately so the next attempt can claim it
-    await kv.put(kvKey, "", { expirationTtl: 1 }).catch(() => {})
+    await kv.delete(kvKey).catch(() => {})
   }
   processedPayments.delete(paymentId)
 }

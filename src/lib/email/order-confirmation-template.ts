@@ -122,6 +122,17 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
             </td>
           </tr>
 
+          ${o.buyerGstNumber ? `
+          <tr>
+            <td style="padding:28px 32px; background:${card}; border-top:1px solid ${border};">
+              <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.35em; color:${textDim}; margin-bottom:16px;">GST Details</div>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                ${row("GST Number", o.buyerGstNumber, true)}
+                ${o.buyerBusinessName ? row("Business Name", o.buyerBusinessName) : ""}
+              </table>
+            </td>
+          </tr>` : ""}
+
           <tr>
             <td style="padding:28px 32px; background:${card}; border-top:1px solid ${border}; border-radius:0 0 8px 8px;">
               <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.35em; color:${textDim}; margin-bottom:16px;">What Happens Next</div>
@@ -172,7 +183,7 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
 }
 
 export function buildOrderConfirmationText(o: OrderConfirmationOptions): string {
-  return `ORDER CONFIRMED — UNHOLY CO.
+  let text = `ORDER CONFIRMED — UNHOLY CO.
 
 The ritual is complete, ${o.customerName.split(" ")[0]}.
 
@@ -191,7 +202,17 @@ Payment ID: ${o.paymentId}
 DELIVERING TO
 -------------
 ${[o.shippingAddress, o.shippingCity, o.shippingState, o.shippingPincode].filter(Boolean).join(", ")}
+`
 
+  if (o.buyerGstNumber) {
+    text += `
+GST DETAILS
+-----------
+GST Number: ${o.buyerGstNumber}${o.buyerBusinessName ? `\nBusiness Name: ${o.buyerBusinessName}` : ""}
+`
+  }
+
+  text += `
 WHAT HAPPENS NEXT
 -----------------
 01 — This email confirms your order.
@@ -208,6 +229,7 @@ Questions? rituals@theunholy.co
 
 UNHOLY CO. — Himalayan mineral water for the counterculture.
 `
+  return text
 }
 
 function escapeHtml(value: string) {

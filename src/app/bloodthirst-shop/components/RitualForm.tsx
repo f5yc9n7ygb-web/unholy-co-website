@@ -1,8 +1,9 @@
 "use client"
 
 import { motion } from "framer-motion"
+import { useState } from "react"
 import type { ShippingForm } from "@/lib/shop/types"
-import { INDIAN_STATES, type FormErrors } from "../hooks/useRitualCheckout"
+import { GSTIN_REGEX, INDIAN_STATES, type FormErrors } from "../hooks/useRitualCheckout"
 
 /**
  * Inline shipping form — gothic-luxe styled, single block, no step labels.
@@ -70,6 +71,13 @@ export function RitualForm({
           )}
         </div>
       </div>
+      <GstLookupField
+        value={form.gstNumber ?? ""}
+        businessName={form.gstBusinessName ?? ""}
+        error={errors.gstNumber}
+        onChange={onChange}
+        onBlur={onBlur}
+      />
     </motion.div>
   )
 }
@@ -87,6 +95,15 @@ function Field({
   type?: string
 }) {
   const id = `rf-${field}`
+  const autoComplete: Partial<Record<keyof ShippingForm, string>> = {
+    name: "name",
+    email: "email",
+    phone: "tel",
+    address: "street-address",
+    city: "address-level2",
+    pincode: "postal-code",
+  }
+  const inputMode = field === "phone" || field === "pincode" ? "numeric" : undefined
   return (
     <div>
       <label htmlFor={id} className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.3em] text-bone/45">
@@ -97,6 +114,8 @@ function Field({
         type={type}
         value={value}
         placeholder={placeholder}
+        autoComplete={autoComplete[field]}
+        inputMode={inputMode}
         onChange={(e) => onChange(field, e.target.value)}
         onBlur={() => onBlur(field)}
         className={`w-full border bg-black/60 px-4 py-3 font-mono text-sm tracking-wider text-offwhite placeholder:text-bone/25 outline-none transition-colors duration-200 focus:border-blood/70 ${
@@ -105,6 +124,108 @@ function Field({
       />
       {error && (
         <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-blood">{error}</p>
+      )}
+    </div>
+  )
+}
+
+function GstLookupField({
+  value,
+  businessName,
+  error: validationError,
+  onChange,
+  onBlur,
+}: {
+  value: string
+  businessName: string
+  error?: string
+  onChange: (f: keyof ShippingForm, v: string) => void
+  onBlur: (f: keyof ShippingForm) => void
+}) {
+  const [loading, setLoading] = useState(false)
+  const [lookupError, setLookupError] = useState<string | null>(null)
+  const [lastLookedUp, setLastLookedUp] = useState("")
+  const error = validationError || lookupError
+
+  const lookup = async (gstin: string) => {
+    if (!GSTIN_REGEX.test(gstin) || gstin === lastLookedUp) return
+    setLoading(true)
+    setLookupError(null)
+    try {
+      const res = await fetch(`/api/gst/verify?gstin=${encodeURIComponent(gstin)}`)
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        setLookupError(data?.error || "Could not verify GSTIN.")
+        onChange("gstBusinessName", "")
+      } else {
+        onChange("gstBusinessName", data.tradeName || data.legalName || "")
+        if (data.status && data.status !== "Active") {
+          setLookupError(`GSTIN status: ${data.status}`)
+        }
+      }
+      setLastLookedUp(gstin)
+    } catch {
+      setLookupError("Unable to verify GSTIN right now.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleChange = (rawValue: string) => {
+    const gstin = rawValue.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15)
+    onChange("gstNumber", gstin)
+    if (gstin !== lastLookedUp) {
+      onChange("gstBusinessName", "")
+      setLookupError(null)
+      setLastLookedUp("")
+    }
+  }
+
+  const handleBlur = () => {
+    onBlur("gstNumber")
+    lookup(value)
+  }
+
+  return (
+    <div className="border border-bone/10 bg-black/35 px-4 py-4">
+      <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.32em] text-bone/38">
+        Business / GST invoice (optional)
+      </p>
+      <label htmlFor="rf-gstNumber" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.3em] text-bone/45">
+        GST Number
+      </label>
+      <div className="relative">
+        <input
+          id="rf-gstNumber"
+          type="text"
+          value={value}
+          placeholder="22AAAAA0000A1Z5"
+          autoComplete="off"
+          onChange={(e) => handleChange(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              handleBlur()
+            }
+          }}
+          className={`w-full border bg-black/60 px-4 py-3 font-mono text-sm uppercase tracking-wider text-offwhite placeholder:text-bone/25 outline-none transition-colors duration-200 focus:border-blood/70 ${
+            error ? "border-blood/70" : "border-bone/15"
+          }`}
+        />
+        {loading && (
+          <span className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-bone/20 border-t-blood" />
+        )}
+      </div>
+      {error && (
+        <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-blood" role="alert">
+          {error}
+        </p>
+      )}
+      {businessName && !error && (
+        <p className="mt-2 border border-green-500/15 bg-green-500/[0.06] px-3 py-2 text-xs text-green-400/90">
+          {businessName}
+        </p>
       )}
     </div>
   )

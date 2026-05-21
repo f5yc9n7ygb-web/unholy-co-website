@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect } from "react"
+import Image from "next/image"
 import { motion } from "framer-motion"
+import { useEffect, type ReactNode } from "react"
 import { usePostHog } from "posthog-js/react"
 import { TransitionLink } from "@/components/ux/TransitionLink"
 import { trackPixel } from "@/lib/meta-pixel"
@@ -17,48 +18,48 @@ type ReceiptSummary = {
   shippingState?: string
 } | null
 
-const steps = [
-  { num: "01", title: "Confirmation", desc: "Email with your order details within minutes." },
-  { num: "02", title: "Dispatch", desc: "Packed and handed to courier within 24–48 hours." },
-  { num: "03", title: "Track & Deliver", desc: "Track your order anytime at theunholy.co/track." },
+const nextSteps = [
+  { num: "01", title: "Confirmation", desc: "Order details arrive by email within minutes." },
+  { num: "02", title: "Dispatch", desc: "The pack is booked for courier handoff within 24-48 hours." },
+  { num: "03", title: "Track", desc: "Use your order ID or checkout email at the track page." },
 ]
 
-// No opacity in initial states — page-transition-content CSS handles the fade.
-// Framer Motion only drives the subtle transforms.
 const fadeUp = (delay = 0) => ({
-  initial: { y: 16 },
+  initial: { y: 18 },
   animate: { y: 0 },
-  transition: { duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] as const },
+  transition: { duration: 0.65, delay, ease: [0.16, 1, 0.3, 1] as const },
 })
 
 export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
   const isVerified = Boolean(receipt)
-  const qtyLabel = receipt ? `${receipt.qty} cans` : null
   const posthog = usePostHog()
+
+  useEffect(() => {
+    // The BloodThirst finale locks the document while it seals. A route handoff
+    // to the receipt must always land scrollable even if that cleanup races.
+    document.body.style.removeProperty("overflow")
+    document.documentElement.style.removeProperty("overflow")
+  }, [])
 
   useEffect(() => {
     if (!isVerified || !receipt) return
 
     // Guard: only fire conversion events once per orderId. The thanks page can
-    // be reloaded, revisited via email link, or restored from bfcache — each
-    // mount would otherwise re-fire Purchase, inflating Meta/PostHog counts.
-    // Fallback to packId+qty when orderId is missing (verified pre-webhook).
+    // be reloaded, revisited via email link, or restored from bfcache.
     const dedupKey = receipt.orderId || `${receipt.packId}-${receipt.qty}-${receipt.price ?? ""}`
     const storageKey = `unholy_purchase_fired_${dedupKey}`
     try {
       if (localStorage.getItem(storageKey)) return
       localStorage.setItem(storageKey, String(Date.now()))
     } catch {
-      // localStorage unavailable (private mode, quota) — fall through and fire.
-      // A duplicate in that edge case is better than silently dropping a real
-      // conversion for a user who genuinely can't persist state.
+      // localStorage unavailable: fire the real conversion rather than drop it.
     }
 
     posthog?.capture("order_completed", {
       pack_id: receipt.packId,
       quantity: receipt.qty,
     })
-    // Meta Pixel Purchase — orderId doubles as eventID for future CAPI dedup.
+    // Meta Pixel Purchase uses orderId so the browser and CAPI events dedupe.
     trackPixel(
       "Purchase",
       {
@@ -75,139 +76,252 @@ export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
   }, [isVerified, receipt, posthog])
 
   return (
-    <div className="relative min-h-[90vh] overflow-hidden">
-      {/* Ghost background text */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 flex items-center justify-center select-none overflow-hidden"
-      >
-        <span className={`font-cinzel font-black leading-none ${isVerified ? "text-[22vw] text-bone/[0.045]" : "text-[28vw] text-blood/[0.12]"}`}>
-          {isVerified ? "YOURS" : "WAIT"}
-        </span>
+    <div className="relative min-h-screen overflow-x-clip bg-[#0a0a0a] text-offwhite">
+      <div aria-hidden className="pointer-events-none fixed inset-0">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 85% 72% at 66% 18%, rgba(176,0,32,0.22), transparent 64%), radial-gradient(ellipse 70% 58% at 18% 88%, rgba(176,0,32,0.1), transparent 72%)",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 115% 90% at 50% 42%, transparent 38%, rgba(10,10,10,0.8) 100%)",
+          }}
+        />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blood/35 to-transparent" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-2xl px-4 py-32 md:py-40">
-
-        {/* ── Icon ── */}
-        <motion.div {...fadeUp(0)} className="mb-10 flex justify-center">
-          {isVerified ? (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-blood/30 bg-blood/10 shadow-[0_0_48px_rgba(176,0,32,0.25)]">
-              <svg className="h-7 w-7 text-blood" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 13l4 4L19 7" />
-              </svg>
+      <div className="relative z-10 mx-auto grid min-h-[calc(100vh-5rem)] w-full max-w-7xl items-center gap-12 px-6 pb-16 pt-16 md:min-h-[calc(100vh-6rem)] md:px-10 md:pb-20 md:pt-20 lg:grid-cols-[minmax(0,1fr)_minmax(30rem,0.92fr)] lg:gap-10">
+        <section className="relative min-w-0">
+          <motion.div {...fadeUp(0)} className="relative z-10 max-w-2xl">
+            <div className="mb-8 flex items-center gap-4">
+              <span className="h-px w-12 bg-blood/75" />
+              <p className="font-mono text-[10px] uppercase tracking-[0.5em] text-blood/85">
+                {isVerified ? "Receipt sealed" : "Receipt pending"}
+              </p>
             </div>
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-bone/10 bg-bone/5">
-              <svg className="h-7 w-7 text-bone/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 8v4M12 16h.01" />
-              </svg>
-            </div>
-          )}
-        </motion.div>
 
-        {/* ── Headline ── */}
-        <motion.div {...fadeUp(0.08)} className="text-center">
-          <p className="mb-4 text-[10px] uppercase tracking-[0.5em] text-blood/60">
-            {isVerified ? "Order confirmed" : "Pending verification"}
-          </p>
-          <h1 className="font-cinzel text-4xl font-bold text-offwhite md:text-5xl lg:text-6xl">
-            {isVerified ? "The ritual is complete." : "Awaiting confirmation."}
-          </h1>
-          <p className="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-bone/45 md:text-base">
-            {isVerified
-              ? "Your BloodThirst is on its way. Confirmation and tracking details will land in your inbox shortly."
-              : "We couldn't verify this payment session. If you were charged, contact us and we’ll investigate."}
-          </p>
-        </motion.div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.45em] text-bone/45">
+              BloodThirst checkout
+            </p>
+            <h1
+              className={`mt-5 max-w-xl break-words font-cinzel font-black uppercase leading-[0.92] text-offwhite ${
+                isVerified
+                  ? "text-[clamp(2.6rem,6vw,5rem)]"
+                  : "text-[clamp(2.35rem,5vw,4.2rem)]"
+              }`}
+            >
+              {isVerified ? "The ritual is complete." : "Awaiting confirmation."}
+            </h1>
+            <p className="mt-7 max-w-lg text-base leading-relaxed text-bone/68 md:text-lg">
+              {isVerified
+                ? "Your BloodThirst is claimed. The verified receipt is below, and tracking follows as soon as the pack enters dispatch."
+                : "This page needs a verified payment receipt before it can confirm an order. If Razorpay charged you, support can trace it from the checkout details."}
+            </p>
 
-        {/* ── Unverified warning ── */}
-        {!isVerified && (
-          <motion.div
-            {...fadeUp(0.15)}
-            className="mt-8 rounded-xl border border-blood/20 bg-blood/[0.06] px-5 py-4 text-sm text-bone/60"
-          >
-            If you completed payment and landed here, reach out via{" "}
-            <TransitionLink href="/contact" className="text-blood/70 underline underline-offset-2 hover:text-blood">
-              contact
-            </TransitionLink>{" "}
-            and we&apos;ll sort it immediately.
-          </motion.div>
-        )}
-
-        {/* ── Order details ── */}
-        {receipt && (
-          <motion.div {...fadeUp(0.16)} className="mt-12">
-            <p className="mb-1 text-[10px] uppercase tracking-[0.4em] text-bone/30">Order details</p>
-            <div className="mt-4">
-              <div className="h-px bg-blood/[0.12]" />
-              {([
-                receipt.orderId && { label: "Order ID", value: receipt.orderId, mono: true },
-                receipt.packTitle && { label: "Product", value: receipt.packTitle, mono: false },
-                { label: "Quantity", value: `${receipt.qty} cans`, mono: false },
-                receipt.price && { label: "Amount Paid", value: `₹${receipt.price.toLocaleString("en-IN")}`, mono: false },
-                receipt.shippingName && { label: "Delivering To", value: [receipt.shippingName, receipt.shippingCity, receipt.shippingState].filter(Boolean).join(", "), mono: false },
-              ].filter(Boolean) as Array<{ label: string; value: string; mono: boolean }>)
-                .map((row) => (
-                  <div key={row.label}>
-                    <div className="flex items-center justify-between py-4">
-                      <span className="text-xs uppercase tracking-widest text-bone/35">
-                        {row.label}
-                      </span>
-                      <span className={`text-sm text-bone/70 ${row.mono ? "font-mono text-xs" : ""}`}>
-                        {row.value}
-                      </span>
-                    </div>
-                    <div className="h-px bg-blood/[0.08]" />
-                  </div>
-                ))}
+            <div className="mt-9 flex flex-wrap gap-3">
+              {isVerified ? (
+                <>
+                  <RitualLink href="/track" tone="blood">Track order</RitualLink>
+                  <RitualLink href="/contact">Contact support</RitualLink>
+                </>
+              ) : (
+                <>
+                  <RitualLink href="/contact" tone="blood">Contact support</RitualLink>
+                  <RitualLink href="/">Return home</RitualLink>
+                </>
+              )}
             </div>
           </motion.div>
-        )}
+        </section>
 
-        {/* ── What happens next ── */}
-        {isVerified && (
-          <motion.div {...fadeUp(0.22)} className="mt-12">
-            <p className="mb-1 text-[10px] uppercase tracking-[0.4em] text-bone/30">What happens next</p>
-            <div className="mt-4">
-              <div className="h-px bg-blood/[0.12]" />
-              {steps.map((step, i) => (
-                <motion.div key={step.num} {...fadeUp(0.28 + i * 0.07)}>
-                  <div className="grid grid-cols-[48px_1fr] gap-4 py-5">
-                    <span className="font-cinzel text-sm font-bold text-blood/40">{step.num}</span>
-                    <div>
-                      <p className="text-sm font-medium text-offwhite/80">{step.title}</p>
-                      <p className="mt-0.5 text-xs text-bone/40">{step.desc}</p>
-                    </div>
-                  </div>
-                  <div className="h-px bg-blood/[0.08]" />
-                </motion.div>
-              ))}
+        <motion.section
+          {...fadeUp(0.08)}
+          className="relative border border-bone/15 bg-black/60 p-6 backdrop-blur-md md:p-8"
+          style={{
+            boxShadow:
+              "0 48px 140px -42px rgba(176,0,32,0.42), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+        >
+          <CornerMarks />
+          <div className="flex items-start justify-between gap-6">
+            <SealMark verified={isVerified} />
+            <div aria-hidden className="relative flex h-28 w-20 shrink-0 items-end justify-center">
+              <div className="absolute bottom-3 h-9 w-20 bg-blood/25 blur-2xl" />
+              <Image
+                src="/can.webp"
+                alt=""
+                width={72}
+                height={126}
+                className="relative drop-shadow-[0_18px_42px_rgba(176,0,32,0.4)]"
+                style={{ width: "72px", height: "auto" }}
+                priority
+              />
             </div>
-          </motion.div>
-        )}
+          </div>
 
-        {/* ── CTAs ── */}
-        <motion.div {...fadeUp(0.35)} className="mt-14 flex flex-wrap justify-center gap-4">
-          <TransitionLink href="/" className="btn btn-ghost px-6 py-3 text-sm">
-            Return Home
-          </TransitionLink>
-          <TransitionLink href="/contact" className="btn btn-ghost px-6 py-3 text-sm">
-            Contact Support
-          </TransitionLink>
-          {isVerified && (
+          <div className="mt-7 flex items-end justify-between gap-4 border-b border-bone/12 pb-6">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.45em] text-blood/75">
+                {isVerified ? "Verified order" : "Verification needed"}
+              </p>
+              <p className="mt-3 font-cinzel text-2xl font-black uppercase text-offwhite md:text-3xl">
+                {isVerified ? "BloodThirst receipt" : "Payment receipt"}
+              </p>
+            </div>
+            {receipt?.price ? (
+              <p className="font-cinzel text-3xl font-black tabular-nums text-offwhite md:text-4xl">
+                INR {receipt.price.toLocaleString("en-IN")}
+              </p>
+            ) : null}
+          </div>
+
+          {receipt ? (
             <>
-              <TransitionLink href="/track" className="btn btn-primary px-6 py-3 text-sm">
-                Track Your Order
-              </TransitionLink>
-              <TransitionLink href="/drops" className="btn btn-ghost px-6 py-3 text-sm">
-                Track the next drop
-              </TransitionLink>
-            </>
-          )}
-        </motion.div>
+              <div className="divide-y divide-bone/10 py-3 font-mono">
+                {receiptRows(receipt).map((row) => (
+                  <ReceiptRow key={row.label} {...row} />
+                ))}
+              </div>
 
+              <div className="mt-7 border-t border-bone/12 pt-6">
+                <p className="font-mono text-[10px] uppercase tracking-[0.45em] text-bone/45">
+                  What happens next
+                </p>
+                <div className="mt-5 grid gap-px border border-bone/12 bg-bone/12 md:grid-cols-3">
+                  {nextSteps.map((step) => (
+                    <div key={step.num} className="min-h-36 bg-black/80 p-4">
+                      <p className="font-cinzel text-sm font-black text-blood/75">{step.num}</p>
+                      <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.32em] text-offwhite">
+                        {step.title}
+                      </p>
+                      <p className="mt-2 text-xs leading-relaxed text-bone/55">{step.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="py-7">
+              <div className="border border-blood/30 bg-blood/[0.08] px-5 py-5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.38em] text-blood/85">
+                  No signed receipt detected
+                </p>
+                <p className="mt-4 text-sm leading-relaxed text-bone/65">
+                  If checkout was interrupted before verification, do not retry blindly after a successful charge.
+                  Send support the payment details and we will inspect the order record.
+                </p>
+              </div>
+              <div className="mt-6 grid gap-px border border-bone/12 bg-bone/12 sm:grid-cols-3">
+                {["UPI", "Cards", "Net banking"].map((method) => (
+                  <span
+                    key={method}
+                    className="bg-black/80 px-4 py-3 text-center font-mono text-[10px] uppercase tracking-[0.35em] text-bone/50"
+                  >
+                    {method}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-bone/12 pt-5 font-mono text-[9px] uppercase tracking-[0.38em] text-bone/40">
+            <span>Razorpay verified checkout</span>
+            <TransitionLink href="/drops" className="text-bone/55 hover:text-blood">
+              Track the next drop
+            </TransitionLink>
+          </div>
+        </motion.section>
       </div>
     </div>
   )
+}
+
+function SealMark({ verified }: { verified: boolean }) {
+  return (
+    <div className="relative z-10 flex h-20 w-20 items-center justify-center border border-blood/35 bg-black/80 shadow-[0_0_55px_rgba(176,0,32,0.22)]">
+      <div className="absolute inset-2 border border-bone/15" />
+      {verified ? (
+        <svg className="relative h-8 w-8 text-blood" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M7.5 12.5l2.8 2.8 6.2-6.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : (
+        <svg className="relative h-8 w-8 text-bone/55" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7.5v5.5M12 16.5h.01" strokeLinecap="round" />
+        </svg>
+      )}
+    </div>
+  )
+}
+
+function CornerMarks() {
+  return (
+    <>
+      <span className="pointer-events-none absolute left-0 top-0 h-4 w-4 border-l border-t border-blood/85" />
+      <span className="pointer-events-none absolute right-0 top-0 h-4 w-4 border-r border-t border-blood/85" />
+      <span className="pointer-events-none absolute bottom-0 left-0 h-4 w-4 border-b border-l border-blood/85" />
+      <span className="pointer-events-none absolute bottom-0 right-0 h-4 w-4 border-b border-r border-blood/85" />
+    </>
+  )
+}
+
+function RitualLink({
+  href,
+  children,
+  tone = "bone",
+}: {
+  href: string
+  children: ReactNode
+  tone?: "bone" | "blood"
+}) {
+  return (
+    <TransitionLink
+      href={href}
+      className={`group inline-flex min-h-12 items-center gap-3 border px-5 font-mono text-[10px] uppercase tracking-[0.42em] text-offwhite ${
+        tone === "blood"
+          ? "border-blood bg-blood shadow-[0_0_36px_rgba(176,0,32,0.32)] hover:border-blood hover:text-offwhite"
+          : "border-bone/25 bg-black/35 hover:border-blood/70 hover:text-offwhite"
+      }`}
+    >
+      <span>{children}</span>
+      <span className="h-px w-5 bg-bone/45 transition-all duration-300 group-hover:w-8 group-hover:bg-offwhite" />
+    </TransitionLink>
+  )
+}
+
+function ReceiptRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+}) {
+  return (
+    <div className="grid gap-2 py-4 sm:grid-cols-[9rem_1fr] sm:items-baseline sm:gap-5">
+      <span className="text-[10px] uppercase tracking-[0.35em] text-bone/45">{label}</span>
+      <span className={`break-words text-sm text-offwhite/85 ${mono ? "text-xs tracking-[0.18em]" : ""}`}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function receiptRows(receipt: NonNullable<ReceiptSummary>) {
+  return [
+    receipt.orderId && { label: "Order ID", value: receipt.orderId, mono: true },
+    receipt.packTitle && { label: "Pack", value: receipt.packTitle },
+    { label: "Quantity", value: `${receipt.qty} cans` },
+    receipt.shippingName && {
+      label: "Delivering to",
+      value: [receipt.shippingName, receipt.shippingCity, receipt.shippingState].filter(Boolean).join(", "),
+    },
+  ].filter(Boolean) as Array<{ label: string; value: string; mono?: boolean }>
 }

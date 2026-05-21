@@ -614,6 +614,8 @@ async function backfillExistingPaymentRecord(options: {
       amount: options.amount,
       promo_code: options.promoCode || null,
       discount_amount: options.discountAmount || 0,
+      gst_number: options.shipping.gstNumber || null,
+      gst_business_name: options.shipping.gstBusinessName || null,
     }).catch((err) => console.error("Supabase payment backfill failed:", err))
   } else {
     // Webhook claimed the payment but never wrote to Supabase (likely a Supabase outage
@@ -676,6 +678,12 @@ async function backfillExistingPaymentRecord(options: {
   if (options.promoCode && !String(fields["Promo Code"] || "")) updateFields["Promo Code"] = options.promoCode
   if (fields["Discount Amount"] === undefined || fields["Discount Amount"] === null || fields["Discount Amount"] === "") {
     updateFields["Discount Amount"] = options.discountAmount || 0
+  }
+  if (options.shipping.gstNumber && !String(fields["GST Number"] || "")) {
+    updateFields["GST Number"] = options.shipping.gstNumber
+  }
+  if (options.shipping.gstBusinessName && !String(fields["GST Business Name"] || "")) {
+    updateFields["GST Business Name"] = options.shipping.gstBusinessName
   }
 
   if (Object.keys(updateFields).length === 0) {

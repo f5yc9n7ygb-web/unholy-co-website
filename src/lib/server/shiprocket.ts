@@ -87,7 +87,7 @@ async function getAuthToken(kv?: KVNamespace | null): Promise<string> {
       // being locked out for the entire 9-day cache TTL.
       cachedToken = null
       if (kv) {
-        await kv.put(TOKEN_KV_KEY, "", { expirationTtl: 1 }).catch(() => {})
+        await kv.delete(TOKEN_KV_KEY).catch(() => {})
       }
       lastError = new Error(
         "Shiprocket auth failed (403 HTML response). " +

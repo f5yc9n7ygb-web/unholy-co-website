@@ -276,8 +276,16 @@ export async function POST(request: NextRequest) {
     const shippingCity = String(shipping.city || fields["Shipping City"] || "")
     const shippingState = String(shipping.state || fields["Shipping State"] || "")
     const shippingPincode = String(shipping.pincode || fields["Shipping Pincode"] || "")
-    const buyerGstNumber = String(fields["GST Number"] || fields["GST number"] || orderSession?.shipping.gstNumber || "")
-    const buyerBusinessName = String(fields["GST Business Name"] || orderSession?.shipping.gstBusinessName || "")
+    const buyerGstNumber = String(
+      fields["GST Number"] || fields["GST number"] ||
+      orderSession?.shipping.gstNumber ||
+      shipping.gstNumber || ""
+    )
+    const buyerBusinessName = String(
+      fields["GST Business Name"] ||
+      orderSession?.shipping.gstBusinessName ||
+      shipping.gstBusinessName || ""
+    )
     const fullAddress = String(shipping.fullAddress || fields["Full Shipping Address"] || "")
     const status = String(supabaseCart?.status || fields["Status"] || "")
     const chargedAmount = Number(supabaseCart?.amount || fields["Amount"] || 0) || payment.amount / 100 || pack.price

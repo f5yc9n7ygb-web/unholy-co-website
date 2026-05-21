@@ -623,11 +623,11 @@ export async function getNextInvoiceSeq(ordersBaseId: string): Promise<number> {
   const lockToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   // Acquire short-lived mutex — KV has no true CAS, so we use get/put + verify.
-  // 5s TTL prevents a crashed worker from holding the lock forever.
+  // Cloudflare KV requires at least 60s TTL for expiring entries.
   for (let attempt = 0; attempt < 10; attempt++) {
     const existingLock = await kv.get(lockKey);
     if (!existingLock) {
-      await kv.put(lockKey, lockToken, { expirationTtl: 5 });
+      await kv.put(lockKey, lockToken, { expirationTtl: 60 });
       // Verify we won the race (another worker may have written simultaneously)
       const verify = await kv.get(lockKey);
       if (verify === lockToken) break;

@@ -121,11 +121,11 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
     }
   }, [sealing])
 
-  // ── Auto-redirect to receipt 12s after the finale begins ──
+  // ── Auto-redirect to receipt after the finale has time to land ──
   const goToReceipt = checkout.goToReceipt
   useEffect(() => {
     if (!isSealed) return
-    const t = setTimeout(() => goToReceipt(), 12000)
+    const t = setTimeout(() => goToReceipt(), 6000)
     return () => clearTimeout(t)
   }, [isSealed, goToReceipt])
 
@@ -231,6 +231,10 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
                 onSign={checkout.sign}
                 isSubmitting={checkout.isSubmitting}
                 payError={checkout.payError}
+                appliedPromo={checkout.appliedPromo}
+                effectiveTotal={checkout.effectiveTotal}
+                onApplyPromo={checkout.applyPromo}
+                onRemovePromo={checkout.removePromo}
               />
             </div>
 
@@ -263,6 +267,7 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
             <PhaseClose
               selected={checkout.selected}
               form={previewClose ? PREVIEW_FORM : checkout.form}
+              total={checkout.confirmedTotal}
               onContinue={previewClose ? () => history.back() : goToReceipt}
             />
           </motion.div>

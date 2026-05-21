@@ -20,6 +20,8 @@ export function SiteChrome({ children }: SiteChromeProps) {
   const suppressInitiationPopup =
     pathname === "/shop" ||
     pathname.startsWith("/shop/") ||
+    pathname === "/thanks" ||
+    pathname.startsWith("/thanks/") ||
     pathname === "/shop_CD_test"
 
   return (

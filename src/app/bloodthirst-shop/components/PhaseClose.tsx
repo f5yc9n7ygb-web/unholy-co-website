@@ -15,10 +15,12 @@ import { CLOSE } from "@/content/bloodthirst"
 export function PhaseClose({
   selected,
   form,
+  total,
   onContinue,
 }: {
   selected: Pack
   form: ShippingForm
+  total: number
   onContinue: () => void
 }) {
   return (
@@ -127,7 +129,7 @@ export function PhaseClose({
 
           <div className="mt-5 grid gap-1 font-mono text-sm">
             <Row label="Pack" value={`${selected.title} · ${selected.qty} cans`} />
-            <Row label="Total" value={`₹${selected.price.toLocaleString("en-IN")}`} accent />
+            <Row label="Total" value={`₹${total.toLocaleString("en-IN")}`} accent />
             <Row label="To" value={form.name || "—"} />
             <Row
               label="Address"
@@ -138,6 +140,9 @@ export function PhaseClose({
               }
               compact
             />
+            {form.gstNumber && (
+              <Row label="GST" value={`${form.gstNumber}${form.gstBusinessName ? ` · ${form.gstBusinessName}` : ""}`} />
+            )}
           </div>
 
           <div className="my-7 h-px w-full bg-bone/12" />
