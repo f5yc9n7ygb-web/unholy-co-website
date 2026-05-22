@@ -63,23 +63,8 @@ const STEPS: Step[] = ["select", "shipping", "review"]
 export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   const { navigate } = usePageTransition()
   const [step, setStep] = useState<Step>("select")
-  // Lazy-init from localStorage so the first render — and any effects that
-  // close over `selected` (notably the ViewContent fire below) — already see
-  // the restored pack for returning users.
-  const [selected, setSelected] = useState<Pack>(() => {
-    if (typeof window === "undefined") return PACKS[0]
-    try {
-      const saved = localStorage.getItem("unholy_cart")
-      if (saved) {
-        const data = JSON.parse(saved)
-        if (data.packId) {
-          const pack = PACKS.find((p) => p.id === data.packId)
-          if (pack) return pack
-        }
-      }
-    } catch { /* ignore corrupt data */ }
-    return PACKS[0]
-  })
+  const [selected, setSelected] = useState<Pack>(PACKS[0])
+  const [cartReady, setCartReady] = useState(false)
   const [loading, setLoading] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null)
@@ -91,22 +76,28 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
 
   const key = razorpayKey
 
-  // ── Hydrate shipping form from localStorage ──
-  // Pack selection is lazy-initialized in useState above, so this only
-  // restores the shipping form fields.
+  // Restore cart state after hydration so the first client render matches SSR.
   useEffect(() => {
     try {
       const saved = localStorage.getItem("unholy_cart")
       if (saved) {
         const data = JSON.parse(saved)
+        if (data.packId) {
+          const pack = PACKS.find((p) => p.id === data.packId)
+          if (pack) setSelected(pack)
+        }
         if (data.shipping) {
           setForm((prev) => ({ ...prev, ...data.shipping }))
         }
       }
     } catch { /* ignore corrupt data */ }
+    finally {
+      setCartReady(true)
+    }
   }, [])
 
   useEffect(() => {
+    if (!cartReady) return
     const timer = setTimeout(() => {
       try {
         localStorage.setItem("unholy_cart", JSON.stringify({
@@ -116,7 +107,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
       } catch { /* storage full or unavailable */ }
     }, 300)
     return () => clearTimeout(timer)
-  }, [selected, form])
+  }, [cartReady, selected, form])
 
   // Clear promo when pack changes (discount may no longer apply)
   useEffect(() => {
@@ -124,13 +115,13 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
   }, [selected.id])
 
   // ── Meta Pixel: ViewContent ───────────────────────────────────────────────
-  // Fires once when the shop has settled on its initial pack (default or the
-  // one restored from localStorage). We deliberately do NOT refire on pack
-  // selection change — that interaction is captured by AddToCart on Proceed.
+  // Fires once after the shop settles on its initial pack (default or the one
+  // restored from localStorage). We deliberately do NOT refire on pack
+  // selection change -- that interaction is captured by AddToCart on Proceed.
   // The ref guards against double-fire from React Strict Mode and bfcache.
   const viewContentFired = useRef(false)
   useEffect(() => {
-    if (viewContentFired.current) return
+    if (!cartReady || viewContentFired.current) return
     viewContentFired.current = true
     trackPixel(
       "ViewContent",
@@ -145,12 +136,7 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
       },
       generateEventId(),
     )
-    // Intentionally empty deps — fire once per mount. `selected` is resolved
-    // synchronously in the useState lazy initializer above (PACKS[0] or the
-    // pack restored from localStorage), so this closure has the correct pack
-    // even for returning users.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [cartReady, selected])
 
   useEffect(() => {
     if (touched.size === 0) return
