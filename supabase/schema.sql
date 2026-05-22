@@ -325,6 +325,8 @@ grant select, insert, update, delete on public.error_logs to service_role;
 grant select, insert, update, delete on public.invoice_counters to service_role;
 grant select, insert, update, delete on public.contact_submissions to service_role;
 grant select, insert, update, delete on public.subscriptions to service_role;
+revoke execute on function public.next_invoice_seq() from public, anon, authenticated;
+revoke execute on function public.increment_promo_usage(text) from public, anon, authenticated;
 grant execute on function public.next_invoice_seq() to service_role;
 grant execute on function public.increment_promo_usage(text) to service_role;
 
