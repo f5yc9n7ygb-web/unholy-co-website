@@ -3,7 +3,8 @@
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { useState } from "react"
-import { getBasePrice, getGstAmount, type Pack } from "@/lib/shop/catalog"
+import { GST_RATE, type Pack } from "@/lib/shop/catalog"
+import type { ReceiptPricing } from "@/lib/shop/receipt"
 import type { ShippingForm } from "@/lib/shop/types"
 import { OFFER } from "@/content/bloodthirst"
 import { QuantityWeapon } from "./QuantityWeapon"
@@ -30,7 +31,7 @@ export function PhaseOffer({
   isSubmitting,
   payError,
   appliedPromo,
-  effectiveTotal,
+  pricing,
   onApplyPromo,
   onRemovePromo,
 }: {
@@ -44,7 +45,7 @@ export function PhaseOffer({
   isSubmitting: boolean
   payError: string | null
   appliedPromo: AppliedPromo | null
-  effectiveTotal: number
+  pricing: ReceiptPricing
   onApplyPromo: (promo: AppliedPromo) => void
   onRemovePromo: () => void
 }) {
@@ -158,7 +159,7 @@ export function PhaseOffer({
                     ₹{selected.price.toLocaleString("en-IN")}
                   </span>
                   <span className="font-cinzel text-5xl font-black tabular-nums leading-none text-offwhite md:text-6xl">
-                    ₹{effectiveTotal.toLocaleString("en-IN")}
+                    ₹{pricing.total.toLocaleString("en-IN")}
                   </span>
                 </div>
               ) : (
@@ -188,7 +189,7 @@ export function PhaseOffer({
             selected={selected}
             buyerState={form.state}
             appliedPromo={appliedPromo}
-            effectiveTotal={effectiveTotal}
+            pricing={pricing}
             onApplyPromo={onApplyPromo}
             onRemovePromo={onRemovePromo}
           />
@@ -251,14 +252,14 @@ function RitualPricing({
   selected,
   buyerState,
   appliedPromo,
-  effectiveTotal,
+  pricing,
   onApplyPromo,
   onRemovePromo,
 }: {
   selected: Pack
   buyerState: string
   appliedPromo: AppliedPromo | null
-  effectiveTotal: number
+  pricing: ReceiptPricing
   onApplyPromo: (promo: AppliedPromo) => void
   onRemovePromo: () => void
 }) {
@@ -377,13 +378,13 @@ function RitualPricing({
               Total (incl. GST)
             </span>
             <span className="font-cinzel text-3xl font-black tabular-nums text-offwhite">
-              INR {effectiveTotal.toLocaleString("en-IN")}
+              INR {pricing.total.toLocaleString("en-IN")}
             </span>
           </div>
           <div className="mt-1.5 text-right font-mono text-[10px] text-bone/40">
-            {!buyerState && "Tax (5%) — determined by state"}
-            {buyerState && buyerState === SUPPLIER_STATE && `Includes CGST 2.5% + SGST 2.5% · INR ${formatTaxAmount(getGstAmount(effectiveTotal))}`}
-            {buyerState && buyerState !== SUPPLIER_STATE && `Includes IGST 5% · INR ${formatTaxAmount(getGstAmount(effectiveTotal))}`}
+            {!buyerState && `Tax (${GST_RATE * 100}%) — determined by state`}
+            {buyerState && buyerState === SUPPLIER_STATE && `Includes CGST ${(GST_RATE * 100) / 2}% + SGST ${(GST_RATE * 100) / 2}% · INR ${formatTaxAmount(pricing.gstAmount)}`}
+            {buyerState && buyerState !== SUPPLIER_STATE && `Includes IGST ${GST_RATE * 100}% · INR ${formatTaxAmount(pricing.gstAmount)}`}
           </div>
         </div>
       </div>

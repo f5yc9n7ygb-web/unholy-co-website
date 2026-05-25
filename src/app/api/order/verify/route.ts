@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 import { Buffer } from "node:buffer"
 import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
+import { createReceiptPricing, moneyToPaise, readReceiptPricing, type ReceiptPricing } from "@/lib/shop/receipt"
 import { hasAirtableOrdersConfig, getRequiredEnv, sendOrderConfirmationEmail, saveRecordToAirtable, queryAirtableRecords, updateAirtableRecord, logErrorToAirtable } from "@/lib/server/integrations"
 import { getKVNamespace } from "@/lib/server/kv"
 import {
@@ -126,8 +127,20 @@ export async function POST(request: NextRequest) {
       throw new Error("Order amount verification failed.")
     }
 
+    if (orderSession.receiptId && String(order?.receipt || "") !== orderSession.receiptId) {
+      throw new Error("Order receipt verification failed.")
+    }
+
     if (String(payment?.order_id || "") !== orderId) {
       throw new Error("Payment does not belong to this order.")
+    }
+
+    if (Number(payment?.amount) !== orderSession.amount) {
+      throw new Error("Payment amount verification failed.")
+    }
+
+    if (String(order?.currency || "").toUpperCase() !== "INR" || String(payment?.currency || "").toUpperCase() !== "INR") {
+      throw new Error("Payment currency verification failed.")
     }
 
     if (!["authorized", "captured"].includes(String(payment?.status || ""))) {
@@ -139,7 +152,13 @@ export async function POST(request: NextRequest) {
       throw new Error("Verified payment is missing a valid pack.")
     }
 
-    const chargedAmount = Number((orderSession.amount / 100).toFixed(2))
+    const pricing = readReceiptPricing(orderSession.pricing)
+      || createReceiptPricing(pack.price, orderSession.discountAmount)
+    if (moneyToPaise(pricing.total) !== orderSession.amount) {
+      throw new Error("Signed checkout total verification failed.")
+    }
+
+    const chargedAmount = pricing.total
     const fullAddress = [
       orderSession.shipping.address,
       orderSession.shipping.city,
@@ -201,7 +220,7 @@ export async function POST(request: NextRequest) {
         fullAddress,
         amount: chargedAmount,
         promoCode: orderSession.promoCode,
-        discountAmount: orderSession.discountAmount,
+        discountAmount: pricing.discountAmount,
         pack,
         paidAt: new Date().toISOString(),
       }).catch((err) => console.error("Payment backfill failed:", err))
@@ -218,6 +237,9 @@ export async function POST(request: NextRequest) {
         pack,
         orderId,
         chargedAmount,
+        pricing,
+        promoCode: orderSession.promoCode,
+        receiptId: orderSession.receiptId,
         shippingName: orderSession.shipping.name,
         shippingCity: orderSession.shipping.city,
         shippingState: orderSession.shipping.state,
@@ -241,7 +263,7 @@ export async function POST(request: NextRequest) {
       await backfillExistingPaymentRecord({
         ordersBaseId, orderId, paymentId,
         shipping: orderSession.shipping, fullAddress, amount: chargedAmount,
-        promoCode: orderSession.promoCode, discountAmount: orderSession.discountAmount,
+        promoCode: orderSession.promoCode, discountAmount: pricing.discountAmount,
         pack, paidAt: new Date().toISOString(),
       }).catch((err) => console.error("Payment backfill failed:", err))
       await markCartConvertedAndSupersedeForEmail({
@@ -252,6 +274,7 @@ export async function POST(request: NextRequest) {
       await sendMetaPurchaseForOrder({ orderSession, pack, orderId, chargedAmount })
       return createSuccessResponse({
         pack, orderId, chargedAmount,
+        pricing, promoCode: orderSession.promoCode, receiptId: orderSession.receiptId,
         shippingName: orderSession.shipping.name,
         shippingCity: orderSession.shipping.city,
         shippingState: orderSession.shipping.state,
@@ -276,7 +299,7 @@ export async function POST(request: NextRequest) {
       paid_at: paidAt,
       shipping_status: "Processing",
       promo_code: orderSession.promoCode || null,
-      discount_amount: orderSession.discountAmount || 0,
+      discount_amount: pricing.discountAmount,
       gst_number: orderSession.shipping.gstNumber || null,
       gst_business_name: orderSession.shipping.gstBusinessName || null,
       migrated_from: "checkout_verify",
@@ -309,7 +332,7 @@ export async function POST(request: NextRequest) {
           "Timestamp": paidAt,
           "Shipping Status": "Processing",
           ...(orderSession.promoCode ? { "Promo Code": orderSession.promoCode } : {}),
-          "Discount Amount": orderSession.discountAmount || 0,
+          "Discount Amount": pricing.discountAmount,
           ...(orderSession.shipping.gstNumber ? { "GST Number": orderSession.shipping.gstNumber } : {}),
           ...(orderSession.shipping.gstBusinessName ? { "GST Business Name": orderSession.shipping.gstBusinessName } : {}),
         }, { baseId: ordersBaseId, tableName: "Payments" })
@@ -431,12 +454,13 @@ export async function POST(request: NextRequest) {
             packTitle: pack.title,
             packQty: pack.qty,
             packPrice: chargedAmount,
+            pricing,
             shippingAddress: orderSession.shipping.address,
             shippingCity: orderSession.shipping.city,
             shippingState: orderSession.shipping.state,
             shippingPincode: orderSession.shipping.pincode,
             promoCode: orderSession.promoCode,
-            discountAmount: orderSession.discountAmount,
+            discountAmount: pricing.discountAmount,
             buyerGstNumber: orderSession.shipping.gstNumber,
             buyerBusinessName: orderSession.shipping.gstBusinessName,
           })
@@ -473,6 +497,9 @@ export async function POST(request: NextRequest) {
       pack,
       orderId,
       chargedAmount,
+      pricing,
+      promoCode: orderSession.promoCode,
+      receiptId: orderSession.receiptId,
       shippingName: orderSession.shipping.name,
       shippingCity: orderSession.shipping.city,
       shippingState: orderSession.shipping.state,
@@ -522,6 +549,9 @@ function createSuccessResponse(options: {
   pack: NonNullable<ReturnType<typeof getPackById>>
   orderId: string
   chargedAmount: number
+  pricing: ReceiptPricing
+  promoCode?: string
+  receiptId?: string
   shippingName: string
   shippingCity: string
   shippingState: string
@@ -532,8 +562,11 @@ function createSuccessResponse(options: {
       packId: options.pack.id,
       qty: options.pack.qty,
       orderId: options.orderId,
+      receiptId: options.receiptId,
       packTitle: options.pack.title,
       price: options.chargedAmount,
+      pricing: options.pricing,
+      promoCode: options.promoCode,
       shippingName: options.shippingName,
       shippingCity: options.shippingCity,
       shippingState: options.shippingState,

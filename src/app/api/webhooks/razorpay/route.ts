@@ -17,6 +17,7 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 import { Buffer } from "node:buffer"
 import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
+import { createReceiptPricing, moneyToPaise, readReceiptPricing } from "@/lib/shop/receipt"
 import {
   hasAirtableOrdersConfig,
   saveRecordToAirtable,
@@ -288,9 +289,16 @@ export async function POST(request: NextRequest) {
     )
     const fullAddress = String(shipping.fullAddress || fields["Full Shipping Address"] || "")
     const status = String(supabaseCart?.status || fields["Status"] || "")
-    const chargedAmount = Number(supabaseCart?.amount || fields["Amount"] || 0) || payment.amount / 100 || pack.price
     const promoCode = String(sourcePayload.promoCode || fields["Promo Code"] || "")
     const discountAmount = Number(sourcePayload.discountAmount || fields["Discount Amount"] || 0) || 0
+    const pricing = readReceiptPricing(orderSession?.pricing)
+      || readReceiptPricing(sourcePayload.pricing)
+      || createReceiptPricing(Number(sourcePayload.price || fields["Price"] || pack.price), discountAmount)
+    const chargedAmount = pricing.total
+
+    if (moneyToPaise(chargedAmount) !== Number(payment.amount)) {
+      throw new Error(`Webhook payment total mismatch for order ${orderId}.`)
+    }
 
     // Only process if not already converted
     if (status === "converted") {
@@ -315,7 +323,7 @@ export async function POST(request: NextRequest) {
       paid_at: paidAt,
       shipping_status: "Processing",
       promo_code: promoCode || null,
-      discount_amount: discountAmount,
+      discount_amount: pricing.discountAmount,
       gst_number: buyerGstNumber || null,
       gst_business_name: buyerBusinessName || null,
       migrated_from: "razorpay_webhook",
@@ -349,7 +357,7 @@ export async function POST(request: NextRequest) {
             "Timestamp": paidAt,
             "Shipping Status": "Processing",
             ...(promoCode ? { "Promo Code": promoCode } : {}),
-            "Discount Amount": discountAmount,
+            "Discount Amount": pricing.discountAmount,
             ...(buyerGstNumber ? { "GST Number": buyerGstNumber } : {}),
             ...(buyerBusinessName ? { "GST Business Name": buyerBusinessName } : {}),
           },
@@ -452,12 +460,13 @@ export async function POST(request: NextRequest) {
           packTitle: pack.title,
           packQty: pack.qty,
           packPrice: chargedAmount,
+          pricing,
           shippingAddress,
           shippingCity,
           shippingState,
           shippingPincode,
           promoCode: promoCode || undefined,
-          discountAmount: discountAmount || undefined,
+          discountAmount: pricing.discountAmount || undefined,
           buyerGstNumber: buyerGstNumber || undefined,
           buyerBusinessName: buyerBusinessName || undefined,
         })

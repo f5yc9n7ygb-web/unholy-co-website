@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer"
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto"
+import type { ReceiptPricing } from "@/lib/shop/receipt"
 import type { ShippingForm } from "@/lib/shop/types"
 import type { KVNamespace } from "@/lib/server/kv"
 
@@ -12,9 +13,11 @@ type SignedEnvelope<T extends string, P> = {
 type OrderSessionPayload = {
   contextId: string
   orderId: string
+  receiptId?: string
   packId: string
   qty: number
   amount: number
+  pricing?: ReceiptPricing
   shipping: ShippingForm
   metaAttribution?: MetaAttributionData
   promoCode?: string
@@ -30,12 +33,15 @@ export type MetaAttributionData = {
   eventSourceUrl?: string
 }
 
-type ReceiptPayload = {
+export type ReceiptPayload = {
   packId: string
   qty: number
   orderId?: string
+  receiptId?: string
   packTitle?: string
   price?: number
+  pricing?: ReceiptPricing
+  promoCode?: string
   shippingName?: string
   shippingCity?: string
   shippingState?: string

@@ -232,7 +232,7 @@ export function BloodThirstShopClient({ razorpayKey }: { razorpayKey?: string })
                 isSubmitting={checkout.isSubmitting}
                 payError={checkout.payError}
                 appliedPromo={checkout.appliedPromo}
-                effectiveTotal={checkout.effectiveTotal}
+                pricing={checkout.pricing}
                 onApplyPromo={checkout.applyPromo}
                 onRemovePromo={checkout.removePromo}
               />

@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 import { GST_RATE } from "@/lib/shop/catalog"
+import { createPaidReceiptPricing } from "@/lib/shop/receipt"
 import {
   COMPANY_GSTIN,
   COMPANY_LEGAL_NAME,
@@ -126,9 +127,10 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     timestamp, promoCode, discountAmount, buyerGstNumber, buyerBusinessName,
   } = data
 
-  const amountPaise = toPaise(amount)
-  const discountPaise = toPaise(discountAmount || 0)
-  const originalAmountPaise = amountPaise + discountPaise
+  const pricing = createPaidReceiptPricing(amount, discountAmount)
+  const amountPaise = toPaise(pricing.total)
+  const discountPaise = toPaise(pricing.discountAmount)
+  const originalAmountPaise = toPaise(pricing.grossTotal)
   const grossTaxablePaise = taxExclusivePaise(originalAmountPaise)
   const taxablePaise = taxExclusivePaise(amountPaise)
   const discountTaxablePaise = Math.max(0, grossTaxablePaise - taxablePaise)
@@ -389,7 +391,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     totals.push(["Gross Value (incl. GST)", `Rs. ${formatMoney(fromPaise(originalAmountPaise))}`])
     const discountLabel = promoCode ? `Discount (${promoCode}, incl. GST)` : "Discount (incl. GST)"
     totals.push([discountLabel, `- Rs. ${formatMoney(fromPaise(discountPaise))}`])
-    totals.push(["Net Value (incl. GST)", `Rs. ${formatMoney(amount)}`])
+    totals.push(["Net Value (incl. GST)", `Rs. ${formatMoney(pricing.total)}`])
     totals.push(["Gross Taxable Value", `Rs. ${formatMoney(fromPaise(grossTaxablePaise))}`])
     totals.push(["Taxable Discount", `- Rs. ${formatMoney(fromPaise(discountTaxablePaise))}`])
   }
@@ -417,11 +419,11 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     thickness: 1, color: bloodRed,
   })
   page.drawText("TOTAL", { x: totalCol, y: y - 8, size: 11, font: fontBold, color: black })
-  drawRightAlignedText(`Rs. ${formatMoney(amount)}`, totalValRight, y - 8, 11, fontBold, bloodRed)
+  drawRightAlignedText(`Rs. ${formatMoney(pricing.total)}`, totalValRight, y - 8, 11, fontBold, bloodRed)
 
   // Amount in words
   y -= 28
-  page.drawText(`Amount in words: ${amountInWords(amount)} Rupees Only`, {
+  page.drawText(`Amount in words: ${amountInWords(pricing.total)} Rupees Only`, {
     x: leftMargin, y, size: 8, font: fontRegular, color: grey,
   })
 

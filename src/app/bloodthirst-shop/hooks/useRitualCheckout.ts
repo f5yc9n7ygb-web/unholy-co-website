@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { PACKS, type Pack } from "@/lib/shop/catalog"
+import { createReceiptPricing, readReceiptPricing, type ReceiptPricing } from "@/lib/shop/receipt"
 import type { ShippingForm } from "@/lib/shop/types"
 import { generateEventId, trackPixel } from "@/lib/meta-pixel"
 import { usePageTransition } from "@/context/TransitionContext"
@@ -76,12 +77,14 @@ export function useRitualCheckout({ razorpayKey }: Args) {
   const [phase, setPhase] = useState<CheckoutPhase>("idle")
   const [payError, setPayError] = useState<string | null>(null)
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null)
+  const [serverPricing, setServerPricing] = useState<ReceiptPricing | null>(null)
   const [receiptToken, setReceiptToken] = useState<string | null>(null)
   const [confirmedTotal, setConfirmedTotal] = useState<number | null>(null)
   const viewContentFired = useRef(false)
   const addToCartFired = useRef<string | null>(null)
 
-  const effectiveTotal = appliedPromo ? appliedPromo.finalPrice : selected.price
+  const pricing = serverPricing || createReceiptPricing(selected.price, appliedPromo?.discountAmount)
+  const effectiveTotal = pricing.total
 
   // Restore cart on mount (shared key with /shop). ViewContent waits for this
   // effect so server markup and the first client render keep the same pack.
@@ -159,6 +162,7 @@ export function useRitualCheckout({ razorpayKey }: Args) {
     if (pack.id === selected.id) return
     setSelected(pack)
     setAppliedPromo(null)
+    setServerPricing(null)
     addToCartFired.current = null
     trackPixel(
       "ViewContent",
@@ -177,11 +181,13 @@ export function useRitualCheckout({ razorpayKey }: Args) {
 
   const applyPromo = useCallback((promo: AppliedPromo) => {
     setAppliedPromo(promo)
+    setServerPricing(null)
     addToCartFired.current = null
   }, [])
 
   const removePromo = useCallback(() => {
     setAppliedPromo(null)
+    setServerPricing(null)
     addToCartFired.current = null
   }, [])
 
@@ -263,6 +269,10 @@ export function useRitualCheckout({ razorpayKey }: Args) {
       if (!res.ok || !data?.ok) {
         throw new Error(data?.error || "Unable to start checkout right now.")
       }
+      const orderPricing = readReceiptPricing(data.order.pricing)
+      if (orderPricing) {
+        setServerPricing(orderPricing)
+      }
       const orderAmount = Number(data.order.amount)
 
       const rz = new window.Razorpay({
@@ -341,6 +351,7 @@ export function useRitualCheckout({ razorpayKey }: Args) {
     phase,
     payError,
     appliedPromo,
+    pricing,
     applyPromo,
     removePromo,
     effectiveTotal,

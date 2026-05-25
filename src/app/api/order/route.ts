@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer"
 import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
+import { createReceiptPricing, moneyToPaise } from "@/lib/shop/receipt"
 import type { ShippingForm } from "@/lib/shop/types"
 import { validatePromoCode } from "@/lib/shop/promo"
 import { hasAirtableOrdersConfig, getRequiredEnv, logErrorToAirtable, saveRecordToAirtable } from "@/lib/server/integrations"
@@ -126,8 +127,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const finalPrice = pack.price - discountAmount
-    const amount = finalPrice * 100
+    const pricing = createReceiptPricing(pack.price, discountAmount)
+    if (pricing.total <= 0) {
+      await releaseReservationOnExit()
+      return NextResponse.json(
+        { ok: false, error: "This promo leaves no payable checkout total. Please choose another code." },
+        { status: 400 }
+      )
+    }
+
+    const amount = moneyToPaise(pricing.total)
     const currency = "INR"
     const receipt = createOrderReceipt()
     const contextId = createOrderContextId()
@@ -186,14 +195,16 @@ export async function POST(request: NextRequest) {
     const sessionToken = createOrderSessionToken({
       contextId,
       orderId: String(order.id || ""),
+      receiptId: receipt,
       packId: pack.id,
       qty: pack.qty,
       amount,
+      pricing,
       shipping,
       metaAttribution: getMetaAttributionFromRequest(request),
       promoCode: promoCode || undefined,
       promoRecordId: validatedPromoRecordId || undefined,
-      discountAmount,
+      discountAmount: pricing.discountAmount,
     })
 
     const nextResponse = NextResponse.json(
@@ -203,6 +214,8 @@ export async function POST(request: NextRequest) {
           id: order.id,
           amount: order.amount,
           currency: order.currency,
+          receipt,
+          pricing,
         },
         // Belt-and-suspenders: pass token in body as fallback for envs where KV isn't bound
         sessionToken,
@@ -239,7 +252,7 @@ export async function POST(request: NextRequest) {
       customer_phone: shipping.phone,
       pack: pack.title,
       quantity: pack.qty,
-      amount: finalPrice,
+      amount: pricing.total,
       status: "pending",
       shipping: {
         name: shipping.name,
@@ -258,8 +271,9 @@ export async function POST(request: NextRequest) {
         price: pack.price,
         promoCode: promoCode || null,
         promoRecordId: validatedPromoRecordId || null,
-        discountAmount,
+        discountAmount: pricing.discountAmount,
         receipt,
+        pricing,
       },
     }
     let persistedCart = false
@@ -279,7 +293,7 @@ export async function POST(request: NextRequest) {
           "Pack ID": pack.id,
           "Quantity": pack.qty,
           "Price": pack.price,
-          "Amount": finalPrice,
+          "Amount": pricing.total,
           "Customer Name": shipping.name,
           "Customer Email": shipping.email,
           "Customer Phone": shipping.phone,
@@ -289,7 +303,7 @@ export async function POST(request: NextRequest) {
           "Shipping Pincode": shipping.pincode,
           "Full Shipping Address": fullAddress,
           ...(promoCode ? { "Promo Code": promoCode } : {}),
-          "Discount Amount": discountAmount,
+          "Discount Amount": pricing.discountAmount,
           ...(shipping.gstNumber ? { "GST Number": shipping.gstNumber } : {}),
           ...(shipping.gstBusinessName ? { "GST Business Name": shipping.gstBusinessName } : {}),
           "Status": "pending",

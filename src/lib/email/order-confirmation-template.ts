@@ -1,3 +1,6 @@
+import { GST_RATE } from "@/lib/shop/catalog"
+import { createPaidReceiptPricing, type ReceiptPricing } from "@/lib/shop/receipt"
+
 export type OrderConfirmationOptions = {
   customerName: string
   customerEmail: string
@@ -6,7 +9,9 @@ export type OrderConfirmationOptions = {
   paymentId: string
   packTitle: string
   packQty: number
+  /** GST-inclusive amount actually paid after discount. */
   packPrice: number
+  pricing?: ReceiptPricing
   shippingAddress: string
   shippingCity: string
   shippingState: string
@@ -17,9 +22,6 @@ export type OrderConfirmationOptions = {
   buyerBusinessName?: string
 }
 
-const GST_RATE = 0.05
-function getGstAmount(price: number) { return Math.round(((price * GST_RATE) / (1 + GST_RATE)) * 100) / 100 }
-function getBasePrice(price: number) { return Math.round((price - getGstAmount(price)) * 100) / 100 }
 function formatCurrency(price: number) {
   return price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
@@ -34,9 +36,13 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
   const textMuted = "#888888"
   const textDim = "#555555"
 
-  const priceFormatted = `₹${formatCurrency(o.packPrice)}`
-  const gstFormatted = `₹${formatCurrency(getGstAmount(o.packPrice))}`
-  const basePriceFormatted = `₹${formatCurrency(getBasePrice(o.packPrice))}`
+  const pricing = getConfirmationPricing(o)
+  const priceFormatted = `₹${formatCurrency(pricing.total)}`
+  const gstFormatted = `₹${formatCurrency(pricing.gstAmount)}`
+  const basePriceFormatted = `₹${formatCurrency(pricing.subtotal)}`
+  const grossPriceFormatted = `₹${formatCurrency(pricing.grossTotal)}`
+  const discountFormatted = `−₹${formatCurrency(pricing.discountAmount)}`
+  const gstLabel = `GST (${GST_RATE * 100}%)`
   const addressBlock = [o.shippingAddress, o.shippingCity, o.shippingState, o.shippingPincode]
     .filter(Boolean)
     .join(", ")
@@ -57,6 +63,10 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
         <div style="font-size:12px; color:${textMuted}; margin-top:3px;">${desc}</div>
       </td>
     </tr>`
+  const discountRows = pricing.discountAmount > 0
+    ? `${row("Gross Total", grossPriceFormatted)}
+                ${row(o.promoCode ? `Discount (${o.promoCode})` : "Discount", discountFormatted)}`
+    : ""
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -106,8 +116,9 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
               <table width="100%" cellpadding="0" cellspacing="0">
                 ${row("Product", o.packTitle)}
                 ${row("Quantity", `${o.packQty} cans`)}
+                ${discountRows}
                 ${row("Subtotal", basePriceFormatted)}
-                ${row("GST (5%)", gstFormatted)}
+                ${row(gstLabel, gstFormatted)}
                 ${row("Total Paid", priceFormatted)}
                 ${row("Order ID", o.orderId, true)}
                 ${row("Payment ID", o.paymentId, true)}
@@ -183,6 +194,13 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
 }
 
 export function buildOrderConfirmationText(o: OrderConfirmationOptions): string {
+  const pricing = getConfirmationPricing(o)
+  const gstLabel = `GST (${GST_RATE * 100}%)`
+  const discountLines = pricing.discountAmount > 0
+    ? `Gross Total: ₹${formatCurrency(pricing.grossTotal)}
+${o.promoCode ? `Discount (${o.promoCode})` : "Discount"}: −₹${formatCurrency(pricing.discountAmount)}
+`
+    : ""
   let text = `ORDER CONFIRMED — UNHOLY CO.
 
 The ritual is complete, ${o.customerName.split(" ")[0]}.
@@ -193,9 +211,9 @@ ORDER DETAILS
 -------------
 Product:    ${o.packTitle}
 Quantity:   ${o.packQty} cans
-Subtotal:   ₹${formatCurrency(getBasePrice(o.packPrice))}
-GST (5%):  ₹${formatCurrency(getGstAmount(o.packPrice))}
-Total Paid: ₹${formatCurrency(o.packPrice)}
+${discountLines}Subtotal:   ₹${formatCurrency(pricing.subtotal)}
+${gstLabel}:  ₹${formatCurrency(pricing.gstAmount)}
+Total Paid: ₹${formatCurrency(pricing.total)}
 Order ID:   ${o.orderId}
 Payment ID: ${o.paymentId}
 
@@ -230,6 +248,10 @@ Questions? rituals@theunholy.co
 UNHOLY CO. — Himalayan mineral water for the counterculture.
 `
   return text
+}
+
+function getConfirmationPricing(options: OrderConfirmationOptions) {
+  return options.pricing || createPaidReceiptPricing(options.packPrice, options.discountAmount)
 }
 
 function escapeHtml(value: string) {

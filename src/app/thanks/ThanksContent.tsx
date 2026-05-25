@@ -6,13 +6,17 @@ import { useEffect, type ReactNode } from "react"
 import { usePostHog } from "posthog-js/react"
 import { TransitionLink } from "@/components/ux/TransitionLink"
 import { trackPixel } from "@/lib/meta-pixel"
+import type { ReceiptPricing } from "@/lib/shop/receipt"
 
 type ReceiptSummary = {
   packId: string
   qty: number
   orderId?: string
+  receiptId?: string
   packTitle?: string
   price?: number
+  pricing?: ReceiptPricing
+  promoCode?: string
   shippingName?: string
   shippingCity?: string
   shippingState?: string
@@ -33,6 +37,7 @@ const fadeUp = (delay = 0) => ({
 export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
   const isVerified = Boolean(receipt)
   const posthog = usePostHog()
+  const total = receiptTotal(receipt)
 
   useEffect(() => {
     // The BloodThirst finale locks the document while it seals. A route handoff
@@ -46,7 +51,7 @@ export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
 
     // Guard: only fire conversion events once per orderId. The thanks page can
     // be reloaded, revisited via email link, or restored from bfcache.
-    const dedupKey = receipt.orderId || `${receipt.packId}-${receipt.qty}-${receipt.price ?? ""}`
+    const dedupKey = receipt.orderId || `${receipt.packId}-${receipt.qty}-${receiptTotal(receipt) ?? ""}`
     const storageKey = `unholy_purchase_fired_${dedupKey}`
     try {
       if (localStorage.getItem(storageKey)) return
@@ -63,13 +68,13 @@ export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
     trackPixel(
       "Purchase",
       {
-        value: receipt.price,
+        value: receiptTotal(receipt),
         currency: "INR",
         content_ids: [receipt.packId],
         content_name: receipt.packTitle,
         content_type: "product",
         num_items: receipt.qty,
-        contents: [{ id: receipt.packId, quantity: 1, item_price: receipt.price }],
+        contents: [{ id: receipt.packId, quantity: 1, item_price: receiptTotal(receipt) }],
       },
       receipt.orderId,
     )
@@ -173,9 +178,9 @@ export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
                 {isVerified ? "BloodThirst receipt" : "Payment receipt"}
               </p>
             </div>
-            {receipt?.price ? (
+            {total !== undefined ? (
               <p className="font-cinzel text-3xl font-black tabular-nums text-offwhite md:text-4xl">
-                INR {receipt.price.toLocaleString("en-IN")}
+                INR {formatReceiptMoney(total)}
               </p>
             ) : null}
           </div>
@@ -315,13 +320,34 @@ function ReceiptRow({
 }
 
 function receiptRows(receipt: NonNullable<ReceiptSummary>) {
+  const pricing = receipt.pricing
   return [
     receipt.orderId && { label: "Order ID", value: receipt.orderId, mono: true },
+    receipt.receiptId && { label: "Receipt", value: receipt.receiptId, mono: true },
     receipt.packTitle && { label: "Pack", value: receipt.packTitle },
     { label: "Quantity", value: `${receipt.qty} cans` },
+    pricing?.discountAmount
+      ? {
+          label: receipt.promoCode ? `Discount ${receipt.promoCode}` : "Discount",
+          value: `-INR ${formatReceiptMoney(pricing.discountAmount)}`,
+        }
+      : null,
+    pricing && { label: "Subtotal excl. GST", value: `INR ${formatReceiptMoney(pricing.subtotal)}` },
+    pricing && { label: "GST included", value: `INR ${formatReceiptMoney(pricing.gstAmount)}` },
     receipt.shippingName && {
       label: "Delivering to",
       value: [receipt.shippingName, receipt.shippingCity, receipt.shippingState].filter(Boolean).join(", "),
     },
   ].filter(Boolean) as Array<{ label: string; value: string; mono?: boolean }>
+}
+
+function receiptTotal(receipt: ReceiptSummary) {
+  return receipt?.pricing?.total ?? receipt?.price
+}
+
+function formatReceiptMoney(amount: number) {
+  return amount.toLocaleString("en-IN", {
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })
 }
