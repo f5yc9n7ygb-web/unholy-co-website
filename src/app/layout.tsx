@@ -10,6 +10,17 @@ import { HeartbeatGlow } from '@/components/ux/HeartbeatGlow'
 import { TransitionProvider } from '@/context/TransitionContext'
 import { PostHogProvider } from '@/components/providers/PostHogProvider'
 import { MetaPixelProvider } from '@/components/providers/MetaPixelProvider'
+import {
+  DEFAULT_SEO_DESCRIPTION,
+  DEFAULT_SEO_KEYWORDS,
+  DEFAULT_SEO_TITLE,
+  OG_IMAGE,
+  SITE_NAME,
+  SITE_URL,
+  brandSchema,
+  organizationSchema,
+  websiteSchema,
+} from '@/lib/site/seo'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -25,15 +36,25 @@ const cinzel = Cinzel({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://theunholy.co'),
+  metadataBase: new URL(SITE_URL),
+  applicationName: SITE_NAME,
   title: {
-    default: 'UNHOLY CO. — BloodThirst',
+    default: DEFAULT_SEO_TITLE,
     template: '%s | UNHOLY CO.',
   },
-  description: 'Gothic premium canned water. Natural Himalayan mineral water. Zero sugar, zero plastic. Stay Unholy.',
-  keywords: ['premium canned water', 'BloodThirst', 'Himalayan mineral water', 'gothic water brand', 'UNHOLY CO', 'canned water India'],
-  authors: [{ name: 'UNHOLY CO.' }],
-  creator: 'UNHOLY CO.',
+  description: DEFAULT_SEO_DESCRIPTION,
+  keywords: DEFAULT_SEO_KEYWORDS,
+  authors: [{ name: SITE_NAME }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: 'beverages',
+  classification: 'Premium canned mineral water',
+  referrer: 'strict-origin-when-cross-origin',
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
   robots: {
     index: true,
     follow: true,
@@ -41,60 +62,40 @@ export const metadata: Metadata = {
       index: true,
       follow: true,
       'max-image-preview': 'large',
+      'max-video-preview': -1,
+      'max-snippet': -1,
     },
   },
   alternates: {
-    canonical: '/',
+    canonical: SITE_URL,
   },
   openGraph: {
     type: 'website',
-    siteName: 'UNHOLY CO.',
-    title: 'UNHOLY CO. — BloodThirst',
-    description: 'Gothic premium canned water. Natural Himalayan mineral water. Zero sugar, zero plastic. Stay Unholy.',
-    url: '/',
+    siteName: SITE_NAME,
+    title: DEFAULT_SEO_TITLE,
+    description: DEFAULT_SEO_DESCRIPTION,
+    url: SITE_URL,
     images: [
       {
-        url: '/og-hero.png',
-        width: 1200,
-        height: 630,
-        alt: 'UNHOLY CO. BloodThirst — Gothic Premium Canned Water',
+        url: OG_IMAGE.path,
+        width: OG_IMAGE.width,
+        height: OG_IMAGE.height,
+        alt: OG_IMAGE.alt,
       },
     ],
     locale: 'en_IN',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'UNHOLY CO. — BloodThirst',
-    description: 'Gothic premium canned water. Natural Himalayan mineral water. Zero sugar, zero plastic. Stay Unholy.',
-    images: ['/og-hero.png'],
+    title: DEFAULT_SEO_TITLE,
+    description: DEFAULT_SEO_DESCRIPTION,
+    images: [OG_IMAGE.path],
     creator: '@unholyco',
   },
-}
-
-const organizationSchema = {
-  '@context': 'https://schema.org',
-  '@type': 'Organization',
-  name: 'UNHOLY CO.',
-  url: 'https://theunholy.co',
-  logo: 'https://theunholy.co/uhc-logo.png',
-  description: 'Gothic premium canned water brand. Natural Himalayan mineral water, zero sugar, zero plastic.',
-  sameAs: [
-    'https://www.instagram.com/unholyco',
-  ],
-  contactPoint: {
-    '@type': 'ContactPoint',
-    contactType: 'customer service',
-    email: 'hello@theunholy.co',
-    availableLanguage: 'English',
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
   },
-}
-
-const websiteSchema = {
-  '@context': 'https://schema.org',
-  '@type': 'WebSite',
-  name: 'UNHOLY CO.',
-  url: 'https://theunholy.co',
-  description: 'Gothic premium canned water. Natural Himalayan mineral water. Zero sugar, zero plastic.',
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -104,6 +105,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(brandSchema) }}
         />
         <script
           type="application/ld+json"

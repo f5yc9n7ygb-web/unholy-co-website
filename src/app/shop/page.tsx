@@ -1,4 +1,6 @@
 import type { Metadata } from "next"
+import { PACKS } from "@/lib/shop/catalog"
+import { OG_IMAGE, SITE_NAME, SITE_URL } from "@/lib/site/seo"
 import { ShopClient } from "./ShopClient"
 import { ShopClosedClient } from "./ShopClosedClient"
 
@@ -7,6 +9,7 @@ import { ShopClosedClient } from "./ShopClosedClient"
 export const revalidate = 30
 
 const LAUNCH_DATE = new Date('2026-04-02T07:30:00.000Z') // April 2 1:00 PM IST
+const shopUrl = `${SITE_URL}/shop`
 
 export const metadata: Metadata = {
   title: "Shop BloodThirst",
@@ -26,6 +29,48 @@ export const metadata: Metadata = {
   },
 }
 
+const shopSchema = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  "@id": `${shopUrl}#webpage`,
+  name: "Shop BloodThirst",
+  url: shopUrl,
+  isPartOf: {
+    "@id": `${SITE_URL}/#website`,
+  },
+  about: {
+    "@id": `${SITE_URL}/bloodthirst#product`,
+  },
+  mainEntity: {
+    "@type": "ItemList",
+    itemListElement: PACKS.map((pack, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      item: {
+        "@type": "Product",
+        name: `BloodThirst ${pack.qty} Pack`,
+        description: pack.blurb,
+        image: [`${SITE_URL}/can.webp`, OG_IMAGE.url],
+        brand: {
+          "@type": "Brand",
+          "@id": `${SITE_URL}/#brand`,
+          name: SITE_NAME,
+        },
+        offers: {
+          "@type": "Offer",
+          price: pack.price,
+          priceCurrency: "INR",
+          availability: "https://schema.org/InStock",
+          url: shopUrl,
+          seller: {
+            "@id": `${SITE_URL}/#organization`,
+          },
+        },
+      },
+    })),
+  },
+}
+
 /**
  * The server-side component for the shop page.
  * Reads the Razorpay key at request time (from runtime secrets) and passes
@@ -34,9 +79,25 @@ export const metadata: Metadata = {
  */
 export default function ShopPage() {
   if (new Date() < LAUNCH_DATE) {
-    return <ShopClosedClient />
+    return (
+      <>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(shopSchema) }}
+        />
+        <ShopClosedClient />
+      </>
+    )
   }
 
   const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || ""
-  return <ShopClient razorpayKey={razorpayKey} />
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(shopSchema) }}
+      />
+      <ShopClient razorpayKey={razorpayKey} />
+    </>
+  )
 }

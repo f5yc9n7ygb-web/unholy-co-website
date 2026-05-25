@@ -1,5 +1,11 @@
 import type { Metadata } from "next"
+import { PACKS } from "@/lib/shop/catalog"
+import { OG_IMAGE, SITE_NAME, SITE_URL } from "@/lib/site/seo"
 import { BloodThirstClient } from "./BloodThirstClient"
+
+const productUrl = `${SITE_URL}/bloodthirst`
+const shopUrl = `${SITE_URL}/shop`
+const packPrices = PACKS.map((pack) => pack.price)
 
 export const metadata: Metadata = {
   title: "BloodThirst",
@@ -23,19 +29,63 @@ export const metadata: Metadata = {
 const productSchema = {
   '@context': 'https://schema.org',
   '@type': 'Product',
-  name: 'BloodThirst',
+  '@id': `${productUrl}#product`,
+  name: 'BloodThirst Himalayan Mineral Water',
+  alternateName: 'BloodThirst',
   brand: {
     '@type': 'Brand',
-    name: 'UNHOLY CO.',
+    '@id': `${SITE_URL}/#brand`,
+    name: SITE_NAME,
+  },
+  manufacturer: {
+    '@id': `${SITE_URL}/#organization`,
   },
   description: 'Natural Himalayan mineral water at 11,000 feet. Zero sugar, zero plastic. Sealed in obsidian-black aluminum.',
-  image: 'https://theunholy.co/can.webp',
-  url: 'https://theunholy.co/bloodthirst',
+  image: [`${SITE_URL}/can.webp`, OG_IMAGE.url],
+  url: productUrl,
+  sku: 'bloodthirst-500ml',
+  category: 'Beverages > Bottled Water',
+  material: 'Aluminum can',
+  additionalProperty: [
+    {
+      '@type': 'PropertyValue',
+      name: 'Volume',
+      value: '500 ml',
+    },
+    {
+      '@type': 'PropertyValue',
+      name: 'Sugar',
+      value: '0 g',
+    },
+    {
+      '@type': 'PropertyValue',
+      name: 'Packaging',
+      value: 'Plastic-free aluminum can',
+    },
+  ],
   offers: {
     '@type': 'AggregateOffer',
     priceCurrency: 'INR',
+    lowPrice: Math.min(...packPrices),
+    highPrice: Math.max(...packPrices),
+    offerCount: PACKS.length,
     availability: 'https://schema.org/InStock',
-    url: 'https://theunholy.co/shop',
+    url: shopUrl,
+    seller: {
+      '@id': `${SITE_URL}/#organization`,
+    },
+    offers: PACKS.map((pack) => ({
+      '@type': 'Offer',
+      name: `${pack.title} - ${pack.qty} cans`,
+      sku: `bloodthirst-${pack.qty}-pack`,
+      price: pack.price,
+      priceCurrency: 'INR',
+      availability: 'https://schema.org/InStock',
+      url: shopUrl,
+      seller: {
+        '@id': `${SITE_URL}/#organization`,
+      },
+    })),
   },
 }
 
