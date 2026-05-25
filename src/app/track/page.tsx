@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Track Your Order",
   description: "Track your UNHOLY CO. BloodThirst order in real-time. Enter your order ID or email to see the latest shipping status.",
   alternates: { canonical: "/track" },
+  robots: { index: false, follow: true },
   openGraph: {
     title: "Track Your Order — UNHOLY CO.",
     description: "Track your BloodThirst order in real-time.",

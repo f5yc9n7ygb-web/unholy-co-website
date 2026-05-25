@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   title: "Something Unholy Is Coming — UNHOLY CO.",
   description:
     "Not your salvation. Something is coming. Claim your place in the ritual before the ordinary even know what this is.",
+  alternates: { canonical: "/" },
+  robots: { index: false, follow: true },
   openGraph: {
     title: "Something Unholy Is Coming — UNHOLY CO.",
     description: "Not your salvation. BLOODTHIRST by UNHOLY CO. — coming soon.",

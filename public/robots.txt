@@ -1,5 +1,5 @@
 # UNHOLY CO. — https://theunholy.co
-# robots.txt — March 2026
+# robots.txt — May 2026
 
 # Allow all search crawlers
 User-agent: *
@@ -8,6 +8,8 @@ Disallow: /api/
 Disallow: /v2
 Disallow: /v3
 Disallow: /shop-v2
+Disallow: /shop_CD_test
+Disallow: /bloodthirst-shop
 
 # AI training crawlers — block to protect brand content
 # Note: blocking GPTBot does NOT affect ChatGPT browsing (ChatGPT-User)
