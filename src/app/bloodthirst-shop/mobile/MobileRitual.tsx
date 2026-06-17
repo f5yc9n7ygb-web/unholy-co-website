@@ -11,6 +11,7 @@ import { ArrowDown, Check, Gift, Lock, ShieldCheck, Sparkles, Truck } from "luci
 import { MobileBuyBar } from "../components/MobileBuyBar"
 import { PhaseClose } from "../components/PhaseClose"
 import { RitualForm } from "../components/RitualForm"
+import { BlackGloveModal, DoNotBuyModal } from "../components/PremiumInquiry"
 import { useRitualCheckout, type CheckoutAddOn } from "../hooks/useRitualCheckout"
 import { MobileAddOnsSheet } from "./MobileAddOnsSheet"
 import { CHECKOUT_ADD_ON_CONFIG, type NoteTone } from "@/lib/shop/addon-config"
@@ -54,6 +55,8 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [barVisible, setBarVisible] = useState(false)
   const [addOnsOpen, setAddOnsOpen] = useState(false)
+  const [blackGloveOpen, setBlackGloveOpen] = useState(false)
+  const [doNotBuyOpen, setDoNotBuyOpen] = useState(false)
   const [noteEnabled, setNoteEnabled] = useState(false)
   const [ledgerEnabled, setLedgerEnabled] = useState(false)
   const [noteTone, setNoteTone] = useState<NoteTone>("Funny")
@@ -474,6 +477,50 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
             />
           </div>
 
+          <div className="mt-5 grid gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setSnapEnabled(false)
+                setBlackGloveOpen(true)
+              }}
+              className="flex items-center justify-between gap-4 border border-blood/25 bg-gradient-to-br from-blood/14 to-black/50 px-4 py-4 text-left active:scale-[0.99]"
+            >
+              <span className="min-w-0">
+                <span className="block font-mono text-[9px] uppercase tracking-[0.28em] text-blood/85">
+                  Black Glove Delivery · ₹1,00,000
+                </span>
+                <span className="mt-1 block text-sm leading-snug text-bone/64">
+                  Founder-delivered. Judgement included. Dignity not guaranteed.
+                </span>
+              </span>
+              <span className="shrink-0 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-offwhite">
+                View
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSnapEnabled(false)
+                setDoNotBuyOpen(true)
+              }}
+              className="flex items-center justify-between gap-4 border border-blood/30 bg-[#120608] px-4 py-4 text-left active:scale-[0.99]"
+            >
+              <span className="min-w-0">
+                <span className="block font-mono text-[9px] uppercase tracking-[0.28em] text-blood/85">
+                  Do Not Buy This · ₹66,666
+                </span>
+                <span className="mt-1 block text-sm leading-snug text-bone/64">
+                  66 cans. Signed crate. Founder judgement. Ancestrally inadvisable.
+                </span>
+              </span>
+              <span className="shrink-0 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-offwhite">
+                Ignore
+              </span>
+            </button>
+          </div>
+
           <div className="mt-6 border border-bone/12 bg-black/45 p-4">
             <div className="space-y-2 font-mono text-[11px] uppercase tracking-[0.18em] text-bone/62">
               <MobileLedgerRow label={`${checkout.selected.title} (${checkout.selected.qty} cans)`} value={money(checkout.selected.price)} />
@@ -535,6 +582,18 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
           scrollToOffer()
         }}
       />
+
+      {blackGloveOpen && <BlackGloveModal onClose={() => setBlackGloveOpen(false)} />}
+      {doNotBuyOpen && (
+        <DoNotBuyModal
+          onClose={() => setDoNotBuyOpen(false)}
+          onTakeTrial={() => {
+            const trial = PACKS.find((pack) => pack.id === "pack3")
+            if (trial) selectPack(trial)
+            setDoNotBuyOpen(false)
+          }}
+        />
+      )}
     </MotionConfig>
   )
 }
