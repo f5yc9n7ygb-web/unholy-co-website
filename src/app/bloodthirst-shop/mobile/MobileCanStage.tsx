@@ -52,7 +52,7 @@ export function MobileCanStage({ onReady, onFirstDrag }: MobileCanStageProps) {
 
   return (
     <div
-      className="absolute inset-0 touch-none"
+      className="absolute inset-0 touch-pan-y"
       role="img"
       aria-label="Interactive BloodThirst can"
       onPointerDown={(event) => {

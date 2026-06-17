@@ -36,6 +36,9 @@ const PROOF_ITEMS = [
   { icon: <Check size={16} />, label: "Secure Razorpay checkout" },
 ] as const
 
+// "Starts with" on the hero is the entry price floor, not the selected pack.
+const FROM_PRICE = Math.min(...PACKS.map((pack) => pack.price))
+
 function money(value: number) {
   return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
 }
@@ -49,6 +52,7 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
   const mountAt = useRef(Date.now())
 
   const [snapEnabled, setSnapEnabled] = useState(true)
+  const [barVisible, setBarVisible] = useState(false)
   const [addOnsOpen, setAddOnsOpen] = useState(false)
   const [noteEnabled, setNoteEnabled] = useState(false)
   const [ledgerEnabled, setLedgerEnabled] = useState(false)
@@ -111,6 +115,8 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
   })
 
   const { isSealed, goToReceipt } = checkout
+  const selectedIdRef = useRef(checkout.selected.id)
+  selectedIdRef.current = checkout.selected.id
 
   useEffect(() => {
     if (!isSealed) return
@@ -140,7 +146,7 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
           seen.add(scene)
           trackBloodthirstEvent("scene_view", {
             scene,
-            pack_id: checkout.selected.id,
+            pack_id: selectedIdRef.current,
           })
         }
         if (scene === "offer" && !offerTracked && root) {
@@ -149,7 +155,7 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
           trackBloodthirstEvent("time_to_offer_ms", {
             time_to_offer_ms: Date.now() - mountAt.current,
             scroll_depth_to_offer: Math.round((root.scrollTop / maxScroll) * 100) / 100,
-            pack_id: checkout.selected.id,
+            pack_id: selectedIdRef.current,
           })
         }
       }
@@ -157,7 +163,20 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
 
     scenes.forEach(([, element]) => element && observer.observe(element))
     return () => observer.disconnect()
-  }, [checkout.selected.id])
+  }, [])
+
+  // Sticky buy bar appears only after the arrival hero scrolls away.
+  useEffect(() => {
+    const root = scrollRef.current
+    const arrival = arrivalRef.current
+    if (!root || !arrival) return
+    const observer = new IntersectionObserver(
+      ([entry]) => setBarVisible(entry.intersectionRatio < 0.5),
+      { root, threshold: [0, 0.5, 1] },
+    )
+    observer.observe(arrival)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     const slot = canSlotRef.current
@@ -268,7 +287,7 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
       <main
         ref={scrollRef}
         className="h-[100svh] overflow-y-auto bg-[#080808] text-bone"
-        style={{ scrollSnapType: snapEnabled ? "y mandatory" : "none" }}
+        style={{ scrollSnapType: snapEnabled ? "y proximity" : "none" }}
       >
         <section
           ref={arrivalRef}
@@ -338,7 +357,7 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
                   Starts with
                 </p>
                 <p className="font-cinzel text-4xl font-black leading-none text-offwhite">
-                  {money(checkout.selected.price)}
+                  {money(FROM_PRICE)}
                 </p>
               </div>
               <button
@@ -506,6 +525,7 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
       <MobileBuyBar
         selected={checkout.selected}
         total={checkout.pricing.total}
+        visible={barVisible}
         onTap={() => {
           trackBloodthirstEvent("sticky_buy_tap", {
             pack_id: checkout.selected.id,
