@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { TransitionLink } from "@/components/ux/TransitionLink"
-import { COMPANY_LEGAL_NAME, COMPANY_SUPPORT_EMAIL } from "@/lib/site/company"
+import { COMPANY_FSSAI_LICENSE, COMPANY_LEGAL_NAME, COMPANY_SUPPORT_EMAIL } from "@/lib/site/company"
 
 type FAQItem = {
   question: string
@@ -49,7 +49,12 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "What are the nutritional contents?",
         answer:
-          "Nothing extra has been added. You get naturally occurring minerals from the source water, including calcium, magnesium, and potassium, with zero sugar, zero calories, and no artificial flavouring.",
+          "Nothing extra has been added. The latest water test shows pH 7.18, TDS 256.87 mg/L, and calcium 28.05 mg/L, with zero sugar, zero calories, and no artificial flavouring.",
+      },
+      {
+        question: "Is BloodThirst FSSAI licensed?",
+        answer:
+          `Yes. BloodThirst is sold under FSSAI Lic. No. ${COMPANY_FSSAI_LICENSE}. The product is marketed by Unholy Beverages Private Limited.`,
       },
     ],
   },
@@ -96,7 +101,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "What payment methods do you accept?",
         answer:
-          "UPI, credit/debit cards, net banking, and digital wallets — all through Razorpay, India's most trusted payment gateway. 256-bit SSL encrypted.",
+          "UPI, credit/debit cards, net banking, and digital wallets — all through Razorpay. We are prepaid-only right now, so COD is not currently available.",
       },
       {
         question: "Are prices inclusive of taxes?",

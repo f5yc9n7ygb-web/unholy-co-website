@@ -103,20 +103,26 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={`${inter.variable} ${cinzel.variable}`} suppressHydrationWarning>
       <head>
         <script
+          key="organization-schema"
+          id="organization-schema"
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
         />
         <script
+          key="brand-schema"
+          id="brand-schema"
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(brandSchema) }}
         />
         <script
+          key="website-schema"
+          id="website-schema"
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
         />
       </head>
       <body className={`${inter.className} body-glow`} suppressHydrationWarning>
-        <PostHogProvider>
+        <PostHogProvider key="analytics-providers">
           <MetaPixelProvider>
             <TransitionProvider>
               <Preloader />

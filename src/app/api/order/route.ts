@@ -15,6 +15,8 @@ import {
   createOrderSessionToken,
 } from "@/lib/server/order-session"
 import { getMetaAttributionFromRequest } from "@/lib/server/meta-capi"
+import type { CheckoutAddOnRecord } from "@/lib/shop/addons"
+import { CHECKOUT_ADD_ON_CONFIG, isCheckoutAddOnId } from "@/lib/shop/addon-config"
 import {
   ORDER_BODY_LIMIT_BYTES,
   checkRateLimit,
@@ -26,6 +28,8 @@ import {
 } from "@/lib/server/security"
 
 const RAZORPAY_ENDPOINT = "https://api.razorpay.com/v1/orders"
+
+type CheckoutAddOn = CheckoutAddOnRecord
 
 /**
  * Handles POST requests to create a Razorpay order and persist a pending cart
@@ -64,12 +68,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.text()
-    const payload = parseJsonBody<{ packId?: string; shipping?: ShippingForm; promoCode?: string; promoRecordId?: string }>(body, ORDER_BODY_LIMIT_BYTES)
+    const payload = parseJsonBody<{
+      packId?: string
+      shipping?: ShippingForm
+      promoCode?: string
+      promoRecordId?: string
+      addOns?: Array<{ id?: string; data?: Record<string, unknown> }>
+    }>(body, ORDER_BODY_LIMIT_BYTES)
     const packId = sanitizeText(payload.packId, 32)
     const shipping = normalizeShipping(payload.shipping)
     const promoCode = sanitizeText(payload.promoCode, 30)
     const promoRecordId = sanitizeText(payload.promoRecordId, 64)
     const pack = getPackById(packId)
+    const addOns = normalizeAddOns(payload.addOns)
+    const grossTotal = pack ? pack.price + addOns.reduce((sum, item) => sum + item.price, 0) : 0
 
     if (!pack) {
       return NextResponse.json(
@@ -114,7 +126,7 @@ export async function POST(request: NextRequest) {
     let discountAmount = 0
     let validatedPromoRecordId: string | null = null
     if (promoCode) {
-      const promoResult = await validatePromoCode(promoCode, pack.price)
+      const promoResult = await validatePromoCode(promoCode, grossTotal)
       if (promoResult.valid) {
         discountAmount = promoResult.discountAmount
         validatedPromoRecordId = promoResult.promo.recordId
@@ -127,7 +139,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const pricing = createReceiptPricing(pack.price, discountAmount)
+    const pricing = createReceiptPricing(grossTotal, discountAmount)
     if (pricing.total <= 0) {
       await releaseReservationOnExit()
       return NextResponse.json(
@@ -205,6 +217,7 @@ export async function POST(request: NextRequest) {
       promoCode: promoCode || undefined,
       promoRecordId: validatedPromoRecordId || undefined,
       discountAmount: pricing.discountAmount,
+      addOns: addOns.length ? addOns : undefined,
     })
 
     const nextResponse = NextResponse.json(
@@ -269,6 +282,7 @@ export async function POST(request: NextRequest) {
       source_payload: {
         packId: pack.id,
         price: pack.price,
+        addOns,
         promoCode: promoCode || null,
         promoRecordId: validatedPromoRecordId || null,
         discountAmount: pricing.discountAmount,
@@ -344,6 +358,46 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+function normalizeAddOns(addOns?: Array<{ id?: string; data?: Record<string, unknown> }>): CheckoutAddOn[] {
+  if (!Array.isArray(addOns)) return []
+
+  const seen = new Set<string>()
+  return addOns.flatMap((item) => {
+    const id = sanitizeText(item?.id, 40)
+    if (!isCheckoutAddOnId(id)) return []
+    const catalogItem = CHECKOUT_ADD_ON_CONFIG[id]
+    if (!catalogItem || seen.has(id)) return []
+    seen.add(id)
+
+    return [{
+      id,
+      title: catalogItem.title,
+      price: catalogItem.price,
+      data: sanitizeAddOnData(id, item?.data),
+    }]
+  })
+}
+
+function sanitizeAddOnData(id: string, data?: Record<string, unknown>): Record<string, unknown> {
+  const value = (key: string, max = 160) => sanitizeText(data?.[key], max)
+  if (id === "cursed_note") {
+    return {
+      tone: value("tone", 40),
+      recipientName: value("recipientName", 80),
+      context: value("context", 500),
+    }
+  }
+  if (id === "unholy_ledger") {
+    return {
+      displayName: value("displayName", 80),
+      city: value("city", 80),
+      confession: value("confession", 500),
+      consent: data?.consent === true,
+    }
+  }
+  return {}
 }
 
 function getRazorpayCredentials() {

@@ -70,7 +70,7 @@ export function SubscribeForm({
       setCompany("")
       setStatus({
         state: "success",
-        message: "Check your inbox and confirm your email to finish subscribing.",
+        message: successMessage,
       })
       onSuccess?.()
     } catch (error: any) {

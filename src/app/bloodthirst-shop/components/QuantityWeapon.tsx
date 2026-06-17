@@ -14,34 +14,48 @@ export function QuantityWeapon({
   onSelect: (p: Pack) => void
 }) {
   return (
-    <div className="grid grid-cols-3 gap-px border border-bone/15 bg-bone/15">
+    <div className="grid grid-cols-1 gap-px border border-bone/15 bg-bone/15 sm:grid-cols-3">
       {PACKS.map((pack) => {
         const active = pack.id === selected.id
+        const starterPerCan = PACKS[0]?.perCan || pack.perCan
+        const savings = Math.max(0, (starterPerCan - pack.perCan) * pack.qty)
         return (
           <button
             key={pack.id}
             data-rune
             onClick={() => onSelect(pack)}
-            className={`relative flex flex-col items-start gap-2 px-5 py-5 text-left transition-all duration-300 ${
+            className={`relative grid min-h-[5.8rem] grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 text-left transition-all duration-300 sm:flex sm:min-h-[8.75rem] sm:flex-col sm:items-start sm:px-3 sm:py-4 md:min-h-[9.75rem] md:px-5 md:py-5 ${
               active
                 ? "bg-blood text-offwhite"
                 : "bg-black/85 text-bone/55 hover:bg-black/65 hover:text-offwhite"
             }`}
           >
-            <span className="font-mono text-[9px] uppercase tracking-[0.35em] opacity-70">
-              {pack.tag || `Pack`}
-            </span>
-            <span className="font-cinzel text-2xl font-black uppercase leading-none md:text-3xl">
-              {pack.qty}
-              <span className="ml-1 align-top text-[10px] tracking-widest opacity-70">
-                cans
+            <span className="min-w-0">
+              <span className={`block font-mono text-[8px] uppercase leading-relaxed tracking-[0.22em] opacity-80 sm:min-h-[1.4rem] sm:tracking-[0.24em] md:text-[9px] md:tracking-[0.35em] ${
+                pack.tag && !active ? "text-blood" : ""
+              }`}>
+                {pack.tag || `Pack`}
+              </span>
+              <span className="mt-1 block font-cinzel text-3xl font-black uppercase leading-none sm:text-2xl md:text-3xl">
+                {pack.qty}
+                <span className="ml-1 align-top text-[10px] tracking-widest opacity-70">
+                  cans
+                </span>
+              </span>
+              <span className="mt-1.5 block font-cinzel text-base font-bold tabular-nums sm:mt-2">
+                ₹{pack.price.toLocaleString("en-IN")}
               </span>
             </span>
-            <span className="font-cinzel text-base font-bold tabular-nums">
-              ₹{pack.price.toLocaleString("en-IN")}
-            </span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.25em] opacity-60">
-              ₹{pack.perCan}/can
+
+            <span className="text-right sm:mt-auto sm:text-left">
+              <span className="block whitespace-nowrap font-cinzel text-xl font-black tabular-nums leading-none sm:pt-3 sm:text-base md:text-xl">
+                ₹{pack.perCan}/can
+              </span>
+              {savings > 0 && (
+                <span className="mt-1 block font-mono text-[8px] uppercase leading-relaxed tracking-[0.2em] opacity-75">
+                  Save ₹{savings.toLocaleString("en-IN")}
+                </span>
+              )}
             </span>
 
             {active && (

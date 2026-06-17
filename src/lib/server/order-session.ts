@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer"
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto"
+import type { CheckoutAddOnRecord } from "@/lib/shop/addons"
 import type { ReceiptPricing } from "@/lib/shop/receipt"
 import type { ShippingForm } from "@/lib/shop/types"
 import type { KVNamespace } from "@/lib/server/kv"
@@ -23,6 +24,9 @@ type OrderSessionPayload = {
   promoCode?: string
   promoRecordId?: string
   discountAmount?: number
+  /** Paid add-ons (Cursed Note, Unholy Ledger). Carried through so fulfillment
+   * and the confirmation email can see what was purchased beyond the pack. */
+  addOns?: CheckoutAddOnRecord[]
 }
 
 export type MetaAttributionData = {
@@ -42,6 +46,7 @@ export type ReceiptPayload = {
   price?: number
   pricing?: ReceiptPricing
   promoCode?: string
+  addOns?: CheckoutAddOnRecord[]
   shippingName?: string
   shippingCity?: string
   shippingState?: string

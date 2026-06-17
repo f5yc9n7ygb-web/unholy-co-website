@@ -41,7 +41,7 @@ export function RitualButton({
       animate={{ x: pos.x, y: pos.y }}
       transition={{ type: "spring", stiffness: 240, damping: 18, mass: 0.6 }}
       whileTap={{ scale: 0.97 }}
-      className="group relative inline-flex items-center justify-center overflow-hidden border border-blood/70 bg-blood px-12 py-5 text-sm font-bold uppercase tracking-[0.45em] text-offwhite transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+      className="group relative inline-flex max-w-full items-center justify-center overflow-hidden border border-blood/70 bg-blood px-7 py-5 text-center text-xs font-bold uppercase tracking-[0.22em] text-offwhite transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 sm:px-10 sm:text-sm md:px-12 md:tracking-[0.36em]"
       style={{
         boxShadow:
           "0 0 0 1px rgba(176,0,32,0.4), 0 30px 80px -10px rgba(176,0,32,0.55), inset 0 0 30px rgba(0,0,0,0.4)",

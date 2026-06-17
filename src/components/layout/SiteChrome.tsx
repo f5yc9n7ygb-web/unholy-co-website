@@ -1,13 +1,13 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { ReactNode } from "react"
+import { ReactNode, useEffect } from "react"
 import { Header } from "./Header"
 import { Footer } from "./Footer"
 import { InitiationPopup } from "@/components/ux/InitiationPopup"
 
 // Routes that render without the site header + footer (client-side navigation)
-const STANDALONE = ["/teaser", "/bloodthirst-shop"]
+const STANDALONE = ["/teaser", "/bloodthirst-shop", "/buy", "/shop"]
 
 interface SiteChromeProps {
   children: ReactNode
@@ -15,6 +15,10 @@ interface SiteChromeProps {
 
 export function SiteChrome({ children }: SiteChromeProps) {
   const pathname = usePathname()
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" })
+  }, [pathname])
 
   const standalone = STANDALONE.some((r) => pathname === r || pathname.startsWith(r + "/"))
   const suppressInitiationPopup =
@@ -27,7 +31,10 @@ export function SiteChrome({ children }: SiteChromeProps) {
   return (
     <>
       {!standalone && <Header />}
-      <main className={standalone ? "isolate" : "pt-20 md:pt-24 isolate"}>
+      <main
+        key={pathname}
+        className={`${standalone ? "isolate" : "pt-20 md:pt-24 isolate"} page-transition-content`}
+      >
         {children}
       </main>
       {!standalone && <Footer />}

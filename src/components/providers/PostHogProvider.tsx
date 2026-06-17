@@ -23,9 +23,10 @@ function PostHogPageView() {
 export function PostHogProvider({ children }: { children: ReactNode }) {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com"
+  const enabled = process.env.NODE_ENV === "production" && Boolean(key)
 
   useEffect(() => {
-    if (key) {
+    if (enabled && key) {
       posthog.init(key, {
         api_host: host,
         capture_pageview: false, // handled manually via PostHogPageView
@@ -33,9 +34,9 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
         persistence: "localStorage",
       })
     }
-  }, [key, host])
+  }, [enabled, key, host])
 
-  if (!key) return <>{children}</>
+  if (!enabled) return <>{children}</>
 
   return (
     <PHProvider client={posthog}>

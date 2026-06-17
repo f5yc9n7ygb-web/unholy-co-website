@@ -213,6 +213,11 @@ export async function sendOrderConfirmationEmail(options: OrderConfirmationOptio
       buyerGstNumber: options.buyerGstNumber,
       buyerBusinessName: options.buyerBusinessName,
       invoiceSeq,
+      addOns: options.addOns?.map((addOn) => ({
+        id: addOn.id || (addOn.title === "The Unholy Ledger" ? "unholy_ledger" : "cursed_note"),
+        title: addOn.title,
+        price: addOn.price,
+      })),
     });
 
     // Cloudflare Edge safe conversion of Uint8Array to base64

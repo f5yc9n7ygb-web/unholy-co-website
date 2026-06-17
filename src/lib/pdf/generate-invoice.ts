@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
+import type { CheckoutAddOnRecord } from "@/lib/shop/addons"
 import { GST_RATE } from "@/lib/shop/catalog"
 import { createPaidReceiptPricing } from "@/lib/shop/receipt"
 import {
@@ -41,6 +42,8 @@ export type InvoiceData = {
    * a stamped CGST+SGST invoice into IGST on reprint.
    */
   taxType?: "CGST+SGST" | "IGST"
+  /** Paid checkout add-ons included in the captured amount. */
+  addOns?: CheckoutAddOnRecord[]
 }
 
 /* ─── Indian state name → GST state code ─── */
@@ -100,9 +103,43 @@ function splitTaxPaise(totalTaxPaise: number): [number, number] {
   return [firstHalf, totalTaxPaise - firstHalf]
 }
 
+function allocatePaise(totalPaise: number, weights: number[]): number[] {
+  const totalWeight = weights.reduce((sum, value) => sum + Math.max(0, value), 0)
+  if (totalPaise <= 0 || totalWeight <= 0) return weights.map(() => 0)
+
+  let remaining = totalPaise
+  return weights.map((weight, index) => {
+    if (index === weights.length - 1) return remaining
+    const share = Math.min(remaining, Math.round((totalPaise * Math.max(0, weight)) / totalWeight))
+    remaining -= share
+    return share
+  })
+}
+
 /** Supplier state — Uttar Pradesh */
 const SUPPLIER_STATE = "Uttar Pradesh"
 const SUPPLIER_STATE_CODE = "09"
+
+function normalizeInvoiceAddOns(addOns: CheckoutAddOnRecord[]) {
+  return addOns.flatMap((addOn) => {
+    const grossInclusivePaise = toPaise(addOn.price)
+    if (grossInclusivePaise <= 0) return []
+
+    const description = addOn.title || (addOn.id === "cursed_note" ? "Cursed Note" : "The Unholy Ledger")
+    const subDescription = addOn.id === "cursed_note"
+      ? "Personalized printed note add-on"
+      : "Consented public digital ledger entry"
+
+    return [{
+      description,
+      subDescription,
+      hsn: "9985",
+      quantity: 1,
+      unit: "Item",
+      grossInclusivePaise,
+    }]
+  })
+}
 
 /**
  * Generate a GST-compliant A4 tax invoice PDF.
@@ -125,15 +162,43 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     customerName, customerEmail, customerPhone,
     shippingAddress, shippingCity, shippingState, shippingPincode,
     timestamp, promoCode, discountAmount, buyerGstNumber, buyerBusinessName,
+    addOns = [],
   } = data
 
   const pricing = createPaidReceiptPricing(amount, discountAmount)
   const amountPaise = toPaise(pricing.total)
   const discountPaise = toPaise(pricing.discountAmount)
   const originalAmountPaise = toPaise(pricing.grossTotal)
-  const grossTaxablePaise = taxExclusivePaise(originalAmountPaise)
-  const taxablePaise = taxExclusivePaise(amountPaise)
-  const discountTaxablePaise = Math.max(0, grossTaxablePaise - taxablePaise)
+  const addOnInvoiceLines = normalizeInvoiceAddOns(addOns)
+  const addOnGrossPaise = addOnInvoiceLines.reduce((sum, line) => sum + line.grossInclusivePaise, 0)
+  const packGrossInclusivePaise = Math.max(0, originalAmountPaise - addOnGrossPaise)
+  const grossInvoiceLines = [
+    {
+      description: `BloodThirst — ${pack}`,
+      subDescription: "Natural Mineral Water",
+      hsn: "2201",
+      quantity,
+      unit: "Can",
+      grossInclusivePaise: packGrossInclusivePaise,
+    },
+    ...addOnInvoiceLines,
+  ].filter((line) => line.grossInclusivePaise > 0)
+  const discountAllocations = allocatePaise(discountPaise, grossInvoiceLines.map((line) => line.grossInclusivePaise))
+  const invoiceLines = grossInvoiceLines.map((line, index) => {
+    const lineDiscountPaise = discountAllocations[index] || 0
+    const netInclusivePaise = Math.max(0, line.grossInclusivePaise - lineDiscountPaise)
+    const grossLineTaxablePaise = taxExclusivePaise(line.grossInclusivePaise)
+    const taxableLinePaise = taxExclusivePaise(netInclusivePaise)
+    return {
+      ...line,
+      grossTaxablePaise: grossLineTaxablePaise,
+      taxablePaise: taxableLinePaise,
+      discountTaxablePaise: Math.max(0, grossLineTaxablePaise - taxableLinePaise),
+    }
+  })
+  const grossTaxablePaise = invoiceLines.reduce((sum, line) => sum + line.grossTaxablePaise, 0)
+  const taxablePaise = invoiceLines.reduce((sum, line) => sum + line.taxablePaise, 0)
+  const discountTaxablePaise = invoiceLines.reduce((sum, line) => sum + line.discountTaxablePaise, 0)
   const gstPaise = amountPaise - taxablePaise
 
   // Determine if interstate (IGST) or intra-state (CGST+SGST).
@@ -293,7 +358,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   const cols = discountPaise > 0
     ? [
         { label: "Description", x: leftMargin + 8, right: 228, align: "left" as const },
-        { label: "HSN", x: 238, right: 260, align: "left" as const },
+        { label: "HSN/SAC", x: 238, right: 260, align: "left" as const },
         { label: "Qty", x: 278, right: 292, align: "right" as const },
         { label: "Unit", x: 305, right: 326, align: "left" as const },
         { label: "Rate", x: 344, right: 378, align: "right" as const },
@@ -303,7 +368,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
       ]
     : [
         { label: "Description", x: leftMargin + 8, right: 228, align: "left" as const },
-        { label: "HSN", x: 240, right: 270, align: "left" as const },
+        { label: "HSN/SAC", x: 240, right: 270, align: "left" as const },
         { label: "Qty", x: 295, right: 312, align: "right" as const },
         { label: "Unit", x: 335, right: 360, align: "left" as const },
         { label: "Rate (Rs.)", x: 380, right: 424, align: "right" as const },
@@ -324,36 +389,41 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     drawCell(col.label, col, y + 2, 7, fontBold, grey)
   }
 
-  // Table row
-  y -= 26
-  page.drawText(`BloodThirst — ${pack}`, {
-    x: cols[0]!.x, y, size: 8.5, font: fontRegular, color: black,
-  })
-  drawCell("2201", cols[1]!, y, 8.5)
-  drawCell(String(quantity), cols[2]!, y, 8.5)
-  drawCell("Can", cols[3]!, y, 8.5)
-  const perUnit = quantity > 0 ? fromPaise(grossTaxablePaise) / quantity : 0
-  drawCell(formatMoney(perUnit), cols[4]!, y, 8.5)
-  if (discountPaise > 0) {
-    drawCell(formatMoney(fromPaise(grossTaxablePaise)), cols[5]!, y, 8.5)
-    drawCell(formatMoney(fromPaise(discountTaxablePaise)), cols[6]!, y, 8.5)
-    drawCell(formatMoney(fromPaise(taxablePaise)), cols[7]!, y, 8.5)
-  } else {
-    drawCell(formatMoney(fromPaise(taxablePaise)), cols[5]!, y, 8.5)
+  for (const line of invoiceLines) {
+    y -= 26
+    const descriptionLines = wrapText(line.description, 28)
+    page.drawText(descriptionLines[0] || line.description, {
+      x: cols[0]!.x, y, size: 8.5, font: fontRegular, color: black,
+    })
+    if (descriptionLines[1]) {
+      page.drawText(descriptionLines[1], {
+        x: cols[0]!.x, y: y - 10, size: 7.2, font: fontRegular, color: black,
+      })
+    }
+    drawCell(line.hsn, cols[1]!, y, 8.5)
+    drawCell(String(line.quantity), cols[2]!, y, 8.5)
+    drawCell(line.unit, cols[3]!, y, 8.5)
+    const perUnit = line.quantity > 0 ? fromPaise(line.grossTaxablePaise) / line.quantity : 0
+    drawCell(formatMoney(perUnit), cols[4]!, y, 8.5)
+    if (discountPaise > 0) {
+      drawCell(formatMoney(fromPaise(line.grossTaxablePaise)), cols[5]!, y, 8.5)
+      drawCell(formatMoney(fromPaise(line.discountTaxablePaise)), cols[6]!, y, 8.5)
+      drawCell(formatMoney(fromPaise(line.taxablePaise)), cols[7]!, y, 8.5)
+    } else {
+      drawCell(formatMoney(fromPaise(line.taxablePaise)), cols[5]!, y, 8.5)
+    }
+
+    y -= descriptionLines[1] ? 20 : 14
+    page.drawText(line.subDescription, {
+      x: cols[0]!.x, y, size: 7, font: fontRegular, color: grey,
+    })
+
+    y -= 12
+    page.drawLine({
+      start: { x: leftMargin, y }, end: { x: rightEdge, y },
+      thickness: 0.5, color: lineGrey,
+    })
   }
-
-  // HSN/SAC sub-label
-  y -= 14
-  page.drawText("Natural Mineral Water", {
-    x: cols[0]!.x, y, size: 7, font: fontRegular, color: grey,
-  })
-
-  // Separator
-  y -= 12
-  page.drawLine({
-    start: { x: leftMargin, y }, end: { x: rightEdge, y },
-    thickness: 0.5, color: lineGrey,
-  })
 
   // ── Totals ──
   y -= 22

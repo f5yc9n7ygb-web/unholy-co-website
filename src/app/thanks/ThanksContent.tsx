@@ -6,6 +6,7 @@ import { useEffect, type ReactNode } from "react"
 import { usePostHog } from "posthog-js/react"
 import { TransitionLink } from "@/components/ux/TransitionLink"
 import { trackPixel } from "@/lib/meta-pixel"
+import type { CheckoutAddOnRecord } from "@/lib/shop/addons"
 import type { ReceiptPricing } from "@/lib/shop/receipt"
 
 type ReceiptSummary = {
@@ -17,6 +18,7 @@ type ReceiptSummary = {
   price?: number
   pricing?: ReceiptPricing
   promoCode?: string
+  addOns?: CheckoutAddOnRecord[]
   shippingName?: string
   shippingCity?: string
   shippingState?: string
@@ -326,6 +328,10 @@ function receiptRows(receipt: NonNullable<ReceiptSummary>) {
     receipt.receiptId && { label: "Receipt", value: receipt.receiptId, mono: true },
     receipt.packTitle && { label: "Pack", value: receipt.packTitle },
     { label: "Quantity", value: `${receipt.qty} cans` },
+    ...(receipt.addOns || []).map((addOn) => ({
+      label: addOn.title,
+      value: `INR ${formatReceiptMoney(addOn.price)}`,
+    })),
     pricing?.discountAmount
       ? {
           label: receipt.promoCode ? `Discount ${receipt.promoCode}` : "Discount",

@@ -41,6 +41,7 @@ function captureFbclidToCookie() {
  */
 export function MetaPixelProvider({ children }: { children: ReactNode }) {
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID
+  const enabled = process.env.NODE_ENV === "production" && Boolean(pixelId)
   const pathname = usePathname()
   const lastPath = useRef<string | null>(null)
 
@@ -51,7 +52,7 @@ export function MetaPixelProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!pixelId) return
+    if (!enabled || !pixelId) return
     if (!pathname || pathname === lastPath.current) return
     // Skip the very first pageview — the base code below fires it via fbq("track", "PageView").
     if (lastPath.current === null) {
@@ -60,9 +61,9 @@ export function MetaPixelProvider({ children }: { children: ReactNode }) {
     }
     lastPath.current = pathname
     trackPixel("PageView")
-  }, [pathname, pixelId])
+  }, [enabled, pathname, pixelId])
 
-  if (!pixelId) return <>{children}</>
+  if (!enabled || !pixelId) return <>{children}</>
 
   return (
     <>

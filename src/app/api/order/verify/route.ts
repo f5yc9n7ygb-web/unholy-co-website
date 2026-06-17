@@ -22,6 +22,7 @@ import {
 } from "@/lib/server/security"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock } from "@/lib/server/inventory"
+import { readCheckoutAddOns, summarizeAddOn, type CheckoutAddOnRecord } from "@/lib/shop/addons"
 import { incrementPromoUsage } from "@/lib/shop/promo"
 import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
 import { sendMetaPurchaseEvent } from "@/lib/server/meta-capi"
@@ -158,6 +159,7 @@ export async function POST(request: NextRequest) {
       throw new Error("Signed checkout total verification failed.")
     }
 
+    const addOns = readCheckoutAddOns(orderSession.addOns)
     const chargedAmount = pricing.total
     const fullAddress = [
       orderSession.shipping.address,
@@ -223,6 +225,7 @@ export async function POST(request: NextRequest) {
         discountAmount: pricing.discountAmount,
         pack,
         paidAt: new Date().toISOString(),
+        addOns,
       }).catch((err) => console.error("Payment backfill failed:", err))
 
       await markCartConvertedAndSupersedeForEmail({
@@ -243,6 +246,7 @@ export async function POST(request: NextRequest) {
         shippingName: orderSession.shipping.name,
         shippingCity: orderSession.shipping.city,
         shippingState: orderSession.shipping.state,
+        addOns,
       })
     }
 
@@ -264,7 +268,7 @@ export async function POST(request: NextRequest) {
         ordersBaseId, orderId, paymentId,
         shipping: orderSession.shipping, fullAddress, amount: chargedAmount,
         promoCode: orderSession.promoCode, discountAmount: pricing.discountAmount,
-        pack, paidAt: new Date().toISOString(),
+        pack, paidAt: new Date().toISOString(), addOns,
       }).catch((err) => console.error("Payment backfill failed:", err))
       await markCartConvertedAndSupersedeForEmail({
         ordersBaseId,
@@ -278,6 +282,7 @@ export async function POST(request: NextRequest) {
         shippingName: orderSession.shipping.name,
         shippingCity: orderSession.shipping.city,
         shippingState: orderSession.shipping.state,
+        addOns,
       })
     }
 
@@ -306,6 +311,7 @@ export async function POST(request: NextRequest) {
       source_payload: {
         razorpayOrder: order,
         razorpayPayment: payment,
+        addOns,
       },
     }).catch((err) => {
       console.error("Supabase payment persist failed, trying Airtable mirror:", err)
@@ -463,6 +469,12 @@ export async function POST(request: NextRequest) {
             discountAmount: pricing.discountAmount,
             buyerGstNumber: orderSession.shipping.gstNumber,
             buyerBusinessName: orderSession.shipping.gstBusinessName,
+            addOns: addOns.map((addOn) => ({
+              id: addOn.id,
+              title: addOn.title,
+              price: addOn.price,
+              detail: summarizeAddOn(addOn),
+            })),
           })
         : Promise.resolve(),
       markCartConvertedAndSupersedeForEmail({
@@ -503,6 +515,7 @@ export async function POST(request: NextRequest) {
       shippingName: orderSession.shipping.name,
       shippingCity: orderSession.shipping.city,
       shippingState: orderSession.shipping.state,
+      addOns,
     })
   } catch (error: any) {
     console.error("Order verification error:", error?.message || error)
@@ -555,6 +568,7 @@ function createSuccessResponse(options: {
   shippingName: string
   shippingCity: string
   shippingState: string
+  addOns?: CheckoutAddOnRecord[]
 }) {
   const response = NextResponse.json({
     ok: true,
@@ -567,6 +581,7 @@ function createSuccessResponse(options: {
       price: options.chargedAmount,
       pricing: options.pricing,
       promoCode: options.promoCode,
+      addOns: options.addOns,
       shippingName: options.shippingName,
       shippingCity: options.shippingCity,
       shippingState: options.shippingState,
@@ -631,7 +646,9 @@ async function backfillExistingPaymentRecord(options: {
   discountAmount?: number
   pack: NonNullable<ReturnType<typeof getPackById>>
   paidAt: string
+  addOns?: CheckoutAddOnRecord[]
 }) {
+  const addOns = options.addOns || []
   const supabasePayment = await getSupabasePaymentByOrderId(options.orderId).catch(() => null)
   if (supabasePayment) {
     await updateSupabasePaymentByOrderId(options.orderId, {
@@ -649,6 +666,10 @@ async function backfillExistingPaymentRecord(options: {
       discount_amount: options.discountAmount || 0,
       gst_number: options.shipping.gstNumber || null,
       gst_business_name: options.shipping.gstBusinessName || null,
+      source_payload: {
+        ...(supabasePayment.source_payload || {}),
+        ...(addOns.length ? { addOns } : {}),
+      },
     }).catch((err) => console.error("Supabase payment backfill failed:", err))
   } else {
     // Webhook claimed the payment but never wrote to Supabase (likely a Supabase outage
@@ -675,7 +696,7 @@ async function backfillExistingPaymentRecord(options: {
       gst_number: options.shipping.gstNumber || null,
       gst_business_name: options.shipping.gstBusinessName || null,
       migrated_from: "checkout_verify_backfill",
-      source_payload: { source: "verify_backfill" },
+      source_payload: { source: "verify_backfill", addOns },
     }).catch((err) => console.error("Supabase payment backfill upsert failed:", err))
   }
 

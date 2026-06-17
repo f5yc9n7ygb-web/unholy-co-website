@@ -6,6 +6,7 @@ import {
 import { checkRateLimit, escapeAirtableValue } from "@/lib/server/security"
 import { getKVNamespace } from "@/lib/server/kv"
 import { generateInvoicePdf } from "@/lib/pdf/generate-invoice"
+import { readCheckoutAddOns } from "@/lib/shop/addons"
 import {
   downloadSupabaseInvoice,
   getSupabasePaymentByOrderId,
@@ -48,6 +49,7 @@ async function generateInvoiceFromSupabase(payment: SupabasePayment) {
     invoiceSeq: payment.invoice_seq || undefined,
     invoiceNumber: payment.invoice_no || undefined,
     taxType: payment.tax_type || undefined,
+    addOns: readCheckoutAddOns(payment.source_payload?.addOns),
   })
 }
 

@@ -5,6 +5,8 @@ import { withSentryConfig } from '@sentry/nextjs'
 const nextConfig = {
   output: 'standalone', // Required for OpenNext Cloudflare adapter
   typedRoutes: true,
+  // Keeps the floating local dev badge out of visual QA screenshots.
+  devIndicators: false,
   images: {
     unoptimized: true, // 👈 serve from /public directly (no optimizer)
   },

@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import Image from "next/image"
+import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import logoMark from "@/public/uhc-logo.png"
 
@@ -9,7 +10,12 @@ const DISPLAY_DURATION = 1800
 // Minimum time the preloader stays visible (even if image loads instantly)
 const MIN_DISPLAY = 600
 
+// Paid-traffic landing pages skip the intro — every second of brand theatre
+// before the product costs conversions on cold ad clicks.
+const SKIP_ROUTES = ["/buy"]
+
 export function Preloader() {
+  const pathname = usePathname()
   const prefersReducedMotion = useReducedMotion()
   const [isVisible, setIsVisible] = useState(true)
   const [shouldRender, setShouldRender] = useState(true)
@@ -56,6 +62,7 @@ export function Preloader() {
     return () => clearTimeout(timer)
   }, [isFirstVisit])
 
+  if (SKIP_ROUTES.includes(pathname)) return null
   if (!shouldRender || !isFirstVisit) return null
 
   return (

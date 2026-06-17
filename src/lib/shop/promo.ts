@@ -30,6 +30,49 @@ import {
 
 const PROMO_TABLE = "Promo Codes"
 
+const BUILT_IN_PROMOS: Record<string, Omit<PromoCode, "recordId">> = {
+  SINNER: {
+    code: "SINNER",
+    discountType: "flat",
+    discountValue: 66,
+    minOrder: 699,
+    maxUses: 0,
+    usedCount: 0,
+    active: true,
+    expiresAt: null,
+  },
+  PLEASE: {
+    code: "PLEASE",
+    discountType: "flat",
+    discountValue: 1,
+    minOrder: 0,
+    maxUses: 0,
+    usedCount: 0,
+    active: true,
+    expiresAt: null,
+  },
+  MOMSAIDNO: {
+    code: "MOMSAIDNO",
+    discountType: "flat",
+    discountValue: 13,
+    minOrder: 0,
+    maxUses: 0,
+    usedCount: 0,
+    active: true,
+    expiresAt: null,
+  },
+  DAMNED: {
+    code: "DAMNED",
+    discountType: "flat",
+    discountValue: 99,
+    minOrder: 1200,
+    maxUses: 0,
+    usedCount: 0,
+    active: true,
+    expiresAt: null,
+  },
+}
+
 export type PromoCode = {
   code: string
   discountType: "percentage" | "flat"
@@ -60,6 +103,14 @@ export async function validatePromoCode(
   const normalized = code.trim().toUpperCase()
   if (normalized.length < 2 || normalized.length > 30) {
     return { valid: false, error: "Invalid promo code." }
+  }
+
+  const builtInPromo = BUILT_IN_PROMOS[normalized]
+  if (builtInPromo) {
+    return validateResolvedPromo(
+      { ...builtInPromo, recordId: `builtin:${normalized}` },
+      orderTotal
+    )
   }
 
   try {
@@ -116,6 +167,8 @@ export async function validatePromoCode(
  * Uses optimistic retry to reduce race window on concurrent redemptions.
  */
 export async function incrementPromoUsage(recordId: string): Promise<void> {
+  if (recordId.startsWith("builtin:")) return
+
   if (recordId.startsWith("supabase:")) {
     await incrementSupabasePromoUsage(recordId.replace(/^supabase:/, ""))
     return
@@ -194,6 +247,8 @@ export async function incrementPromoUsageByCode(code: string): Promise<void> {
   if (!code || typeof code !== "string") return
   
   const normalized = code.trim().toUpperCase()
+  if (BUILT_IN_PROMOS[normalized]) return
+
   try {
     const promo = await getSupabasePromoCode(normalized)
     if (promo) {

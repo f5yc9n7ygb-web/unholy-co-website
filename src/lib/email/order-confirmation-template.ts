@@ -20,6 +20,8 @@ export type OrderConfirmationOptions = {
   discountAmount?: number
   buyerGstNumber?: string
   buyerBusinessName?: string
+  /** Paid add-ons (e.g. Cursed Note, Unholy Ledger), itemized for the customer. */
+  addOns?: Array<{ id?: "cursed_note" | "unholy_ledger"; title: string; price: number; detail?: string }>
 }
 
 function formatCurrency(price: number) {
@@ -126,6 +128,16 @@ export function buildOrderConfirmationHtml(o: OrderConfirmationOptions): string 
             </td>
           </tr>
 
+          ${(o.addOns && o.addOns.length) ? `
+          <tr>
+            <td style="padding:28px 32px; background:${card}; border-top:1px solid ${border};">
+              <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.35em; color:${textDim}; margin-bottom:16px;">Add-Ons</div>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                ${o.addOns.map((a) => row(a.detail ? `${a.title} (${a.detail})` : a.title, `₹${formatCurrency(a.price)}`)).join("")}
+              </table>
+            </td>
+          </tr>` : ""}
+
           <tr>
             <td style="padding:28px 32px; background:${card}; border-top:1px solid ${border};">
               <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.35em; color:${textDim}; margin-bottom:12px;">Delivering To</div>
@@ -216,7 +228,11 @@ ${gstLabel}:  ₹${formatCurrency(pricing.gstAmount)}
 Total Paid: ₹${formatCurrency(pricing.total)}
 Order ID:   ${o.orderId}
 Payment ID: ${o.paymentId}
-
+${o.addOns && o.addOns.length ? `
+ADD-ONS
+-------
+${o.addOns.map((a) => `${a.title}${a.detail ? ` (${a.detail})` : ""}: ₹${formatCurrency(a.price)}`).join("\n")}
+` : ""}
 DELIVERING TO
 -------------
 ${[o.shippingAddress, o.shippingCity, o.shippingState, o.shippingPincode].filter(Boolean).join(", ")}

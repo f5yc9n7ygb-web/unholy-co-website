@@ -4,6 +4,7 @@ import { motion } from "framer-motion"
 import { TransitionLink } from "@/components/ux/TransitionLink"
 import {
   COMPANY_BRAND_NAME,
+  COMPANY_FSSAI_LICENSE,
   COMPANY_GSTIN,
   COMPANY_LEGAL_NAME,
   COMPANY_PRESS_EMAIL,
@@ -17,7 +18,7 @@ const sections = [
     body: [
       `${COMPANY_BRAND_NAME} and BloodThirst are sold online by ${COMPANY_LEGAL_NAME}.`,
       `Registered office: ${COMPANY_REGISTERED_ADDRESS}.`,
-      `GSTIN: ${COMPANY_GSTIN}. For order support, privacy requests, and policy questions, contact ${COMPANY_SUPPORT_EMAIL}.`,
+      `GSTIN: ${COMPANY_GSTIN}. FSSAI Lic. No.: ${COMPANY_FSSAI_LICENSE}. For order support, privacy requests, and policy questions, contact ${COMPANY_SUPPORT_EMAIL}.`,
     ],
   },
   {

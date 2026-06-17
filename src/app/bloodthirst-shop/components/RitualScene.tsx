@@ -33,9 +33,9 @@ type Keyframe = {
  *  0.75 – 1.00  CLOSE     cinematic spin & slight retreat as page seals
  */
 const desktopKeyframes: Keyframe[] = [
-  { progress: 0.00, camera: [0.1, 0.18, 4.6], lookAt: [0, 0.05, 0],   canRotY: FRONT,         canRotZ: 0,     canX: 0,    canY: 0,    canScale: 1.0,  fov: 32 },
-  { progress: 0.10, camera: [0.0, 0.16, 4.4], lookAt: [0, 0.05, 0],   canRotY: FRONT - 0.35,  canRotZ: 0,     canX: 0,    canY: 0,    canScale: 1.02, fov: 32 },
-  { progress: 0.15, camera: [0.0, 0.14, 4.2], lookAt: [0, 0.0, 0],    canRotY: FRONT - 0.55,  canRotZ: 0,     canX: 0,    canY: 0,    canScale: 1.04, fov: 32 },
+  { progress: 0.00, camera: [0.1, 0.20, 5.25], lookAt: [0, 0.05, 0],  canRotY: FRONT,         canRotZ: 0,     canX: 0,    canY: 0.08, canScale: 0.86, fov: 34 },
+  { progress: 0.10, camera: [0.0, 0.18, 5.05], lookAt: [0, 0.05, 0],  canRotY: FRONT - 0.35,  canRotZ: 0,     canX: 0,    canY: 0.06, canScale: 0.88, fov: 34 },
+  { progress: 0.15, camera: [0.0, 0.16, 4.85], lookAt: [0, 0.0, 0],   canRotY: FRONT - 0.55,  canRotZ: 0,     canX: 0,    canY: 0.04, canScale: 0.9,  fov: 34 },
 
   { progress: 0.20, camera: [1.4, 0.25, 3.4], lookAt: [0, 0.05, 0],   canRotY: FRONT - 1.0,   canRotZ: -0.06, canX: 0,    canY: 0,    canScale: 1.05, fov: 30 },
   { progress: 0.26, camera: [2.0, 0.30, 2.6], lookAt: [0, 0.05, 0],   canRotY: FRONT - 1.6,   canRotZ: -0.05, canX: 0,    canY: 0,    canScale: 1.06, fov: 28 },
@@ -45,9 +45,9 @@ const desktopKeyframes: Keyframe[] = [
   { progress: 0.46, camera: [-0.6, 0.55, 5.0], lookAt: [-0.4, 0.2, 0], canRotY: FRONT - 3.9,  canRotZ: 0,     canX: -1.1, canY: 0.4,  canScale: 0.92, fov: 34 },
   { progress: 0.55, camera: [-0.8, 0.55, 5.4], lookAt: [-0.6, 0.2, 0], canRotY: FRONT - 4.5,  canRotZ: 0,     canX: -1.3, canY: 0.4,  canScale: 0.92, fov: 34 },
 
-  { progress: 0.62, camera: [0.0, 0.20, 4.4], lookAt: [0, 0.05, 0],   canRotY: FRONT - 5.4,   canRotZ: 0,     canX: 0,    canY: 0,    canScale: 1.0,  fov: 32 },
-  { progress: 0.70, camera: [0.0, 0.10, 3.8], lookAt: [0, 0.05, 0],   canRotY: FRONT - 6.05,  canRotZ: 0,     canX: 0,    canY: 0,    canScale: 1.06, fov: 30 },
-  { progress: 0.75, camera: [0.0, 0.05, 3.4], lookAt: [0, 0.05, 0],   canRotY: FRONT - 2 * Math.PI, canRotZ: 0, canX: 0,  canY: 0,    canScale: 1.10, fov: 28 },
+  { progress: 0.62, camera: [0.0, 0.22, 5.05], lookAt: [0.35, 0.05, 0], canRotY: FRONT - 5.4,   canRotZ: 0,     canX: 1.55, canY: -0.04, canScale: 0.76, fov: 34 },
+  { progress: 0.70, camera: [0.0, 0.12, 4.75], lookAt: [0.45, 0.05, 0], canRotY: FRONT - 6.05,  canRotZ: 0,     canX: 1.75, canY: -0.04, canScale: 0.78, fov: 34 },
+  { progress: 0.75, camera: [0.0, 0.08, 4.6], lookAt: [0.45, 0.05, 0],  canRotY: FRONT - 2 * Math.PI, canRotZ: 0, canX: 1.65, canY: -0.04, canScale: 0.8, fov: 33 },
 
   { progress: 0.85, camera: [0.0, 0.02, 3.6], lookAt: [0, 0.05, 0],   canRotY: FRONT - 2 * Math.PI, canRotZ: 0, canX: 0,  canY: 0,    canScale: 1.08, fov: 30 },
   { progress: 1.00, camera: [0.0, 0.00, 4.2], lookAt: [0, 0.0, 0],    canRotY: FRONT - 2 * Math.PI - 0.4, canRotZ: 0, canX: 0, canY: 0.05, canScale: 1.0, fov: 32 },
@@ -57,8 +57,8 @@ const mobileKeyframes: Keyframe[] = [
   { progress: 0.00, camera: [0.0, 0.20, 5.0], lookAt: [0, 0.0, 0],   canRotY: FRONT,        canRotZ: 0, canX: 0, canY: 0,    canScale: 1.0, fov: 36 },
   { progress: 0.20, camera: [0.0, 0.20, 5.0], lookAt: [0, 0.0, 0],   canRotY: FRONT - 1.2,  canRotZ: 0, canX: 0, canY: 0,    canScale: 1.0, fov: 36 },
   { progress: 0.45, camera: [0.0, 0.20, 5.4], lookAt: [0, 0.0, 0],   canRotY: FRONT - 3.0,  canRotZ: 0, canX: 0, canY: 0.1,  canScale: 0.95, fov: 36 },
-  { progress: 0.65, camera: [0.0, 0.10, 4.6], lookAt: [0, 0.0, 0],   canRotY: FRONT - 5.2,  canRotZ: 0, canX: 0, canY: 0,    canScale: 1.04, fov: 34 },
-  { progress: 0.78, camera: [0.0, 0.05, 4.0], lookAt: [0, 0.0, 0],   canRotY: FRONT - 2 * Math.PI, canRotZ: 0, canX: 0, canY: 0, canScale: 1.10, fov: 32 },
+  { progress: 0.65, camera: [0.0, 0.10, 5.0], lookAt: [0, 0.0, 0],   canRotY: FRONT - 5.2,  canRotZ: 0, canX: 0, canY: -0.1, canScale: 0.82, fov: 38 },
+  { progress: 0.78, camera: [0.0, 0.05, 4.8], lookAt: [0, 0.0, 0],   canRotY: FRONT - 2 * Math.PI, canRotZ: 0, canX: 0, canY: -0.12, canScale: 0.86, fov: 36 },
   { progress: 1.00, camera: [0.0, 0.00, 4.6], lookAt: [0, 0.0, 0],   canRotY: FRONT - 2 * Math.PI - 0.4, canRotZ: 0, canX: 0, canY: 0.05, canScale: 1.0, fov: 34 },
 ]
 
@@ -542,6 +542,8 @@ export type RitualSceneProps = {
   premium?: boolean
   /** When true, the scene plays its closing finale (spin → dissolve) */
   sealed?: boolean
+  /** Fires after the Canvas has rendered a couple of frames. */
+  onReady?: () => void
 }
 
 export function RitualScene({
@@ -549,6 +551,7 @@ export function RitualScene({
   isMobile = false,
   premium = true,
   sealed = false,
+  onReady,
 }: RitualSceneProps) {
   const mouseRef = useRef({ x: 0, y: 0 })
   const kfs = isMobile ? mobileKeyframes : desktopKeyframes
@@ -593,6 +596,7 @@ export function RitualScene({
       style={{ background: "transparent" }}
       dpr={isMobile ? [1, 1.5] : [1.25, 2]}
     >
+      <SceneReady onReady={onReady} />
       <SceneTone />
       <CameraRig
         scrollProgress={scrollProgress}
@@ -631,4 +635,19 @@ export function RitualScene({
       <FinaleBurst finaleRef={finaleRef} count={isMobile ? 180 : 380} />
     </Canvas>
   )
+}
+
+function SceneReady({ onReady }: { onReady?: () => void }) {
+  const fired = useRef(false)
+  const frames = useRef(0)
+
+  useFrame(() => {
+    if (fired.current) return
+    frames.current += 1
+    if (frames.current < 2) return
+    fired.current = true
+    onReady?.()
+  })
+
+  return null
 }

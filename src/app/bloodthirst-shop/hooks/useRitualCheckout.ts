@@ -26,6 +26,13 @@ export type AppliedPromo = {
   promoRecordId: string
 }
 
+export type CheckoutAddOn = {
+  id: "cursed_note" | "unholy_ledger"
+  title: string
+  price: number
+  data?: Record<string, unknown>
+}
+
 export const GSTIN_REGEX = /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/
 
 export const INDIAN_STATES = [
@@ -62,14 +69,31 @@ const EMPTY_FORM: ShippingForm = {
   name: "", email: "", phone: "", address: "", city: "", pincode: "", state: "", gstNumber: "",
 }
 
-type Args = { razorpayKey?: string }
+type Args = {
+  razorpayKey?: string
+  /** Per-page starting pack (e.g. /buy anchors cold traffic on the 6-pack). Saved carts still win. */
+  defaultPackId?: string
+  checkoutAddOns?: CheckoutAddOn[]
+  /** Mobile ritual fires AddToCart when a pack is actively selected. */
+  addToCartOnPackSelect?: boolean
+  /** Mobile ritual suppresses the later pre-Razorpay AddToCart to avoid double counting. */
+  suppressCheckoutAddToCart?: boolean
+}
 
-const DEFAULT_PACK = PACKS.find((p) => p.id === "pack12") || PACKS[0]
+const DEFAULT_PACK = PACKS.find((p) => p.id === "pack6") || PACKS[0]
 
-export function useRitualCheckout({ razorpayKey }: Args) {
+export function useRitualCheckout({
+  razorpayKey,
+  defaultPackId,
+  checkoutAddOns = [],
+  addToCartOnPackSelect = false,
+  suppressCheckoutAddToCart = false,
+}: Args) {
   const { navigate } = usePageTransition()
 
-  const [selected, setSelected] = useState<Pack>(DEFAULT_PACK)
+  const [selected, setSelected] = useState<Pack>(
+    () => PACKS.find((p) => p.id === defaultPackId) || DEFAULT_PACK
+  )
   const [form, setForm] = useState<ShippingForm>(EMPTY_FORM)
   const [errors, setErrors] = useState<FormErrors>({})
   const [touched, setTouched] = useState<Set<string>>(new Set())
@@ -82,9 +106,20 @@ export function useRitualCheckout({ razorpayKey }: Args) {
   const [confirmedTotal, setConfirmedTotal] = useState<number | null>(null)
   const viewContentFired = useRef(false)
   const addToCartFired = useRef<string | null>(null)
+  const addToCartEventIds = useRef<Record<string, string>>({})
+  const addOnSignature = checkoutAddOns.map((item) => `${item.id}:${item.price}`).join("|")
 
-  const pricing = serverPricing || createReceiptPricing(selected.price, appliedPromo?.discountAmount)
+  const addOnTotal = checkoutAddOns.reduce((sum, item) => sum + item.price, 0)
+  const grossTotal = selected.price + addOnTotal
+  const pricing = serverPricing || createReceiptPricing(grossTotal, appliedPromo?.discountAmount)
   const effectiveTotal = pricing.total
+
+  useEffect(() => {
+    setServerPricing(null)
+    setAppliedPromo(null)
+    addToCartFired.current = null
+    addToCartEventIds.current = {}
+  }, [addOnSignature])
 
   // Restore cart on mount (shared key with /shop). ViewContent waits for this
   // effect so server markup and the first client render keep the same pack.
@@ -158,6 +193,27 @@ export function useRitualCheckout({ razorpayKey }: Args) {
     setTouched((prev) => new Set(prev).add(field))
   }, [])
 
+  const trackAddToCart = useCallback((pack: Pack, value: number) => {
+    const cartSignature = `${pack.id}:${value}`
+    if (addToCartFired.current === cartSignature) return
+    addToCartFired.current = cartSignature
+    const eventId = addToCartEventIds.current[cartSignature] || generateEventId()
+    addToCartEventIds.current[cartSignature] = eventId
+    trackPixel(
+      "AddToCart",
+      {
+        value,
+        currency: "INR",
+        content_ids: [pack.id],
+        content_name: pack.title,
+        content_type: "product",
+        num_items: pack.qty,
+        contents: [{ id: pack.id, quantity: 1, item_price: value }],
+      },
+      eventId,
+    )
+  }, [])
+
   const selectPack = useCallback((pack: Pack) => {
     if (pack.id === selected.id) return
     setSelected(pack)
@@ -177,7 +233,10 @@ export function useRitualCheckout({ razorpayKey }: Args) {
       },
       generateEventId(),
     )
-  }, [selected.id])
+    if (addToCartOnPackSelect) {
+      trackAddToCart(pack, pack.price + addOnTotal)
+    }
+  }, [addOnTotal, addToCartOnPackSelect, selected.id, trackAddToCart])
 
   const applyPromo = useCallback((promo: AppliedPromo) => {
     setAppliedPromo(promo)
@@ -222,22 +281,8 @@ export function useRitualCheckout({ razorpayKey }: Args) {
     setPayError(null)
     setPhase("submitting")
 
-    const cartSignature = `${selected.id}:${effectiveTotal}`
-    if (addToCartFired.current !== cartSignature) {
-      addToCartFired.current = cartSignature
-      trackPixel(
-        "AddToCart",
-        {
-          value: effectiveTotal,
-          currency: "INR",
-          content_ids: [selected.id],
-          content_name: selected.title,
-          content_type: "product",
-          num_items: selected.qty,
-          contents: [{ id: selected.id, quantity: 1, item_price: effectiveTotal }],
-        },
-        generateEventId(),
-      )
+    if (!suppressCheckoutAddToCart) {
+      trackAddToCart(selected, effectiveTotal)
     }
 
     trackPixel(
@@ -263,6 +308,10 @@ export function useRitualCheckout({ razorpayKey }: Args) {
           shipping: form,
           promoCode: appliedPromo?.code || undefined,
           promoRecordId: appliedPromo?.promoRecordId || undefined,
+          addOns: checkoutAddOns.map((item) => ({
+            id: item.id,
+            data: item.data || {},
+          })),
         }),
       })
       const data = await res.json()
@@ -334,7 +383,7 @@ export function useRitualCheckout({ razorpayKey }: Args) {
       setPayError(e?.message || "Payment failed to initialize.")
       setPhase("error")
     }
-  }, [appliedPromo, effectiveTotal, form, phase, razorpayKey, selected])
+  }, [appliedPromo, checkoutAddOns, effectiveTotal, form, phase, razorpayKey, selected, suppressCheckoutAddToCart, trackAddToCart])
 
   const goToReceipt = useCallback(() => {
     if (!receiptToken) return
@@ -352,6 +401,8 @@ export function useRitualCheckout({ razorpayKey }: Args) {
     payError,
     appliedPromo,
     pricing,
+    grossTotal,
+    addOnTotal,
     applyPromo,
     removePromo,
     effectiveTotal,

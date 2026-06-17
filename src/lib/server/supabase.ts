@@ -1,3 +1,5 @@
+import { readCheckoutAddOns } from "@/lib/shop/addons"
+
 type SupabasePaymentRow = {
   payment_id: string | null
   order_id: string
@@ -30,9 +32,18 @@ type SupabasePaymentRow = {
   tax_type: "CGST+SGST" | "IGST" | null
   original_invoice_seq: number | null
   migrated_from: string | null
+  source_payload: Record<string, unknown> | null
 }
 
 export type SupabasePayment = SupabasePaymentRow
+
+export type PublicLedgerEntry = {
+  name: string
+  city: string
+  date: string
+  pack: string
+  confession: string
+}
 
 export type SupabaseOrder = {
   id?: string
@@ -141,6 +152,7 @@ const PAYMENT_SELECT = [
   "tax_type",
   "original_invoice_seq",
   "migrated_from",
+  "source_payload",
 ].join(",")
 
 function getSupabaseConfig() {
@@ -278,6 +290,62 @@ export async function getSupabasePaymentsByShippingStatus(status: string, limit 
   if (!response.ok) throw new Error(`Supabase payment status lookup failed (${response.status}): ${await response.text()}`)
 
   return response.json() as Promise<SupabasePaymentRow[]>
+}
+
+export async function getSupabasePublicLedgerEntries(limit = 24): Promise<PublicLedgerEntry[]> {
+  const params = new URLSearchParams({
+    select: "order_id,pack,paid_at,source_payload",
+    order: "paid_at.desc.nullslast",
+    limit: String(Math.max(limit, 50)),
+  })
+  const response = await supabaseFetch(`/rest/v1/payments?${params.toString()}`)
+  if (!response) return []
+  if (!response.ok) throw new Error(`Supabase ledger lookup failed (${response.status}): ${await response.text()}`)
+
+  const rows = await response.json() as Array<{
+    order_id?: string | null
+    pack?: string | null
+    paid_at?: string | null
+    source_payload?: Record<string, unknown> | null
+  }>
+
+  return rows.flatMap((row) => {
+    const addOns = readCheckoutAddOns(row.source_payload?.addOns)
+    const ledger = addOns.find((addOn) => addOn.id === "unholy_ledger" && addOn.data?.consent === true)
+    if (!ledger?.data) return []
+
+    const name = cleanLedgerText(ledger.data.displayName, 80)
+    const city = cleanLedgerText(ledger.data.city, 80)
+    if (!name || !city) return []
+
+    return [{
+      name,
+      city,
+      date: formatLedgerDate(row.paid_at),
+      pack: cleanLedgerText(row.pack, 80) || "BloodThirst",
+      confession: cleanLedgerText(ledger.data.confession, 240) || "No confession entered.",
+    }]
+  }).slice(0, limit)
+}
+
+function cleanLedgerText(value: unknown, maxLength: number) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength)
+}
+
+function formatLedgerDate(value?: string | null) {
+  if (!value) return ""
+  try {
+    return new Date(value).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    })
+  } catch {
+    return ""
+  }
 }
 
 export async function downloadSupabaseInvoice(path: string, bucket = "invoices"): Promise<ArrayBuffer | null> {

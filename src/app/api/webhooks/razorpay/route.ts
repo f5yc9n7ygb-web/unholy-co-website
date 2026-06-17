@@ -34,6 +34,7 @@ import { claimProcessedPayment, readOrderSessionToken, releaseProcessedPayment }
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock, releaseStockByPack } from "@/lib/server/inventory"
 import { incrementPromoUsageByCode } from "@/lib/shop/promo"
+import { readCheckoutAddOns, summarizeAddOn, type CheckoutAddOnRecord } from "@/lib/shop/addons"
 import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
 import { sendMetaPurchaseEvent } from "@/lib/server/meta-capi"
 import {
@@ -262,6 +263,12 @@ export async function POST(request: NextRequest) {
     const fields = cart?.fields || {}
     const shipping = (supabaseCart?.shipping || {}) as Record<string, unknown>
     const sourcePayload = (supabaseCart?.source_payload || {}) as Record<string, unknown>
+    // Prefer the signed session token; fall back to the cart source_payload the
+    // order route persisted, so add-ons survive even if the KV token is gone.
+    const addOns: CheckoutAddOnRecord[] =
+      Array.isArray(orderSession?.addOns) && orderSession.addOns.length
+        ? readCheckoutAddOns(orderSession.addOns)
+        : readCheckoutAddOns(sourcePayload.addOns)
     const packId = String(sourcePayload.packId || fields["Pack ID"] || "")
     const pack = getPackById(packId)
 
@@ -330,6 +337,7 @@ export async function POST(request: NextRequest) {
       source_payload: {
         razorpayPayment: payment,
         cart: supabaseCart || fields,
+        addOns,
       },
     }).catch((err) => {
       console.error("Webhook: Supabase payment persist failed, trying Airtable mirror:", err)
@@ -469,6 +477,12 @@ export async function POST(request: NextRequest) {
           discountAmount: pricing.discountAmount || undefined,
           buyerGstNumber: buyerGstNumber || undefined,
           buyerBusinessName: buyerBusinessName || undefined,
+          addOns: addOns.map((addOn) => ({
+            id: addOn.id,
+            title: addOn.title,
+            price: addOn.price,
+            detail: summarizeAddOn(addOn),
+          })),
         })
       )
     }
