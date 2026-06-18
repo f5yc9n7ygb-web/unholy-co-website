@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 import { Buffer } from "node:buffer"
 import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
+import { decidePaymentFulfilment } from "../payment-status"
 import { createReceiptPricing, moneyToPaise, readReceiptPricing, type ReceiptPricing } from "@/lib/shop/receipt"
 import { hasAirtableOrdersConfig, getRequiredEnv, sendOrderConfirmationEmail, saveRecordToAirtable, queryAirtableRecords, updateAirtableRecord, logErrorToAirtable } from "@/lib/server/integrations"
 import { getKVNamespace } from "@/lib/server/kv"
@@ -144,7 +145,8 @@ export async function POST(request: NextRequest) {
       throw new Error("Payment currency verification failed.")
     }
 
-    if (!["authorized", "captured"].includes(String(payment?.status || ""))) {
+    const fulfilmentDecision = decidePaymentFulfilment(String(payment?.status || ""))
+    if (fulfilmentDecision === "reject") {
       throw new Error("Payment is not ready for fulfillment.")
     }
 
@@ -168,6 +170,27 @@ export async function POST(request: NextRequest) {
       orderSession.shipping.pincode,
     ].filter(Boolean).join(", ")
     const ordersBaseId = process.env.AIRTABLE_ORDERS_BASE_ID || ""
+
+    if (fulfilmentDecision === "pending") {
+      // Auto-capture (payment_capture: 1) makes `authorized` transient. Do NOT
+      // run any side effects here — the payment.captured webhook is the single
+      // fulfilment path (persists the order, decrements stock, consumes promo,
+      // creates the shipment, sends the email). Return a receipt so the customer
+      // still reaches /thanks; the webhook completes fulfilment once capture lands.
+      return createSuccessResponse({
+        pack,
+        orderId,
+        chargedAmount,
+        pricing,
+        promoCode: orderSession.promoCode,
+        receiptId: orderSession.receiptId,
+        shippingName: orderSession.shipping.name,
+        shippingCity: orderSession.shipping.city,
+        shippingState: orderSession.shipping.state,
+        addOns,
+        pending: true,
+      })
+    }
 
     if (!(await claimProcessedPayment(paymentId, kv))) {
       // Payment already claimed (likely by webhook). Verify the record actually exists
@@ -569,9 +592,11 @@ function createSuccessResponse(options: {
   shippingCity: string
   shippingState: string
   addOns?: CheckoutAddOnRecord[]
+  pending?: boolean
 }) {
   const response = NextResponse.json({
     ok: true,
+    ...(options.pending ? { pending: true } : {}),
     receiptToken: createReceiptToken({
       packId: options.pack.id,
       qty: options.pack.qty,
