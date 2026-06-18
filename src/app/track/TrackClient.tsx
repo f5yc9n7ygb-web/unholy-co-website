@@ -219,14 +219,16 @@ function OrderCard({ order, defaultExpanded = false, showTrackingProgress = true
                 >
                   Reorder
                 </a>
-                <a
-                  href={invoiceHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-ghost px-5 py-2.5 text-xs"
-                >
-                  Download Invoice
-                </a>
+                {invoiceIdentifier && (
+                  <a
+                    href={invoiceHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-ghost px-5 py-2.5 text-xs"
+                  >
+                    Download Invoice
+                  </a>
+                )}
                 <a
                   href={`/refund?order=${encodeURIComponent(order.orderId)}`}
                   className="btn btn-ghost px-5 py-2.5 text-xs"
@@ -234,6 +236,11 @@ function OrderCard({ order, defaultExpanded = false, showTrackingProgress = true
                   Request Refund
                 </a>
               </div>
+              {!invoiceIdentifier && (
+                <p className="mt-3 text-[11px] text-bone/25">
+                  Need your invoice? Open the <span className="text-bone/40">My Orders</span> tab and verify with your email.
+                </p>
+              )}
             </div>
           </motion.div>
         )}

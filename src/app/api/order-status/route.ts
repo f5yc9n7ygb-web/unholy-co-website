@@ -21,6 +21,7 @@ import {
   sanitizeText,
   validateRequestOrigin,
 } from "@/lib/server/security"
+import { redactOrderContact } from "./redact"
 
 export const dynamic = "force-dynamic"
 
@@ -40,7 +41,7 @@ function shouldFetchLiveTracking(shippingStatus: string) {
   return !TERMINAL_SHIPPING_STATUSES.has(shippingStatus.trim().toLowerCase())
 }
 
-async function mapRecordToOrder(record: { fields: Record<string, unknown> }, fetchTracking: boolean) {
+async function mapRecordToOrder(record: { fields: Record<string, unknown> }, fetchTracking: boolean, redactContact: boolean) {
   const fields = record.fields
   const awbCode = String(fields["AWB Code"] || "")
   const shippingStatus = String(fields["Shipping Status"] || "Processing")
@@ -54,7 +55,7 @@ async function mapRecordToOrder(record: { fields: Record<string, unknown> }, fet
     }
   }
 
-  return {
+  const order = {
     orderId: String(fields["Order ID"] || ""),
     customerEmail: String(fields["Customer Email"] || ""),
     customerPhone: String(fields["Customer Phone"] || ""),
@@ -69,9 +70,10 @@ async function mapRecordToOrder(record: { fields: Record<string, unknown> }, fet
     deliveredAt: tracking?.deliveredDate || String(fields["Delivered At"] || "") || null,
     trackingActivities: tracking?.activities || null,
   }
+  return redactContact ? redactOrderContact(order) : order
 }
 
-async function mapSupabasePaymentToOrder(payment: SupabasePayment, fetchTracking: boolean) {
+async function mapSupabasePaymentToOrder(payment: SupabasePayment, fetchTracking: boolean, redactContact: boolean) {
   const awbCode = payment.awb_code || ""
   const shippingStatus = payment.shipping_status || "Processing"
 
@@ -84,7 +86,7 @@ async function mapSupabasePaymentToOrder(payment: SupabasePayment, fetchTracking
     }
   }
 
-  return {
+  const order = {
     orderId: payment.order_id || "",
     customerEmail: payment.customer_email || "",
     customerPhone: payment.customer_phone || "",
@@ -99,6 +101,7 @@ async function mapSupabasePaymentToOrder(payment: SupabasePayment, fetchTracking
     deliveredAt: tracking?.deliveredDate || payment.delivered_at || null,
     trackingActivities: tracking?.activities || null,
   }
+  return redactContact ? redactOrderContact(order) : order
 }
 
 export async function POST(request: NextRequest) {
@@ -169,7 +172,7 @@ export async function POST(request: NextRequest) {
         try {
           const supabasePayments = await getSupabasePaymentsByEmail(emailLower, 20)
           const orders = await Promise.all(
-            supabasePayments.map((payment, i) => mapSupabasePaymentToOrder(payment, i < 3))
+            supabasePayments.map((payment, i) => mapSupabasePaymentToOrder(payment, i < 3, false))
           )
 
           return NextResponse.json({ ok: true, orders, mode: "history" }, { headers: NO_STORE_HEADERS })
@@ -206,7 +209,7 @@ export async function POST(request: NextRequest) {
 
       // Only fetch live Shiprocket tracking for recent non-delivered orders (first 3)
       const orders = await Promise.all(
-        allRecords.map((record, i) => mapRecordToOrder(record, i < 3))
+        allRecords.map((record, i) => mapRecordToOrder(record, i < 3, false))
       )
 
       return NextResponse.json({ ok: true, orders, mode: "history" }, { headers: NO_STORE_HEADERS })
@@ -225,7 +228,7 @@ export async function POST(request: NextRequest) {
       return null
     })
     if (supabasePayment) {
-      const order = await mapSupabasePaymentToOrder(supabasePayment, true)
+      const order = await mapSupabasePaymentToOrder(supabasePayment, true, true)
       return NextResponse.json({ ok: true, orders: [order], mode: "track" }, { headers: NO_STORE_HEADERS })
     }
 
@@ -245,7 +248,7 @@ export async function POST(request: NextRequest) {
       }, { status: 404 })
     }
 
-    const orders = await Promise.all(records.map((r) => mapRecordToOrder(r, true)))
+    const orders = await Promise.all(records.map((r) => mapRecordToOrder(r, true, true)))
 
     return NextResponse.json({ ok: true, orders, mode: "track" }, { headers: NO_STORE_HEADERS })
   } catch (error: any) {
