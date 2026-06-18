@@ -8,10 +8,14 @@ import { hasAirtableOrdersConfig, getRequiredEnv, sendOrderConfirmationEmail, sa
 import { getKVNamespace } from "@/lib/server/kv"
 import {
   ORDER_SESSION_COOKIE,
-  claimProcessedPayment,
   createReceiptToken,
   readOrderSessionToken,
 } from "@/lib/server/order-session"
+import {
+  claimPaymentForProcessing,
+  completePaymentClaim,
+  failPaymentClaim,
+} from "@/lib/server/payment-claim"
 import {
   ORDER_BODY_LIMIT_BYTES,
   checkRateLimit,
@@ -38,6 +42,7 @@ const RAZORPAY_ORDERS_ENDPOINT = "https://api.razorpay.com/v1/orders"
 const RAZORPAY_PAYMENTS_ENDPOINT = "https://api.razorpay.com/v1/payments"
 
 export async function POST(request: NextRequest) {
+  let claimedPaymentId: string | null = null
   try {
     const originCheck = validateRequestOrigin(request)
     if (!originCheck.ok) {
@@ -192,7 +197,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    if (!(await claimProcessedPayment(paymentId, kv))) {
+    if (!(await claimPaymentForProcessing(paymentId, kv)).granted) {
       // Payment already claimed (likely by webhook). Verify the record actually exists
       // before telling the user everything is fine.
       const existingSupabasePayment = await getSupabasePaymentByPaymentId(paymentId).catch(() => null)
@@ -273,8 +278,10 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // #9: Airtable dedup — KV claim succeeded, but check Airtable in case of
-    // KV eventual consistency (e.g. webhook wrote the record on another edge node)
+    claimedPaymentId = paymentId
+
+    // #9: Airtable dedup — claim succeeded, but check Airtable in case of
+    // eventual consistency (e.g. webhook wrote the record on another edge node)
     const existingSupabasePayment = await getSupabasePaymentByPaymentId(paymentId).catch(() => null)
     const existingPayment = existingSupabasePayment || !ordersBaseId || !hasAirtableOrdersConfig()
       ? []
@@ -375,6 +382,12 @@ export async function POST(request: NextRequest) {
     if (!supabasePayment && !paymentRecordId) {
       throw new Error("No backend store is configured for captured payment persistence.")
     }
+
+    // Order/payment durably persisted — mark the claim completed (terminal).
+    // The side effects below are non-fatal best-effort and must not flip the
+    // claim back to retryable.
+    await completePaymentClaim(paymentId)
+    claimedPaymentId = null
 
     // Critical tasks must run sequentially: if stock decrement throws, we must
     // NOT increment the promo counter (and vice versa). Running them in
@@ -542,6 +555,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error("Order verification error:", error?.message || error)
+    if (claimedPaymentId) {
+      // Failed before durable fulfilment — release so the payment.captured
+      // webhook (or a retry) can re-claim and complete the order.
+      const kv = await getKVNamespace().catch(() => null)
+      await failPaymentClaim(claimedPaymentId, kv, error?.message || String(error)).catch(() => {})
+    }
     await logErrorToAirtable("Order Verification", error, {
       route: "/api/order/verify",
       service: "checkout",

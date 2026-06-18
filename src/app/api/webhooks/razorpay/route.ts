@@ -30,7 +30,8 @@ import {
 import { buildPaymentFailedHtml, buildPaymentFailedText } from "@/lib/email/payment-failed-template"
 import { getKVNamespace, getExecutionContext } from "@/lib/server/kv"
 import { escapeAirtableValue } from "@/lib/server/security"
-import { claimProcessedPayment, readOrderSessionToken, releaseProcessedPayment } from "@/lib/server/order-session"
+import { readOrderSessionToken } from "@/lib/server/order-session"
+import { claimPaymentForProcessing, completePaymentClaim, failPaymentClaim } from "@/lib/server/payment-claim"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock, releaseStockByPack } from "@/lib/server/inventory"
 import { incrementPromoUsageByCode } from "@/lib/shop/promo"
@@ -46,6 +47,7 @@ import {
 } from "@/lib/server/supabase"
 
 export async function POST(request: NextRequest) {
+  let claimedPaymentId: string | null = null
   try {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET
     if (!webhookSecret) {
@@ -208,11 +210,13 @@ export async function POST(request: NextRequest) {
 
     const { id: paymentId, order_id: orderId } = payment
 
-    // Idempotency layer 1 — KV claim (fast, survives across edge isolates)
+    // Idempotency layer 1 — durable atomic claim (Postgres CAS, KV fallback).
     const kv = await getKVNamespace()
-    if (!(await claimProcessedPayment(paymentId, kv))) {
+    const claim = await claimPaymentForProcessing(paymentId, kv)
+    if (!claim.granted) {
       return NextResponse.json({ ok: true, message: "Already processed" })
     }
+    claimedPaymentId = paymentId
     const orderSession = readOrderSessionToken(kv ? await kv.get(`os:${orderId}`) : null)
 
     const ordersBaseId = process.env.AIRTABLE_ORDERS_BASE_ID || ""
@@ -253,8 +257,10 @@ export async function POST(request: NextRequest) {
         paymentId,
         severity: "critical",
       })
-      // Release the KV claim so the Razorpay retry can actually process the payment
-      await releaseProcessedPayment(paymentId, kv)
+      // Transition to failed_retryable + drop the KV marker so the Razorpay
+      // retry can re-claim and process once the cart row exists.
+      await failPaymentClaim(paymentId, kv, "Cart record not found")
+      claimedPaymentId = null
       // Return 500 so Razorpay retries — the cart record may not have been written yet
       return NextResponse.json({ ok: false, error: "Cart record not found, retry expected" }, { status: 500 })
     }
@@ -381,6 +387,12 @@ export async function POST(request: NextRequest) {
     if (!supabasePayment && !paymentRecordId) {
       throw new Error("No backend store is configured for captured payment persistence.")
     }
+
+    // Order/payment is now durably persisted — mark the claim completed
+    // (terminal). Remaining side effects below are non-fatal best-effort and
+    // must not flip the claim back to retryable.
+    await completePaymentClaim(paymentId)
+    claimedPaymentId = null
 
     // ── Critical path: stock + promo (must succeed before fulfillment) ────────
     // These are awaited sequentially so a promo increment never lands without
@@ -572,6 +584,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     console.error("Razorpay webhook error:", error?.message || error)
+    if (claimedPaymentId) {
+      // Failed before durable fulfilment — release so a Razorpay retry re-claims.
+      const kv = await getKVNamespace().catch(() => null)
+      await failPaymentClaim(claimedPaymentId, kv, error?.message || String(error)).catch(() => {})
+    }
     await logErrorToAirtable("Razorpay Webhook", error, {
       route: "/api/webhooks/razorpay",
       service: "razorpay",

@@ -551,6 +551,60 @@ export async function incrementSupabasePromoUsageAtomic(
   return result?.[0] || null
 }
 
+// ── Durable payment-processing claim + state machine (audit P0 #3, #4) ───────
+
+export type PaymentProcessingClaim = {
+  granted: boolean
+  state: "processing" | "completed" | "failed_retryable"
+  attempts: number
+}
+
+/**
+ * Atomically claim a payment for processing via the `claim_payment_processing`
+ * Postgres function. Exactly one concurrent caller receives granted=true.
+ * Returns null when Supabase is not configured (caller should fall back to KV).
+ */
+export async function claimPaymentProcessing(paymentId: string): Promise<PaymentProcessingClaim | null> {
+  const rows = await supabaseJson<PaymentProcessingClaim[]>("/rest/v1/rpc/claim_payment_processing", {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ p_payment_id: paymentId }),
+  })
+  return rows?.[0] || null
+}
+
+/** Mark a claimed payment completed (terminal) once durable fulfilment lands. */
+export async function completePaymentProcessing(paymentId: string): Promise<void> {
+  const params = new URLSearchParams({ payment_id: `eq.${paymentId}` })
+  await supabaseJson(`/rest/v1/payment_processing?${params.toString()}`, {
+    method: "PATCH",
+    headers: jsonHeaders(),
+    body: JSON.stringify({
+      state: "completed",
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }),
+  })
+}
+
+/**
+ * Mark a still-processing claim as failed-retryable so a later webhook retry
+ * can re-claim it. The `state=eq.processing` guard ensures a completed payment
+ * is never knocked back into a retryable state.
+ */
+export async function failPaymentProcessing(paymentId: string, lastError?: string): Promise<void> {
+  const params = new URLSearchParams({ payment_id: `eq.${paymentId}`, state: "eq.processing" })
+  await supabaseJson(`/rest/v1/payment_processing?${params.toString()}`, {
+    method: "PATCH",
+    headers: jsonHeaders(),
+    body: JSON.stringify({
+      state: "failed_retryable",
+      last_error: (lastError || "").slice(0, 500),
+      updated_at: new Date().toISOString(),
+    }),
+  })
+}
+
 export async function getSupabaseRefundByOrderId(orderId: string): Promise<SupabaseRefund | null> {
   const params = new URLSearchParams({
     select: "*",
