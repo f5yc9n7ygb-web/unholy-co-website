@@ -37,3 +37,7 @@ create index if not exists reservations_email_status_idx
   on reservations (customer_email, status);
 create index if not exists reservations_order_idx
   on reservations (razorpay_order_id);
+
+-- Server-only table: RLS on (no anon/authenticated policies) + service_role grant.
+alter table public.reservations enable row level security;
+grant select, insert, update, delete on public.reservations to service_role;

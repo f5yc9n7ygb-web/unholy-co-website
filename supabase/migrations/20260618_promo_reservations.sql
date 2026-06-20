@@ -88,3 +88,7 @@ begin
   return true;
 end;
 $$;
+
+-- Server-only table: RLS on (no anon/authenticated policies) + service_role grant.
+alter table public.promo_reservations enable row level security;
+grant select, insert, update, delete on public.promo_reservations to service_role;

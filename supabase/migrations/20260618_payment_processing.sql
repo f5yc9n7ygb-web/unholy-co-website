@@ -78,3 +78,8 @@ begin
   return query select false, existing.state, existing.attempts;
 end;
 $$;
+
+-- Server-only table: RLS on (no anon/authenticated policies) + service_role grant,
+-- matching the existing schema convention.
+alter table public.payment_processing enable row level security;
+grant select, insert, update, delete on public.payment_processing to service_role;
