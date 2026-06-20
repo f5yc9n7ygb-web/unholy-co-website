@@ -6,6 +6,7 @@ import type { ShippingForm } from "@/lib/shop/types"
 import { validatePromoCode } from "@/lib/shop/promo"
 import { hasAirtableOrdersConfig, getRequiredEnv, logErrorToAirtable, saveRecordToAirtable } from "@/lib/server/integrations"
 import { checkStock, releaseStockReservation, reserveStock } from "@/lib/server/inventory"
+import { createReservation } from "@/lib/server/reservations"
 import { getKVNamespace } from "@/lib/server/kv"
 import { upsertSupabaseOrder } from "@/lib/server/supabase"
 import {
@@ -339,6 +340,17 @@ export async function POST(request: NextRequest) {
     // cron is the only thing that should roll it back if the customer doesn't
     // pay. Don't release on the cookie-set path below.
     reservationCommitted = true
+
+    // Order-scoped ledger row — gates idempotent release/consume of this order's
+    // held stock (consumed on pay, released on failure/supersede). Additive: the
+    // counter was already incremented by reserveStock above.
+    await createReservation({
+      reservationId: String(order.id || ""),
+      razorpayOrderId: String(order.id || ""),
+      packId: pack.id,
+      quantity: pack.qty,
+      customerEmail: shipping.email,
+    })
 
     return nextResponse
   } catch (error: any) {

@@ -8,6 +8,7 @@ import {
   getSupabaseOrdersByEmailAndStatuses,
   updateSupabaseOrderByRazorpayOrderId,
 } from "@/lib/server/supabase"
+import { releaseReservation } from "@/lib/server/reservations"
 
 /**
  * Mark the cart row for a completed payment as converted, and supersede any
@@ -59,6 +60,10 @@ export async function markCartConvertedAndSupersedeForEmail(options: {
       if (sibling.razorpay_order_id === orderId) continue
       await updateSupabaseOrderByRazorpayOrderId(sibling.razorpay_order_id, { status: "expired" })
         .catch((err) => console.error(`Failed to expire Supabase sibling cart ${sibling.razorpay_order_id}:`, err))
+      // Release the superseded sibling's held stock (P0 #5.2 leak). Gated +
+      // only-once; the cart is now 'expired' so the cron won't double-release.
+      await releaseReservation(sibling.razorpay_order_id)
+        .catch((err) => console.error(`Failed to release sibling reservation ${sibling.razorpay_order_id}:`, err))
     }
   }
 

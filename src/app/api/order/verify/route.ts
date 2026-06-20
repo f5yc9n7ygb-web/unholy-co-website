@@ -16,6 +16,7 @@ import {
   completePaymentClaim,
   failPaymentClaim,
 } from "@/lib/server/payment-claim"
+import { consumeReservation } from "@/lib/server/reservations"
 import {
   ORDER_BODY_LIMIT_BYTES,
   checkRateLimit,
@@ -388,6 +389,10 @@ export async function POST(request: NextRequest) {
     // claim back to retryable.
     await completePaymentClaim(paymentId)
     claimedPaymentId = null
+
+    // Settle this order's reservation (reserved -> consumed) so it is never
+    // later released or expired; decrementStock below applies the sale counter.
+    await consumeReservation(orderId)
 
     // Critical tasks must run sequentially: if stock decrement throws, we must
     // NOT increment the promo counter (and vice versa). Running them in

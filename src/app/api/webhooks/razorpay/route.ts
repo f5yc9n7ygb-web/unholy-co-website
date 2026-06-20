@@ -32,6 +32,7 @@ import { getKVNamespace, getExecutionContext } from "@/lib/server/kv"
 import { escapeAirtableValue } from "@/lib/server/security"
 import { readOrderSessionToken } from "@/lib/server/order-session"
 import { claimPaymentForProcessing, completePaymentClaim, failPaymentClaim } from "@/lib/server/payment-claim"
+import { consumeReservation, releaseReservation } from "@/lib/server/reservations"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock, releaseStockByPack } from "@/lib/server/inventory"
 import { incrementPromoUsageByCode } from "@/lib/shop/promo"
@@ -120,7 +121,10 @@ export async function POST(request: NextRequest) {
           const qty = Number(supabaseCart.quantity || 0)
           if (packId && qty > 0) {
             try {
-              await releaseStockByPack(packId, qty, kv)
+              // Gated, only-once release; fall back to legacy pack+qty release
+              // when no reservation ledger row exists (pre-migration).
+              const released = await releaseReservation(failedPayment.order_id, kv)
+              if (!released) await releaseStockByPack(packId, qty, kv)
               failedStockReleased = true
             } catch (err) {
               console.error("Webhook: Supabase release stock by pack failed:", err)
@@ -161,7 +165,8 @@ export async function POST(request: NextRequest) {
               const qty = Number(cf["Quantity"] || 0)
               if (packId && qty > 0) {
                 try {
-                  await releaseStockByPack(packId, qty, kv)
+                  const released = await releaseReservation(failedPayment.order_id, kv)
+                  if (!released) await releaseStockByPack(packId, qty, kv)
                   failedStockReleased = true
                 } catch (err) {
                   console.error("Webhook: Airtable release stock by pack failed:", err)
@@ -393,6 +398,10 @@ export async function POST(request: NextRequest) {
     // must not flip the claim back to retryable.
     await completePaymentClaim(paymentId)
     claimedPaymentId = null
+
+    // Settle this order's reservation (reserved -> consumed); decrementStock
+    // below applies the sale counter.
+    await consumeReservation(orderId)
 
     // ── Critical path: stock + promo (must succeed before fulfillment) ────────
     // These are awaited sequentially so a promo increment never lands without

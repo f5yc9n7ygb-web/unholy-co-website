@@ -605,6 +605,60 @@ export async function failPaymentProcessing(paymentId: string, lastError?: strin
   })
 }
 
+// ── Order-scoped inventory reservations (audit P0 #5) ────────────────────────
+
+export type SupabaseReservation = {
+  reservation_id: string
+  razorpay_order_id: string | null
+  pack_id: string
+  quantity: number
+  customer_email: string | null
+  status: "reserved" | "consumed" | "released" | "expired"
+  expires_at: string
+}
+
+const RESERVATION_SELECT =
+  "reservation_id,razorpay_order_id,pack_id,quantity,customer_email,status,expires_at"
+
+/** Insert a reservation ledger row. Ignores duplicates (idempotent per id). */
+export async function insertSupabaseReservation(
+  reservation: Pick<
+    SupabaseReservation,
+    "reservation_id" | "razorpay_order_id" | "pack_id" | "quantity" | "customer_email" | "expires_at"
+  >,
+): Promise<SupabaseReservation | null> {
+  const rows = await supabaseJson<SupabaseReservation[]>("/rest/v1/reservations?on_conflict=reservation_id", {
+    method: "POST",
+    headers: jsonHeaders({ headers: { Prefer: "resolution=ignore-duplicates,return=representation" } }),
+    body: JSON.stringify(reservation),
+  })
+  return rows?.[0] || null
+}
+
+/**
+ * Atomically transition a reservation out of 'reserved'. The
+ * `status=eq.reserved` guard makes this only-once: exactly one caller wins and
+ * receives the row (with pack_id/quantity for the counter release); concurrent
+ * retries / cron passes / supersede sweeps match zero rows and get null. So a
+ * reservation's held stock can never be released or consumed twice.
+ */
+export async function transitionSupabaseReservation(
+  reservationId: string,
+  toStatus: "consumed" | "released" | "expired",
+): Promise<SupabaseReservation | null> {
+  const params = new URLSearchParams({
+    reservation_id: `eq.${reservationId}`,
+    status: "eq.reserved",
+    select: RESERVATION_SELECT,
+  })
+  const rows = await supabaseJson<SupabaseReservation[]>(`/rest/v1/reservations?${params.toString()}`, {
+    method: "PATCH",
+    headers: jsonHeaders({ headers: { Prefer: "return=representation" } }),
+    body: JSON.stringify({ status: toStatus, updated_at: new Date().toISOString() }),
+  })
+  return rows?.[0] || null
+}
+
 export async function getSupabaseRefundByOrderId(orderId: string): Promise<SupabaseRefund | null> {
   const params = new URLSearchParams({
     select: "*",
