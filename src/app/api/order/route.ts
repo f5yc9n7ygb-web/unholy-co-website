@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
 import { createReceiptPricing, moneyToPaise } from "@/lib/shop/receipt"
 import type { ShippingForm } from "@/lib/shop/types"
-import { validatePromoCode } from "@/lib/shop/promo"
+import { validatePromoCode, reservePromoUsage, linkPromoReservationToOrder } from "@/lib/shop/promo"
 import { hasAirtableOrdersConfig, getRequiredEnv, logErrorToAirtable, saveRecordToAirtable } from "@/lib/server/integrations"
 import { checkStock, releaseStockReservation, reserveStock } from "@/lib/server/inventory"
 import { createReservation } from "@/lib/server/reservations"
@@ -153,6 +153,21 @@ export async function POST(request: NextRequest) {
     const currency = "INR"
     const receipt = createOrderReceipt()
     const contextId = createOrderContextId()
+
+    // Reserve the promo slot atomically BEFORE creating the discounted Razorpay
+    // order, so a limited promo can't be fanned out across many unpaid orders
+    // (P0 #6). Keyed by contextId; linked to the order id once it exists.
+    if (promoCode && validatedPromoRecordId) {
+      const promoReservation = await reservePromoUsage(promoCode, contextId)
+      if (promoReservation === "denied") {
+        await releaseReservationOnExit()
+        return NextResponse.json(
+          { ok: false, error: `Promo code "${promoCode}" has reached its usage limit. Please remove it and try again.` },
+          { status: 400 }
+        )
+      }
+    }
+
     const { keyId, keySecret } = getRazorpayCredentials()
 
     // Razorpay can be sluggish during peak hours; enforce timeout + retry on
@@ -351,6 +366,10 @@ export async function POST(request: NextRequest) {
       quantity: pack.qty,
       customerEmail: shipping.email,
     })
+
+    if (promoCode && validatedPromoRecordId) {
+      await linkPromoReservationToOrder(contextId, String(order.id || ""))
+    }
 
     return nextResponse
   } catch (error: any) {

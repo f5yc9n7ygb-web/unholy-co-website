@@ -35,7 +35,7 @@ import { claimPaymentForProcessing, completePaymentClaim, failPaymentClaim } fro
 import { consumeReservation, releaseReservation } from "@/lib/server/reservations"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock, releaseStockByPack } from "@/lib/server/inventory"
-import { incrementPromoUsageByCode } from "@/lib/shop/promo"
+import { incrementPromoUsageByCode, consumePromoReservation, releasePromoReservation } from "@/lib/shop/promo"
 import { readCheckoutAddOns, summarizeAddOn, type CheckoutAddOnRecord } from "@/lib/shop/addons"
 import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
 import { sendMetaPurchaseEvent } from "@/lib/server/meta-capi"
@@ -111,6 +111,9 @@ export async function POST(request: NextRequest) {
           }
           await kv.put(failedClaimKey, "1", { expirationTtl: 24 * 60 * 60 })
         }
+
+        // Release the promo slot this failed order was holding (P0 #6, only-once).
+        await releasePromoReservation(failedPayment.order_id).catch(() => {})
 
         const supabaseCart = await getSupabaseOrderByRazorpayOrderId(failedPayment.order_id).catch(() => null)
         if (supabaseCart) {
@@ -410,7 +413,10 @@ export async function POST(request: NextRequest) {
     try {
       await decrementStock(pack.id, pack.qty, orderId, kv)
       if (promoCode) {
-        await incrementPromoUsageByCode(promoCode)
+        const consumed = await consumePromoReservation(orderId)
+        if (!consumed) {
+          await incrementPromoUsageByCode(promoCode)
+        }
       }
     } catch (err) {
       await logErrorToAirtable(`Critical fulfillment failure (Order: ${orderId})`, err, {

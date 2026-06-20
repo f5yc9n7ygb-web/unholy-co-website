@@ -659,6 +659,64 @@ export async function transitionSupabaseReservation(
   return rows?.[0] || null
 }
 
+// ── Promo usage reservations (audit P0 #6) ───────────────────────────────────
+
+export type PromoReservationResult = { granted: boolean; reason: string }
+
+/** Atomically reserve a promo slot via the reserve_promo_usage RPC. */
+export async function reservePromoUsageSupabase(
+  code: string,
+  reservationId: string,
+  ttlSeconds = 1800,
+): Promise<PromoReservationResult | null> {
+  const rows = await supabaseJson<PromoReservationResult[]>("/rest/v1/rpc/reserve_promo_usage", {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ p_code: code, p_reservation_id: reservationId, p_ttl_seconds: ttlSeconds }),
+  })
+  return rows?.[0] || null
+}
+
+/** Link a promo reservation (keyed by contextId) to its Razorpay order id. */
+export async function linkPromoReservation(reservationId: string, orderId: string): Promise<void> {
+  const params = new URLSearchParams({ reservation_id: `eq.${reservationId}` })
+  await supabaseJson(`/rest/v1/promo_reservations?${params.toString()}`, {
+    method: "PATCH",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ razorpay_order_id: orderId, updated_at: new Date().toISOString() }),
+  })
+}
+
+/**
+ * Settle a promo reservation on payment (reserved -> consumed). Returns true if
+ * THIS call won the only-once transition, false if there was no reserved row
+ * (built-in/unlimited/pre-migration) — letting the caller fall back to the
+ * legacy at-payment increment.
+ */
+export async function consumePromoReservationByOrder(orderId: string): Promise<boolean> {
+  const params = new URLSearchParams({
+    razorpay_order_id: `eq.${orderId}`,
+    status: "eq.reserved",
+    select: "reservation_id",
+  })
+  const rows = await supabaseJson<Array<{ reservation_id: string }>>(`/rest/v1/promo_reservations?${params.toString()}`, {
+    method: "PATCH",
+    headers: jsonHeaders({ headers: { Prefer: "return=representation" } }),
+    body: JSON.stringify({ status: "consumed", updated_at: new Date().toISOString() }),
+  })
+  return Boolean(rows && rows.length > 0)
+}
+
+/** Release a promo reservation (reserved -> released, used_count--). Only-once. */
+export async function releasePromoReservationByOrder(orderId: string): Promise<boolean> {
+  const result = await supabaseJson<boolean>("/rest/v1/rpc/release_promo_reservation_by_order", {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ p_order_id: orderId }),
+  })
+  return result === true
+}
+
 export async function getSupabaseRefundByOrderId(orderId: string): Promise<SupabaseRefund | null> {
   const params = new URLSearchParams({
     select: "*",

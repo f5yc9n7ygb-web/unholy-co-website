@@ -9,6 +9,7 @@ import {
   updateSupabaseOrderByRazorpayOrderId,
 } from "@/lib/server/supabase"
 import { releaseReservation } from "@/lib/server/reservations"
+import { releasePromoReservation } from "@/lib/shop/promo"
 
 /**
  * Mark the cart row for a completed payment as converted, and supersede any
@@ -64,6 +65,7 @@ export async function markCartConvertedAndSupersedeForEmail(options: {
       // only-once; the cart is now 'expired' so the cron won't double-release.
       await releaseReservation(sibling.razorpay_order_id)
         .catch((err) => console.error(`Failed to release sibling reservation ${sibling.razorpay_order_id}:`, err))
+      await releasePromoReservation(sibling.razorpay_order_id).catch(() => {})
     }
   }
 

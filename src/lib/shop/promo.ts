@@ -25,6 +25,10 @@ import {
   getSupabasePromoCode,
   incrementSupabasePromoUsageAtomic,
   updateSupabasePromoCode,
+  reservePromoUsageSupabase,
+  linkPromoReservation,
+  consumePromoReservationByOrder,
+  releasePromoReservationByOrder,
   type SupabasePromoCode,
 } from "@/lib/server/supabase"
 
@@ -228,6 +232,46 @@ export async function incrementPromoUsage(recordId: string): Promise<void> {
       }
     }
   }
+}
+
+// ── Promo usage reservations (audit P0 #6) ───────────────────────────────────
+//
+// Reserve a slot atomically at order creation so a limited promo can't be
+// fanned out across many unpaid discounted orders. Settle on pay, release on
+// failure. Built-in/unlimited codes and pre-migration envs are granted without
+// tracking (the legacy at-payment increment still caps them).
+
+/** Reserve a promo slot keyed by the order contextId. Returns the decision. */
+export async function reservePromoUsage(
+  code: string,
+  reservationId: string,
+): Promise<"granted" | "denied"> {
+  if (!code) return "granted"
+  const normalized = code.trim().toUpperCase()
+  if (BUILT_IN_PROMOS[normalized]) return "granted" // unlimited — no cap to enforce
+  const result = await reservePromoUsageSupabase(normalized, reservationId).catch(() => null)
+  if (!result) return "granted" // RPC unavailable (pre-migration) — legacy path caps at payment
+  return result.granted ? "granted" : "denied"
+}
+
+/** Link a reserved promo slot to its Razorpay order id once the order exists. */
+export async function linkPromoReservationToOrder(reservationId: string, orderId: string): Promise<void> {
+  await linkPromoReservation(reservationId, orderId).catch((err) =>
+    console.error("linkPromoReservation failed:", err))
+}
+
+/**
+ * Settle a promo reservation on successful payment. Returns true if a reserved
+ * slot was consumed (caller must NOT also run the legacy increment); false when
+ * there was no reservation to consume (built-in/unlimited/pre-migration).
+ */
+export async function consumePromoReservation(orderId: string): Promise<boolean> {
+  return consumePromoReservationByOrder(orderId).catch(() => false)
+}
+
+/** Release a promo reservation on failure/cancel/supersede (only-once). */
+export async function releasePromoReservation(orderId: string): Promise<boolean> {
+  return releasePromoReservationByOrder(orderId).catch(() => false)
 }
 
 function calculateDiscount(promo: PromoCode, orderTotal: number): number {

@@ -29,7 +29,7 @@ import {
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
 import { decrementStock } from "@/lib/server/inventory"
 import { readCheckoutAddOns, summarizeAddOn, type CheckoutAddOnRecord } from "@/lib/shop/addons"
-import { incrementPromoUsage } from "@/lib/shop/promo"
+import { incrementPromoUsage, consumePromoReservation } from "@/lib/shop/promo"
 import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
 import { sendMetaPurchaseEvent } from "@/lib/server/meta-capi"
 import {
@@ -399,8 +399,13 @@ export async function POST(request: NextRequest) {
     // Promise.all left the system in a half-applied state on partial failure.
     try {
       await decrementStock(pack.id, pack.qty, orderId, kv)
-      if (orderSession.promoRecordId) {
-        await incrementPromoUsage(orderSession.promoRecordId)
+      if (orderSession.promoCode) {
+        // Settle the reserved promo slot; only fall back to the legacy increment
+        // when there was no reservation (built-in/unlimited/pre-migration).
+        const consumed = await consumePromoReservation(orderId)
+        if (!consumed && orderSession.promoRecordId) {
+          await incrementPromoUsage(orderSession.promoRecordId)
+        }
       }
     } catch (err) {
       await logErrorToAirtable(`Critical fulfillment failure (Order: ${orderId})`, err, {
