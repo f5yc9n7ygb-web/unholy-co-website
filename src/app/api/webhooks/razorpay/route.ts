@@ -32,9 +32,10 @@ import { getKVNamespace, getExecutionContext } from "@/lib/server/kv"
 import { escapeAirtableValue } from "@/lib/server/security"
 import { readOrderSessionToken } from "@/lib/server/order-session"
 import { claimPaymentForProcessing, completePaymentClaim, failPaymentClaim } from "@/lib/server/payment-claim"
-import { consumeReservation, releaseReservation } from "@/lib/server/reservations"
+import { releaseReservation } from "@/lib/server/reservations"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
-import { decrementStock, releaseStockByPack } from "@/lib/server/inventory"
+import { releaseStockByPack } from "@/lib/server/inventory"
+import { settlePaidOrderCritical } from "@/lib/server/paid-order-critical"
 import { incrementPromoUsageByCode, consumePromoReservation, releasePromoReservation } from "@/lib/shop/promo"
 import { readCheckoutAddOns, summarizeAddOn, type CheckoutAddOnRecord } from "@/lib/shop/addons"
 import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
@@ -126,9 +127,9 @@ export async function POST(request: NextRequest) {
             try {
               // Gated, only-once release; fall back to legacy pack+qty release
               // when no reservation ledger row exists (pre-migration).
-              const released = await releaseReservation(failedPayment.order_id, kv)
-              if (!released) await releaseStockByPack(packId, qty, kv)
-              failedStockReleased = true
+              const releaseResult = await releaseReservation(failedPayment.order_id, kv)
+              if (releaseResult === "missing") await releaseStockByPack(packId, qty, kv)
+              failedStockReleased = releaseResult !== "unavailable"
             } catch (err) {
               console.error("Webhook: Supabase release stock by pack failed:", err)
             }
@@ -168,9 +169,9 @@ export async function POST(request: NextRequest) {
               const qty = Number(cf["Quantity"] || 0)
               if (packId && qty > 0) {
                 try {
-                  const released = await releaseReservation(failedPayment.order_id, kv)
-                  if (!released) await releaseStockByPack(packId, qty, kv)
-                  failedStockReleased = true
+                  const releaseResult = await releaseReservation(failedPayment.order_id, kv)
+                  if (releaseResult === "missing") await releaseStockByPack(packId, qty, kv)
+                  failedStockReleased = releaseResult !== "unavailable"
                 } catch (err) {
                   console.error("Webhook: Airtable release stock by pack failed:", err)
                 }
@@ -240,9 +241,7 @@ export async function POST(request: NextRequest) {
           maxRecords: 1,
         }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
 
-    if (existingSupabasePayment || existingPayment.length > 0) {
-      return NextResponse.json({ ok: true, message: "Already processed (dedup)" })
-    }
+    const paymentAlreadyPersisted = Boolean(existingSupabasePayment || existingPayment.length > 0)
 
     // Look up the abandoned cart record to get order details.
     const supabaseCart = await getSupabaseOrderByRazorpayOrderId(orderId).catch(() => null)
@@ -309,7 +308,6 @@ export async function POST(request: NextRequest) {
       shipping.gstBusinessName || ""
     )
     const fullAddress = String(shipping.fullAddress || fields["Full Shipping Address"] || "")
-    const status = String(supabaseCart?.status || fields["Status"] || "")
     const promoCode = String(sourcePayload.promoCode || fields["Promo Code"] || "")
     const discountAmount = Number(sourcePayload.discountAmount || fields["Discount Amount"] || 0) || 0
     const pricing = readReceiptPricing(orderSession?.pricing)
@@ -321,13 +319,8 @@ export async function POST(request: NextRequest) {
       throw new Error(`Webhook payment total mismatch for order ${orderId}.`)
     }
 
-    // Only process if not already converted
-    if (status === "converted") {
-      return NextResponse.json({ ok: true, message: "Already converted" })
-    }
-
     const paidAt = new Date().toISOString()
-    const supabasePayment = await upsertSupabasePayment({
+    const supabasePayment = existingSupabasePayment || (paymentAlreadyPersisted ? null : await upsertSupabasePayment({
       payment_id: paymentId,
       order_id: orderId,
       pack: pack.title,
@@ -356,10 +349,10 @@ export async function POST(request: NextRequest) {
     }).catch((err) => {
       console.error("Webhook: Supabase payment persist failed, trying Airtable mirror:", err)
       return null
-    })
+    }))
 
-    let paymentRecordId: string | null = null
-    if (ordersBaseId && hasAirtableOrdersConfig()) {
+    let paymentRecordId: string | null = existingPayment[0]?.id || null
+    if (!paymentAlreadyPersisted && ordersBaseId && hasAirtableOrdersConfig()) {
       try {
         const airtablePayment = await saveRecordToAirtable(
           {
@@ -396,28 +389,19 @@ export async function POST(request: NextRequest) {
       throw new Error("No backend store is configured for captured payment persistence.")
     }
 
-    // Order/payment is now durably persisted — mark the claim completed
-    // (terminal). Remaining side effects below are non-fatal best-effort and
-    // must not flip the claim back to retryable.
-    await completePaymentClaim(paymentId)
-    claimedPaymentId = null
-
-    // Settle this order's reservation (reserved -> consumed); decrementStock
-    // below applies the sale counter.
-    await consumeReservation(orderId)
-
-    // ── Critical path: stock + promo (must succeed before fulfillment) ────────
-    // These are awaited sequentially so a promo increment never lands without
-    // a matching stock decrement (and vice versa). If either throws we still
-    // return 200 because the payment is captured — ops must reconcile manually.
+    // Keep the durable claim retryable until stock and promo settlement finish.
     try {
-      await decrementStock(pack.id, pack.qty, orderId, kv)
-      if (promoCode) {
-        const consumed = await consumePromoReservation(orderId)
-        if (!consumed) {
-          await incrementPromoUsageByCode(promoCode)
-        }
-      }
+      await settlePaidOrderCritical({
+        orderId,
+        packId: pack.id,
+        quantity: pack.qty,
+        kv,
+        settlePromo: async () => {
+          if (!promoCode) return
+          const consumed = await consumePromoReservation(orderId)
+          if (!consumed) await incrementPromoUsageByCode(promoCode)
+        },
+      })
     } catch (err) {
       await logErrorToAirtable(`Critical fulfillment failure (Order: ${orderId})`, err, {
         route: "/api/webhooks/razorpay",
@@ -427,7 +411,11 @@ export async function POST(request: NextRequest) {
         paymentId,
         severity: "critical",
       })
+      throw err
     }
+
+    await completePaymentClaim(paymentId)
+    claimedPaymentId = null
 
     await sendMetaPurchaseEvent({
       eventId: orderId,

@@ -339,10 +339,9 @@ export async function releaseStockByPack(
  * Silently skips if inventory isn't set up.
  */
 export async function decrementStock(packId: string, qty: number, orderId?: string, kv?: KVNamespace | null): Promise<void> {
-  await withInventoryLock(packId, kv, async () => {
-    try {
+  const completed = await withInventoryLock(packId, kv, async () => {
       const inv = await getInventoryRecord(packId)
-      if (!inv) return
+      if (!inv) return true
 
       const newStock = Math.max(0, inv.stock - qty)
       const newReserved = Math.max(0, inv.reserved - qty)
@@ -375,8 +374,7 @@ export async function decrementStock(packId: string, qty: number, orderId?: stri
       if (orderId && kv) {
         await kv.delete(`stock-reserve:${orderId}`).catch(() => {})
       }
-    } catch (err) {
-      console.error("Inventory decrement failed:", err)
-    }
-  }, undefined)
+      return true
+  }, false)
+  if (!completed) throw new Error(`Inventory lock unavailable for ${packId}`)
 }

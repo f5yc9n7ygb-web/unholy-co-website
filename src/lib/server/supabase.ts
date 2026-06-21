@@ -659,6 +659,46 @@ export async function transitionSupabaseReservation(
   return rows?.[0] || null
 }
 
+export async function getSupabaseReservationById(
+  reservationId: string,
+): Promise<SupabaseReservation | null> {
+  const params = new URLSearchParams({
+    reservation_id: `eq.${reservationId}`,
+    select: RESERVATION_SELECT,
+    limit: "1",
+  })
+  const rows = await supabaseJson<SupabaseReservation[]>(`/rest/v1/reservations?${params.toString()}`)
+  return rows?.[0] || null
+}
+
+export async function restoreConsumedSupabaseReservation(reservationId: string): Promise<boolean> {
+  const params = new URLSearchParams({
+    reservation_id: `eq.${reservationId}`,
+    status: "eq.consumed",
+    select: "reservation_id",
+  })
+  const rows = await supabaseJson<Array<{ reservation_id: string }>>(
+    `/rest/v1/reservations?${params.toString()}`,
+    {
+      method: "PATCH",
+      headers: jsonHeaders({ headers: { Prefer: "return=representation" } }),
+      body: JSON.stringify({ status: "reserved", updated_at: new Date().toISOString() }),
+    },
+  )
+  return Boolean(rows?.length)
+}
+
+export async function getExpiredSupabaseReservations(limit = 100): Promise<SupabaseReservation[]> {
+  const params = new URLSearchParams({
+    status: "eq.reserved",
+    expires_at: `lt.${new Date().toISOString()}`,
+    select: RESERVATION_SELECT,
+    order: "expires_at.asc",
+    limit: String(limit),
+  })
+  return (await supabaseJson<SupabaseReservation[]>(`/rest/v1/reservations?${params.toString()}`)) || []
+}
+
 // ── Promo usage reservations (audit P0 #6) ───────────────────────────────────
 
 export type PromoReservationResult = { granted: boolean; reason: string }
@@ -715,6 +755,23 @@ export async function releasePromoReservationByOrder(orderId: string): Promise<b
     body: JSON.stringify({ p_order_id: orderId }),
   })
   return result === true
+}
+
+export async function getExpiredPromoReservationOrderIds(limit = 100): Promise<string[]> {
+  const params = new URLSearchParams({
+    status: "eq.reserved",
+    expires_at: `lt.${new Date().toISOString()}`,
+    select: "reservation_id,razorpay_order_id",
+    order: "expires_at.asc",
+    limit: String(limit),
+  })
+  const rows = await supabaseJson<Array<{ reservation_id: string; razorpay_order_id: string | null }>>(
+    `/rest/v1/promo_reservations?${params.toString()}`,
+  )
+  for (const row of rows || []) {
+    if (!row.razorpay_order_id) await linkPromoReservation(row.reservation_id, row.reservation_id)
+  }
+  return (rows || []).map((row) => row.razorpay_order_id || row.reservation_id).filter(Boolean)
 }
 
 export async function getSupabaseRefundByOrderId(orderId: string): Promise<SupabaseRefund | null> {

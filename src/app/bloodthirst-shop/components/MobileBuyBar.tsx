@@ -25,7 +25,7 @@ export function MobileBuyBar({
   return (
     <div
       aria-hidden={!visible}
-      className={`fixed inset-x-0 bottom-0 z-[55] flex items-center justify-between gap-3 border-t border-bone/15 bg-black/90 px-4 pt-3 backdrop-blur-md transition-[opacity,transform] duration-200 ease-out md:hidden ${
+      className={`fixed inset-x-0 bottom-0 z-[55] flex items-center justify-between gap-3 border-t border-bone/15 bg-black/90 px-4 pt-3 backdrop-blur-md transition-[opacity,transform] duration-200 ease-out ${
         visible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-full opacity-0"
       }`}
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}

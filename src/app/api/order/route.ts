@@ -3,12 +3,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPackById } from "@/lib/shop/catalog"
 import { createReceiptPricing, moneyToPaise } from "@/lib/shop/receipt"
 import type { ShippingForm } from "@/lib/shop/types"
-import { validatePromoCode, reservePromoUsage, linkPromoReservationToOrder } from "@/lib/shop/promo"
+import { validatePromoCode, reservePromoUsage, linkPromoReservationToOrder, releasePromoReservation } from "@/lib/shop/promo"
 import { hasAirtableOrdersConfig, getRequiredEnv, logErrorToAirtable, saveRecordToAirtable } from "@/lib/server/integrations"
 import { checkStock, releaseStockReservation, reserveStock } from "@/lib/server/inventory"
 import { createReservation } from "@/lib/server/reservations"
 import { getKVNamespace } from "@/lib/server/kv"
-import { upsertSupabaseOrder } from "@/lib/server/supabase"
+import { upsertSupabaseOrder, isSupabaseConfigured } from "@/lib/server/supabase"
 import {
   ORDER_SESSION_COOKIE,
   createOrderContextId,
@@ -18,6 +18,7 @@ import {
 import { getMetaAttributionFromRequest } from "@/lib/server/meta-capi"
 import type { CheckoutAddOnRecord } from "@/lib/shop/addons"
 import { CHECKOUT_ADD_ON_CONFIG, isCheckoutAddOnId } from "@/lib/shop/addon-config"
+import { isValidIndianMobile, normalizeIndianPhone } from "@/lib/shop/checkout-validation"
 import {
   ORDER_BODY_LIMIT_BYTES,
   checkRateLimit,
@@ -99,6 +100,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const addOnValidationError = validateAddOns(addOns)
+    if (addOnValidationError) {
+      return NextResponse.json({ ok: false, error: addOnValidationError }, { status: 400 })
+    }
+
     // Check stock availability (checkStock is called inside reserveStock).
     // The reservation key is hoisted to function scope so any early-return path
     // (or the outer catch) can roll the reservation back — without that, a
@@ -154,20 +160,6 @@ export async function POST(request: NextRequest) {
     const receipt = createOrderReceipt()
     const contextId = createOrderContextId()
 
-    // Reserve the promo slot atomically BEFORE creating the discounted Razorpay
-    // order, so a limited promo can't be fanned out across many unpaid orders
-    // (P0 #6). Keyed by contextId; linked to the order id once it exists.
-    if (promoCode && validatedPromoRecordId) {
-      const promoReservation = await reservePromoUsage(promoCode, contextId)
-      if (promoReservation === "denied") {
-        await releaseReservationOnExit()
-        return NextResponse.json(
-          { ok: false, error: `Promo code "${promoCode}" has reached its usage limit. Please remove it and try again.` },
-          { status: 400 }
-        )
-      }
-    }
-
     const { keyId, keySecret } = getRazorpayCredentials()
 
     // Razorpay can be sluggish during peak hours; enforce timeout + retry on
@@ -218,6 +210,21 @@ export async function POST(request: NextRequest) {
         { ok: false, error: "Payment gateway is slow right now. Please try again.", retryable: true },
         { status: 503 }
       )
+    }
+
+    // Reserve against the real Razorpay order id. Using the pre-order context id
+    // leaked limited-use slots whenever Razorpay creation failed before linking.
+    if (promoCode && validatedPromoRecordId) {
+      const orderId = String(order.id || "")
+      const promoReservation = await reservePromoUsage(promoCode, orderId)
+      if (promoReservation === "denied") {
+        await releaseReservationOnExit()
+        return NextResponse.json(
+          { ok: false, error: `Promo code "${promoCode}" has reached its usage limit. Please remove it and try again.` },
+          { status: 400 }
+        )
+      }
+      await linkPromoReservationToOrder(orderId, orderId)
     }
 
     const sessionToken = createOrderSessionToken({
@@ -306,12 +313,29 @@ export async function POST(request: NextRequest) {
         pricing,
       },
     }
+    // The Supabase cart is the CANONICAL store: its source_payload carries the
+    // add-ons + full pricing the webhook needs to reconstruct the exact charged
+    // amount. If Supabase is configured but the write fails, fail the order
+    // BEFORE the customer pays — do NOT fall through to the Airtable mirror,
+    // which lacks add-ons/pricing and would make the webhook reject a valid paid
+    // add-on order (P0 #7).
     let persistedCart = false
-    try {
-      await upsertSupabaseOrder(cartPayload)
+    if (isSupabaseConfigured()) {
+      const supabaseCart = await upsertSupabaseOrder(cartPayload).catch((err) => {
+        console.error("Supabase canonical cart persist failed:", err)
+        return null
+      })
+      if (!supabaseCart) {
+        await releaseReservationOnExit()
+        if (promoCode && validatedPromoRecordId) {
+          await releasePromoReservation(String(order.id || "")).catch(() => {})
+        }
+        return NextResponse.json(
+          { ok: false, error: "We couldn't start your checkout just now. Please try again.", retryable: true },
+          { status: 503 }
+        )
+      }
       persistedCart = true
-    } catch (err) {
-      console.error("Supabase cart persist failed, trying Airtable mirror:", err)
     }
 
     if (hasAirtableOrdersConfig()) {
@@ -366,10 +390,6 @@ export async function POST(request: NextRequest) {
       quantity: pack.qty,
       customerEmail: shipping.email,
     })
-
-    if (promoCode && validatedPromoRecordId) {
-      await linkPromoReservationToOrder(contextId, String(order.id || ""))
-    }
 
     return nextResponse
   } catch (error: any) {
@@ -431,6 +451,23 @@ function sanitizeAddOnData(id: string, data?: Record<string, unknown>): Record<s
   return {}
 }
 
+function validateAddOns(addOns: CheckoutAddOn[]): string | null {
+  for (const addOn of addOns) {
+    if (addOn.id === "cursed_note") {
+      if (!String(addOn.data?.recipientName || "").trim() || !String(addOn.data?.context || "").trim()) {
+        return "Add the Cursed Note recipient and context before checkout."
+      }
+    }
+    if (addOn.id === "unholy_ledger") {
+      if (addOn.data?.consent !== true) return "Consent is required for an Unholy Ledger entry."
+      if (!String(addOn.data?.displayName || "").trim() || !String(addOn.data?.city || "").trim()) {
+        return "Add the Ledger display name and city before checkout."
+      }
+    }
+  }
+  return null
+}
+
 function getRazorpayCredentials() {
   const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
   const keySecret = process.env.RAZORPAY_KEY_SECRET
@@ -447,7 +484,7 @@ function normalizeShipping(shipping?: ShippingForm): ShippingForm {
   return {
     name: sanitizeText(shipping?.name, 80),
     email: sanitizeText(shipping?.email, 120).toLowerCase(),
-    phone: sanitizeText(shipping?.phone, 20),
+    phone: normalizeIndianPhone(sanitizeText(shipping?.phone, 20)),
     address: sanitizeText(shipping?.address, 240),
     city: sanitizeText(shipping?.city, 80),
     pincode: sanitizeText(shipping?.pincode, 12),
@@ -462,7 +499,7 @@ function validateShipping(shipping: ShippingForm) {
   if (!shipping.email) return "Email is required."
   if (!isValidEmail(shipping.email)) return "A valid email is required."
   if (!shipping.phone) return "Phone is required."
-  if (!/^[6-9]\d{9}$/.test(shipping.phone.replace(/\D/g, ""))) {
+  if (!isValidIndianMobile(shipping.phone)) {
     return "A valid phone number is required."
   }
   if (!shipping.address) return "Address is required."

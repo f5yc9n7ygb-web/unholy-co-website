@@ -4,7 +4,7 @@ import dynamic from "next/dynamic"
 import Image from "next/image"
 import Link from "next/link"
 import Script from "next/script"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { AnimatePresence, MotionConfig, motion } from "framer-motion"
 import { ArrowDown, Check, Gift, Lock, ShieldCheck, Sparkles, Truck } from "lucide-react"
 
@@ -12,9 +12,10 @@ import { MobileBuyBar } from "../components/MobileBuyBar"
 import { PhaseClose } from "../components/PhaseClose"
 import { RitualForm } from "../components/RitualForm"
 import { BlackGloveModal, DoNotBuyModal } from "../components/PremiumInquiry"
-import { useRitualCheckout, type CheckoutAddOn } from "../hooks/useRitualCheckout"
+import { useCheckoutAddOnDraft } from "../hooks/useCheckoutAddOnDraft"
+import { useRitualCheckout } from "../hooks/useRitualCheckout"
 import { MobileAddOnsSheet } from "./MobileAddOnsSheet"
-import { CHECKOUT_ADD_ON_CONFIG, type NoteTone } from "@/lib/shop/addon-config"
+import { MobileCanvasErrorBoundary } from "./MobileCanvasErrorBoundary"
 import { PACKS, type Pack } from "@/lib/shop/catalog"
 import { trackBloodthirstEvent } from "@/lib/analytics/bloodthirst"
 
@@ -29,6 +30,7 @@ type CanvasFallbackReason =
   | "weak_device"
   | "slow_connection"
   | "canvas_timeout"
+  | "asset_error"
 
 const PROOF_ITEMS = [
   { icon: <ShieldCheck size={16} />, label: "FSSAI licensed" },
@@ -45,69 +47,29 @@ function money(value: number) {
 }
 
 export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
-  const scrollRef = useRef<HTMLElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const arrivalRef = useRef<HTMLElement>(null)
   const proofRef = useRef<HTMLElement>(null)
   const offerRef = useRef<HTMLElement>(null)
+  const paymentRef = useRef<HTMLFormElement>(null)
   const canSlotRef = useRef<HTMLDivElement>(null)
   const mountAt = useRef(Date.now())
 
-  const [snapEnabled, setSnapEnabled] = useState(true)
   const [barVisible, setBarVisible] = useState(false)
   const [addOnsOpen, setAddOnsOpen] = useState(false)
   const [blackGloveOpen, setBlackGloveOpen] = useState(false)
   const [doNotBuyOpen, setDoNotBuyOpen] = useState(false)
-  const [noteEnabled, setNoteEnabled] = useState(false)
-  const [ledgerEnabled, setLedgerEnabled] = useState(false)
-  const [noteTone, setNoteTone] = useState<NoteTone>("Funny")
-  const [recipientName, setRecipientName] = useState("")
-  const [noteContext, setNoteContext] = useState("")
-  const [ledgerName, setLedgerName] = useState("")
-  const [ledgerCity, setLedgerCity] = useState("")
-  const [ledgerConfession, setLedgerConfession] = useState("")
-  const [ledgerConsent, setLedgerConsent] = useState(false)
+  const {
+    noteEnabled, setNoteEnabled, ledgerEnabled, setLedgerEnabled,
+    noteTone, setNoteTone, recipientName, setRecipientName,
+    noteContext, setNoteContext, ledgerName, setLedgerName,
+    ledgerCity, setLedgerCity, ledgerConfession, setLedgerConfession,
+    ledgerConsent, setLedgerConsent, checkoutAddOns,
+  } = useCheckoutAddOnDraft()
   const [canvasAllowed, setCanvasAllowed] = useState(false)
   const [canvasInView, setCanvasInView] = useState(false)
   const [canvasReady, setCanvasReady] = useState(false)
   const [canvasFallback, setCanvasFallback] = useState<CanvasFallbackReason | null>(null)
-
-  const checkoutAddOns = useMemo<CheckoutAddOn[]>(() => {
-    const items: CheckoutAddOn[] = []
-    if (noteEnabled) {
-      const note = CHECKOUT_ADD_ON_CONFIG.cursed_note
-      items.push({
-        id: note.id,
-        title: note.title,
-        price: note.price,
-        data: { tone: noteTone, recipientName, context: noteContext },
-      })
-    }
-    if (ledgerEnabled && ledgerConsent) {
-      const ledger = CHECKOUT_ADD_ON_CONFIG.unholy_ledger
-      items.push({
-        id: ledger.id,
-        title: ledger.title,
-        price: ledger.price,
-        data: {
-          displayName: ledgerName,
-          city: ledgerCity,
-          confession: ledgerConfession,
-          consent: ledgerConsent,
-        },
-      })
-    }
-    return items
-  }, [
-    ledgerCity,
-    ledgerConfession,
-    ledgerConsent,
-    ledgerEnabled,
-    ledgerName,
-    noteContext,
-    noteEnabled,
-    noteTone,
-    recipientName,
-  ])
 
   const checkout = useRitualCheckout({
     razorpayKey,
@@ -168,11 +130,13 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
     return () => observer.disconnect()
   }, [])
 
-  // Sticky buy bar appears only after the arrival hero scrolls away.
+  // Keep the opening scene visually clean, then surface the persistent buy
+  // action once the visitor has committed to the descent.
   useEffect(() => {
     const root = scrollRef.current
     const arrival = arrivalRef.current
     if (!root || !arrival) return
+
     const observer = new IntersectionObserver(
       ([entry]) => setBarVisible(entry.intersectionRatio < 0.5),
       { root, threshold: [0, 0.5, 1] },
@@ -247,10 +211,24 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
     return () => window.clearTimeout(timeout)
   }, [canvasAllowed, canvasFallback, canvasReady])
 
-  const scrollToOffer = useCallback(() => {
-    setSnapEnabled(false)
-    offerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  const handleCanvasError = useCallback(() => {
+    setCanvasReady(false)
+    setCanvasFallback((current) => {
+      if (!current) trackBloodthirstEvent("canvas_fallback", { reason: "asset_error" })
+      return "asset_error"
+    })
   }, [])
+
+  const scrollToOffer = useCallback(() => {
+    checkout.trackCurrentAddToCart()
+    const root = scrollRef.current
+    const offer = offerRef.current
+    const target = root && offer && root.scrollTop >= offer.offsetTop - root.clientHeight * 0.25
+      ? paymentRef.current
+      : offer
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+    target?.scrollIntoView({ behavior, block: "start" })
+  }, [checkout])
 
   const selectPack = (pack: Pack) => {
     checkout.selectPack(pack)
@@ -287,15 +265,13 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
         strategy="afterInteractive"
       />
 
-      <main
+      <div
         ref={scrollRef}
-        className="h-[100svh] overflow-y-auto bg-[#080808] text-bone"
-        style={{ scrollSnapType: snapEnabled ? "y proximity" : "none" }}
+        className="bloodthirst-ritual-scroll h-[100svh] snap-y snap-mandatory overflow-y-auto overscroll-y-contain bg-[#080808] text-bone"
       >
         <section
           ref={arrivalRef}
-          className="relative flex min-h-[100svh] flex-col overflow-hidden px-5 pb-28 pt-16"
-          style={{ scrollSnapAlign: "start" }}
+          className="relative flex min-h-[100svh] snap-start snap-always flex-col overflow-hidden px-5 pb-28 pt-16"
         >
           <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_50%_14%,rgba(176,0,32,0.26),transparent_42%),linear-gradient(180deg,#111_0%,#080808_68%,#050505_100%)]" />
           <div className="relative z-10 flex items-center justify-between gap-4">
@@ -314,7 +290,7 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
               fill
               priority
               sizes="100vw"
-              className={`object-contain transition-opacity duration-500 ${canvasReady ? "opacity-0" : "opacity-100"}`}
+              className={`object-contain transition-opacity duration-500 ${canvasReady && !canvasFallback ? "opacity-0" : "opacity-100"}`}
             />
             <AnimatePresence>
               {canVisible && (
@@ -326,19 +302,24 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
                   transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
                   className="absolute inset-0"
                 >
-                  <DeferredMobileCanStage
-                    onReady={() => {
-                      setCanvasReady(true)
-                      trackBloodthirstEvent("canvas_ready", {
-                        canvas_ready_ms: Date.now() - mountAt.current,
-                      })
-                    }}
-                    onFirstDrag={() => {
-                      trackBloodthirstEvent("drag_interaction", {
-                        pack_id: checkout.selected.id,
-                      })
-                    }}
-                  />
+                  <MobileCanvasErrorBoundary
+                    onError={handleCanvasError}
+                  >
+                    <DeferredMobileCanStage
+                      onReady={() => {
+                        setCanvasReady(true)
+                        trackBloodthirstEvent("canvas_ready", {
+                          canvas_ready_ms: Date.now() - mountAt.current,
+                        })
+                      }}
+                      onError={handleCanvasError}
+                      onFirstDrag={() => {
+                        trackBloodthirstEvent("drag_interaction", {
+                          pack_id: checkout.selected.id,
+                        })
+                      }}
+                    />
+                  </MobileCanvasErrorBoundary>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -377,8 +358,7 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
 
         <section
           ref={proofRef}
-          className="relative flex min-h-[100svh] flex-col justify-center px-5 py-20"
-          style={{ scrollSnapAlign: "start" }}
+          className="relative flex min-h-[100svh] snap-start snap-always flex-col justify-center px-5 py-20"
         >
           <p className="font-mono text-[10px] uppercase tracking-[0.36em] text-blood/90">
             Proof
@@ -409,9 +389,7 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
 
         <section
           ref={offerRef}
-          className="relative min-h-[100svh] px-5 pb-32 pt-16"
-          onFocusCapture={() => setSnapEnabled(false)}
-          onPointerDownCapture={() => setSnapEnabled(false)}
+          className="relative min-h-[100svh] snap-start px-5 pb-32 pt-16"
         >
           <p className="font-mono text-[10px] uppercase tracking-[0.36em] text-blood/90">
             Offer
@@ -473,7 +451,6 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
               onLedgerConfessionChange={setLedgerConfession}
               ledgerConsent={ledgerConsent}
               onLedgerConsentChange={setLedgerConsent}
-              onEngage={() => setSnapEnabled(false)}
             />
           </div>
 
@@ -481,7 +458,6 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
             <button
               type="button"
               onClick={() => {
-                setSnapEnabled(false)
                 setBlackGloveOpen(true)
               }}
               className="flex items-center justify-between gap-4 border border-blood/25 bg-gradient-to-br from-blood/14 to-black/50 px-4 py-4 text-left active:scale-[0.99]"
@@ -502,7 +478,6 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
             <button
               type="button"
               onClick={() => {
-                setSnapEnabled(false)
                 setDoNotBuyOpen(true)
               }}
               className="flex items-center justify-between gap-4 border border-blood/30 bg-[#120608] px-4 py-4 text-left active:scale-[0.99]"
@@ -539,24 +514,28 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
             </div>
           </div>
 
-          <div className="mt-7">
+          <form
+            ref={paymentRef}
+            className="mt-7 scroll-mt-6"
+            onSubmit={(event) => {
+              event.preventDefault()
+              checkout.sign()
+            }}
+          >
             <RitualForm
               form={checkout.form}
               errors={checkout.errors}
               onChange={checkout.updateField}
               onBlur={checkout.blurField}
             />
-          </div>
-
-          <button
-            type="button"
-            onClick={checkout.sign}
+            <button
+            type="submit"
             disabled={checkout.isSubmitting}
             className="mt-7 flex w-full items-center justify-center gap-2 bg-offwhite px-5 py-4 text-sm font-black uppercase text-black active:scale-[0.98] disabled:opacity-55"
           >
             <Lock size={16} />
             {checkout.isSubmitting ? "Opening Razorpay" : `Pay Securely — ${money(checkout.pricing.total)}`}
-          </button>
+            </button>
           {checkout.payError && (
             <p className="mt-3 text-sm text-blood" role="alert">
               {checkout.payError}
@@ -566,8 +545,9 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
             <Gift size={14} className="text-blood" />
             Razorpay secure · GST invoice · damage replacement.
           </p>
+          </form>
         </section>
-      </main>
+      </div>
 
       <MobileBuyBar
         selected={checkout.selected}

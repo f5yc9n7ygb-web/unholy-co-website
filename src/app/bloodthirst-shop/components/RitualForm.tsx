@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { motion, useReducedMotion } from "framer-motion"
 import { useState } from "react"
 import type { ShippingForm } from "@/lib/shop/types"
 import { GSTIN_REGEX, INDIAN_STATES, type FormErrors } from "../hooks/useRitualCheckout"
@@ -20,10 +20,11 @@ export function RitualForm({
   onChange: (f: keyof ShippingForm, v: string) => void
   onBlur: (f: keyof ShippingForm) => void
 }) {
+  const reduceMotion = useReducedMotion()
   return (
     <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+      whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.3 }}
       transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
       className="space-y-4"
@@ -44,7 +45,7 @@ export function RitualForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="City" field="city" value={form.city} error={errors.city} onChange={onChange} onBlur={onBlur} placeholder="City" />
         <div>
-          <label htmlFor="rf-state" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.3em] text-bone/45">
+          <label htmlFor="rf-state" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.3em] text-bone/60">
             State
           </label>
           <div className="relative">
@@ -53,6 +54,8 @@ export function RitualForm({
               value={form.state}
               onChange={(e) => onChange("state", e.target.value)}
               onBlur={() => onBlur("state")}
+              aria-invalid={Boolean(errors.state)}
+              aria-describedby={errors.state ? "rf-state-error" : undefined}
               className={`w-full appearance-none border bg-black/60 px-4 py-3 font-mono text-sm uppercase tracking-wider outline-none transition-colors duration-200 focus:border-blood/70 ${
                 errors.state ? "border-blood/70" : "border-bone/15"
               } ${form.state ? "text-offwhite" : "text-bone/35"}`}
@@ -67,7 +70,7 @@ export function RitualForm({
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-xs text-bone/45">▾</span>
           </div>
           {errors.state && (
-            <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-blood">{errors.state}</p>
+            <p id="rf-state-error" role="alert" className="mt-1 font-mono text-[10px] uppercase tracking-wider text-red-400">{errors.state}</p>
           )}
         </div>
       </div>
@@ -106,7 +109,7 @@ function Field({
   const inputMode = field === "phone" || field === "pincode" ? "numeric" : undefined
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.3em] text-bone/45">
+      <label htmlFor={id} className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.3em] text-bone/60">
         {label}
       </label>
       <input
@@ -118,12 +121,14 @@ function Field({
         inputMode={inputMode}
         onChange={(e) => onChange(field, e.target.value)}
         onBlur={() => onBlur(field)}
-        className={`w-full border bg-black/60 px-4 py-3 font-mono text-sm tracking-wider text-offwhite placeholder:text-bone/25 outline-none transition-colors duration-200 focus:border-blood/70 ${
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${id}-error` : undefined}
+        className={`w-full border bg-black/60 px-4 py-3 font-mono text-sm tracking-wider text-offwhite placeholder:text-bone/45 outline-none transition-colors duration-200 focus:border-blood/70 ${
           error ? "border-blood/70" : "border-bone/15"
         }`}
       />
       {error && (
-        <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-blood">{error}</p>
+        <p id={`${id}-error`} role="alert" className="mt-1 font-mono text-[10px] uppercase tracking-wider text-red-400">{error}</p>
       )}
     </div>
   )
@@ -191,7 +196,7 @@ function GstLookupField({
       <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.32em] text-bone/38">
         Business / GST invoice (optional)
       </p>
-      <label htmlFor="rf-gstNumber" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.3em] text-bone/45">
+      <label htmlFor="rf-gstNumber" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.3em] text-bone/60">
         GST Number
       </label>
       <div className="relative">
@@ -203,13 +208,15 @@ function GstLookupField({
           autoComplete="off"
           onChange={(e) => handleChange(e.target.value)}
           onBlur={handleBlur}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "rf-gstNumber-error" : businessName ? "rf-gstNumber-status" : undefined}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault()
               handleBlur()
             }
           }}
-          className={`w-full border bg-black/60 px-4 py-3 font-mono text-sm uppercase tracking-wider text-offwhite placeholder:text-bone/25 outline-none transition-colors duration-200 focus:border-blood/70 ${
+          className={`w-full border bg-black/60 px-4 py-3 font-mono text-sm uppercase tracking-wider text-offwhite placeholder:text-bone/45 outline-none transition-colors duration-200 focus:border-blood/70 ${
             error ? "border-blood/70" : "border-bone/15"
           }`}
         />
@@ -218,12 +225,12 @@ function GstLookupField({
         )}
       </div>
       {error && (
-        <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-blood" role="alert">
+        <p id="rf-gstNumber-error" className="mt-1 font-mono text-[10px] uppercase tracking-wider text-red-400" role="alert">
           {error}
         </p>
       )}
       {businessName && !error && (
-        <p className="mt-2 border border-green-500/15 bg-green-500/[0.06] px-3 py-2 text-xs text-green-400/90">
+        <p id="rf-gstNumber-status" role="status" className="mt-2 border border-green-500/15 bg-green-500/[0.06] px-3 py-2 text-xs text-green-400/90">
           {businessName}
         </p>
       )}

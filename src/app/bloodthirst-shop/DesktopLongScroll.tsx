@@ -4,7 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import Script from "next/script"
 import type React from "react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   ArrowDown,
   BadgeCheck,
@@ -24,6 +24,8 @@ import { CHECKOUT_ADD_ON_CONFIG, NOTE_TONES, type NoteTone } from "@/lib/shop/ad
 import { COMPANY_LEGAL_NAME, COMPANY_FSSAI_LICENSE } from "@/lib/site/company"
 import type { ShippingForm } from "@/lib/shop/types"
 import { RitualForm } from "./components/RitualForm"
+import { BlackGloveModal, DoNotBuyModal } from "./components/PremiumInquiry"
+import { useCheckoutAddOnDraft } from "./hooks/useCheckoutAddOnDraft"
 import { useRitualCheckout, type AppliedPromo, type CheckoutAddOn } from "./hooks/useRitualCheckout"
 
 type AddOnId = "cursed_note" | "unholy_ledger"
@@ -134,21 +136,6 @@ const FAQS: { question: string; answer: React.ReactNode }[] = [
   },
 ]
 
-const BLACK_GLOVE_BREAKDOWN = [
-  ["Founder's flight", 24999],
-  ["Hotel because sleep is expensive", 11999],
-  ["Black outfit procurement", 4999],
-  ["Sunglasses for indoor judgement", 2999],
-  ["Carrying crate with unnecessary seriousness", 7777],
-  ["Doorstep silence", 4444],
-  ["Judging your purchase decision", 9999],
-  ["Awkward neighbor interaction risk", 6666],
-  ['Saying "Stay Unholy" with a straight face', 3333],
-  ["Emotional damage to founder", 8888],
-  ["Actual delivery", 0],
-  ["Convenience fee for poor decisions", 14897],
-] as const
-
 const PRIMARY_PACKS = PACKS.filter((pack) => pack.id !== "pack24")
 const STOCK_PACK = PACKS.find((pack) => pack.id === "pack24")
 
@@ -163,68 +150,31 @@ export function DesktopLongScroll({ razorpayKey }: { razorpayKey?: string }) {
   const checkoutRef = useRef<HTMLElement>(null)
 
   const [expandedAddOn, setExpandedAddOn] = useState<AddOnId | null>(null)
-  const [noteEnabled, setNoteEnabled] = useState(false)
-  const [ledgerEnabled, setLedgerEnabled] = useState(false)
-  const [noteTone, setNoteTone] = useState<NoteTone>("Funny")
-  const [recipientName, setRecipientName] = useState("")
-  const [noteContext, setNoteContext] = useState("")
-  const [ledgerName, setLedgerName] = useState("")
-  const [ledgerCity, setLedgerCity] = useState("")
-  const [ledgerConfession, setLedgerConfession] = useState("")
-  const [ledgerConsent, setLedgerConsent] = useState(false)
-  const [doNotBuySent, setDoNotBuySent] = useState(false)
+  const {
+    noteEnabled, setNoteEnabled, ledgerEnabled, setLedgerEnabled,
+    noteTone, setNoteTone, recipientName, setRecipientName,
+    noteContext, setNoteContext, ledgerName, setLedgerName,
+    ledgerCity, setLedgerCity, ledgerConfession, setLedgerConfession,
+    ledgerConsent, setLedgerConsent, checkoutAddOns,
+  } = useCheckoutAddOnDraft()
   const [codeInput, setCodeInput] = useState("")
   const [codeLoading, setCodeLoading] = useState(false)
   const [codeMessage, setCodeMessage] = useState<string | null>(null)
   const [codeError, setCodeError] = useState<string | null>(null)
   const [blackGloveOpen, setBlackGloveOpen] = useState(false)
   const [doNotBuyOpen, setDoNotBuyOpen] = useState(false)
-  const [blackGloveSent, setBlackGloveSent] = useState(false)
   const [mobileBarBlocked, setMobileBarBlocked] = useState(true)
-
-  const checkoutAddOns = useMemo<CheckoutAddOn[]>(() => {
-    const items: CheckoutAddOn[] = []
-    if (noteEnabled) {
-      const note = CHECKOUT_ADD_ON_CONFIG.cursed_note
-      items.push({
-        id: note.id,
-        title: note.title,
-        price: note.price,
-        data: { tone: noteTone, recipientName, context: noteContext },
-      })
-    }
-    if (ledgerEnabled && ledgerConsent) {
-      const ledger = CHECKOUT_ADD_ON_CONFIG.unholy_ledger
-      items.push({
-        id: ledger.id,
-        title: ledger.title,
-        price: ledger.price,
-        data: {
-          displayName: ledgerName,
-          city: ledgerCity,
-          confession: ledgerConfession,
-          consent: ledgerConsent,
-        },
-      })
-    }
-    return items
-  }, [
-    ledgerCity,
-    ledgerConfession,
-    ledgerConsent,
-    ledgerEnabled,
-    ledgerName,
-    noteContext,
-    noteEnabled,
-    noteTone,
-    recipientName,
-  ])
 
   const checkout = useRitualCheckout({
     razorpayKey,
     defaultPackId: "pack3",
     checkoutAddOns,
   })
+  const { goToReceipt, isSealed } = checkout
+
+  useEffect(() => {
+    if (isSealed) goToReceipt()
+  }, [goToReceipt, isSealed])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -249,8 +199,9 @@ export function DesktopLongScroll({ razorpayKey }: { razorpayKey?: string }) {
     return () => observer.disconnect()
   }, [])
 
-  const scrollToPacks = () => packRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-  const scrollToCheckout = () => checkoutRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  const scrollBehavior = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+  const scrollToPacks = () => packRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "start" })
+  const scrollToCheckout = () => checkoutRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "start" })
 
   const applyCode = async (forcedCode?: string) => {
     const code = (forcedCode || codeInput).trim().toUpperCase()
@@ -329,7 +280,7 @@ export function DesktopLongScroll({ razorpayKey }: { razorpayKey?: string }) {
         src="https://checkout.razorpay.com/v1/checkout.js"
         strategy="afterInteractive"
       />
-      <main className="min-h-screen bg-[#090909] text-bone">
+      <div className="min-h-screen bg-[#090909] text-bone">
         <div aria-hidden className="fixed inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(176,0,32,0.20),transparent_35%),linear-gradient(180deg,#111_0%,#090909_50%,#050505_100%)]" />
         <div aria-hidden className="pointer-events-none fixed inset-0 opacity-[0.04]" style={{ backgroundImage: "url('/bloodthirst-texture.webp')" }} />
 
@@ -792,41 +743,11 @@ export function DesktopLongScroll({ razorpayKey }: { razorpayKey?: string }) {
           onClick={scrollToCheckout}
           visible={!mobileBarBlocked}
         />
-      </main>
+      </div>
 
-      {blackGloveOpen && (
-        <BlackGloveModal
-          sent={blackGloveSent}
-          onClose={() => setBlackGloveOpen(false)}
-          onSubmit={() => setBlackGloveSent(true)}
-        />
-      )}
+      {blackGloveOpen && <BlackGloveModal onClose={() => setBlackGloveOpen(false)} />}
 
-      {doNotBuyOpen && (
-        <ModalFrame title="You clicked it. That's already concerning." onClose={() => setDoNotBuyOpen(false)}>
-          <p className="text-sm leading-relaxed text-bone/68">
-            66 cans, a signed crate, a cursed note, entry into the Unholy Ledger, and enough hydration to make your accountant uncomfortable. This one&apos;s an inquiry — we confirm stock and logistics (and your wellbeing) before anything is charged.
-          </p>
-          <InquiryForm
-            idPrefix="dnb"
-            inquiryType="Do Not Buy This (66 cans)"
-            contextLine="Do Not Buy This inquiry (₹66,666 — 66 cans, signed crate, ledger entry, founder judgement)."
-            submitLabel="Proceed. I Am Unwell."
-            sent={doNotBuySent}
-            sentMessage="Logged. Someone will reach out to confirm this poor decision before any payment."
-            onSent={() => setDoNotBuySent(true)}
-            secondary={
-              <button
-                type="button"
-                onClick={selectTrialAndReturn}
-                className="border border-bone/20 px-5 py-3 text-sm font-bold uppercase text-offwhite"
-              >
-                Take Me Back to the ₹699 Pack.
-              </button>
-            }
-          />
-        </ModalFrame>
-      )}
+      {doNotBuyOpen && <DoNotBuyModal onClose={() => setDoNotBuyOpen(false)} onTakeTrial={selectTrialAndReturn} />}
     </div>
   )
 }
@@ -972,7 +893,14 @@ function CartPanel({
 }) {
   const [deliveryOpen, setDeliveryOpen] = useState(false)
   return (
-    <div className="border border-bone/12 bg-[#050505]/95 p-6 shadow-2xl shadow-black/30">
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (deliveryOpen) onSign()
+        else setDeliveryOpen(true)
+      }}
+      className="border border-bone/12 bg-[#050505]/95 p-6 shadow-2xl shadow-black/30 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto"
+    >
       <p className="text-xs font-bold uppercase text-blood">Your Sin</p>
       <div className="mt-4 space-y-3 text-sm text-bone/70">
         <CartRow label={selected.title} value={money(selected.price)} />
@@ -983,7 +911,7 @@ function CartPanel({
                 type="button"
                 onClick={() => onRemoveAddOn(item.id)}
                 aria-label={`Remove ${item.title}`}
-                className="shrink-0 text-bone/40 transition-colors hover:text-blood"
+                className="flex h-8 w-8 shrink-0 items-center justify-center text-bone/55 transition-colors hover:text-blood"
               >
                 <X size={13} />
               </button>
@@ -1010,8 +938,7 @@ function CartPanel({
             <RitualForm form={form} errors={errors} onChange={onChange} onBlur={onBlur} />
           </div>
           <button
-            type="button"
-            onClick={onSign}
+            type="submit"
             disabled={isSubmitting}
             className="mt-6 flex w-full items-center justify-center gap-2 bg-offwhite px-5 py-4 text-sm font-black uppercase text-black transition-transform hover:-translate-y-0.5 disabled:opacity-55"
           >
@@ -1052,7 +979,7 @@ function CartPanel({
           </Link>
         </p>
       </div>
-    </div>
+    </form>
   )
 }
 
@@ -1111,214 +1038,5 @@ function TextInput({ label, value, onChange, placeholder }: { label: string; val
         className="mt-2 w-full border border-bone/15 bg-black/60 px-4 py-3 text-sm text-offwhite outline-none focus:border-blood"
       />
     </div>
-  )
-}
-
-function ModalFrame({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  const panelRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null
-    const panel = panelRef.current
-    const focusables = panel?.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
-    )
-    ;(focusables?.[0] ?? panel)?.focus()
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault()
-        onClose()
-        return
-      }
-      if (event.key === "Tab" && focusables && focusables.length > 0) {
-        const first = focusables[0]
-        const last = focusables[focusables.length - 1]
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault()
-          last.focus()
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault()
-          first.focus()
-        }
-      }
-    }
-
-    document.addEventListener("keydown", onKeyDown)
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.removeEventListener("keydown", onKeyDown)
-      document.body.style.overflow = previousOverflow
-      previouslyFocused?.focus?.()
-    }
-  }, [onClose])
-
-  return (
-    <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-      role="presentation"
-      onClick={onClose}
-    >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-        tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto border border-bone/15 bg-[#090909] p-6 text-bone shadow-2xl outline-none md:p-8"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <h2 id="modal-title" className="font-cinzel text-3xl font-black uppercase leading-tight text-offwhite">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Close modal" className="p-2 text-bone/60 hover:text-offwhite">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="mt-6">{children}</div>
-      </div>
-    </div>
-  )
-}
-
-function InquiryForm({
-  idPrefix,
-  inquiryType,
-  contextLine,
-  submitLabel,
-  sent,
-  sentMessage,
-  onSent,
-  secondary,
-}: {
-  idPrefix: string
-  inquiryType: string
-  contextLine: string
-  submitLabel: string
-  sent: boolean
-  sentMessage: string
-  onSent: () => void
-  secondary?: React.ReactNode
-}) {
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [phone, setPhone] = useState("")
-  const [city, setCity] = useState("")
-  const [details, setDetails] = useState("")
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const submit = async () => {
-    if (submitting) return
-    if (!name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError("Add your name and a valid email so we can reach you.")
-      return
-    }
-    setSubmitting(true)
-    setError(null)
-    try {
-      const res = await fetch("/api/contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          phone: phone.trim() || undefined,
-          inquiry_type: inquiryType,
-          source: "bloodthirst-shop",
-          message: `${contextLine}\nCity: ${city.trim() || "—"}\nDetails: ${details.trim() || "—"}`,
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || "Could not send your inquiry right now. Email rituals@theunholy.co instead.")
-      }
-      onSent()
-    } catch (err: any) {
-      setError(err?.message || "Could not send your inquiry right now. Email rituals@theunholy.co instead.")
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  if (sent) {
-    return (
-      <div className="mt-6 border border-green-500/25 bg-green-500/10 p-4 text-sm text-green-300">
-        {sentMessage}
-      </div>
-    )
-  }
-
-  const inputClass =
-    "w-full border border-bone/15 bg-black/60 px-4 py-3 text-sm text-offwhite outline-none focus:border-blood"
-  const labelClass = "mb-1.5 block text-xs font-bold uppercase tracking-wide text-bone/52"
-
-  return (
-    <div className="mt-6 grid gap-3">
-      <div>
-        <label htmlFor={`${idPrefix}-name`} className={labelClass}>Name</label>
-        <input id={`${idPrefix}-name`} value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" className={inputClass} placeholder="Your name" />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label htmlFor={`${idPrefix}-email`} className={labelClass}>Email</label>
-          <input id={`${idPrefix}-email`} value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" className={inputClass} placeholder="you@domain.com" />
-        </div>
-        <div>
-          <label htmlFor={`${idPrefix}-phone`} className={labelClass}>Phone (optional)</label>
-          <input id={`${idPrefix}-phone`} value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" inputMode="tel" autoComplete="tel" className={inputClass} placeholder="10-digit mobile" />
-        </div>
-      </div>
-      <div>
-        <label htmlFor={`${idPrefix}-city`} className={labelClass}>City</label>
-        <input id={`${idPrefix}-city`} value={city} onChange={(event) => setCity(event.target.value)} autoComplete="address-level2" className={inputClass} placeholder="City" />
-      </div>
-      <div>
-        <label htmlFor={`${idPrefix}-details`} className={labelClass}>Details</label>
-        <textarea id={`${idPrefix}-details`} value={details} onChange={(event) => setDetails(event.target.value)} rows={3} className={`resize-none ${inputClass}`} placeholder="Anything we should know" />
-      </div>
-      {error && <p className="text-sm text-blood" role="alert">{error}</p>}
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <button type="button" onClick={submit} disabled={submitting} className="bg-offwhite px-5 py-3 text-sm font-bold uppercase text-black transition-opacity disabled:opacity-55">
-          {submitting ? "Sending…" : submitLabel}
-        </button>
-        {secondary}
-      </div>
-    </div>
-  )
-}
-
-function BlackGloveModal({ sent, onClose, onSubmit }: { sent: boolean; onClose: () => void; onSubmit: () => void }) {
-  return (
-    <ModalFrame title="Black Glove Delivery" onClose={onClose}>
-      <p className="text-sm leading-relaxed text-bone/68">
-        Your BloodThirst, delivered by the founder, because normal shipping lacks emotional damage.
-      </p>
-      <div className="mt-6 space-y-2">
-        {BLACK_GLOVE_BREAKDOWN.map(([label, price]) => (
-          <CartRow key={label} label={label} value={money(price)} />
-        ))}
-        <div className="border-t border-bone/10 pt-3">
-          <CartRow label="Total" value="₹1,00,000" />
-        </div>
-      </div>
-      <p className="mt-5 text-sm leading-relaxed text-bone/56">
-        Inquiry only — nothing is charged here. Available only where physically possible. If we cannot complete the ritual, we&apos;ll contact you before accepting the order. We are dramatic, not fraudulent.
-      </p>
-      <InquiryForm
-        idPrefix="bg"
-        inquiryType="Black Glove Delivery"
-        contextLine="Black Glove Delivery inquiry (₹1,00,000)."
-        submitLabel="Summon the Founder"
-        sent={sent}
-        sentMessage="Inquiry marked. The founder has been emotionally notified. Check your inbox for confirmation."
-        onSent={onSubmit}
-        secondary={
-          <button type="button" onClick={onClose} className="border border-bone/20 px-5 py-3 text-sm font-bold uppercase text-offwhite">
-            Return to Normal Shipping Like a Coward
-          </button>
-        }
-      />
-    </ModalFrame>
   )
 }

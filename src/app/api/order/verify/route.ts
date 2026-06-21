@@ -8,6 +8,8 @@ import { hasAirtableOrdersConfig, getRequiredEnv, sendOrderConfirmationEmail, sa
 import { getKVNamespace } from "@/lib/server/kv"
 import {
   ORDER_SESSION_COOKIE,
+  RECEIPT_COOKIE,
+  RECEIPT_COOKIE_MAX_AGE_SECONDS,
   createReceiptToken,
   readOrderSessionToken,
 } from "@/lib/server/order-session"
@@ -16,7 +18,6 @@ import {
   completePaymentClaim,
   failPaymentClaim,
 } from "@/lib/server/payment-claim"
-import { consumeReservation } from "@/lib/server/reservations"
 import {
   ORDER_BODY_LIMIT_BYTES,
   checkRateLimit,
@@ -27,7 +28,7 @@ import {
   validateRequestOrigin,
 } from "@/lib/server/security"
 import { createShiprocketOrder } from "@/lib/server/shiprocket"
-import { decrementStock } from "@/lib/server/inventory"
+import { settlePaidOrderCritical } from "@/lib/server/paid-order-critical"
 import { readCheckoutAddOns, summarizeAddOn, type CheckoutAddOnRecord } from "@/lib/shop/addons"
 import { incrementPromoUsage, consumePromoReservation } from "@/lib/shop/promo"
 import { markCartConvertedAndSupersedeForEmail } from "@/lib/server/abandoned-cart"
@@ -294,7 +295,25 @@ export async function POST(request: NextRequest) {
         }).catch(() => [] as Awaited<ReturnType<typeof queryAirtableRecords>>)
 
     if (existingSupabasePayment || existingPayment.length > 0) {
-      // Record already written (likely by webhook) — backfill and return success
+      // A prior attempt persisted payment but did not finish its retryable
+      // critical work. The reservation status prevents a second stock move.
+      await settlePaidOrderCritical({
+        orderId,
+        packId: pack.id,
+        quantity: pack.qty,
+        kv,
+        settlePromo: async () => {
+          if (!orderSession.promoCode) return
+          const consumed = await consumePromoReservation(orderId)
+          if (!consumed && orderSession.promoRecordId) {
+            await incrementPromoUsage(orderSession.promoRecordId)
+          }
+        },
+      })
+      await completePaymentClaim(paymentId)
+      claimedPaymentId = null
+
+      // Record already written (likely by webhook) — backfill and return success.
       await backfillExistingPaymentRecord({
         ordersBaseId, orderId, paymentId,
         shipping: orderSession.shipping, fullAddress, amount: chargedAmount,
@@ -384,29 +403,21 @@ export async function POST(request: NextRequest) {
       throw new Error("No backend store is configured for captured payment persistence.")
     }
 
-    // Order/payment durably persisted — mark the claim completed (terminal).
-    // The side effects below are non-fatal best-effort and must not flip the
-    // claim back to retryable.
-    await completePaymentClaim(paymentId)
-    claimedPaymentId = null
-
-    // Settle this order's reservation (reserved -> consumed) so it is never
-    // later released or expired; decrementStock below applies the sale counter.
-    await consumeReservation(orderId)
-
-    // Critical tasks must run sequentially: if stock decrement throws, we must
-    // NOT increment the promo counter (and vice versa). Running them in
-    // Promise.all left the system in a half-applied state on partial failure.
+    // Keep the payment claim retryable until stock and promo state are durable.
     try {
-      await decrementStock(pack.id, pack.qty, orderId, kv)
-      if (orderSession.promoCode) {
-        // Settle the reserved promo slot; only fall back to the legacy increment
-        // when there was no reservation (built-in/unlimited/pre-migration).
-        const consumed = await consumePromoReservation(orderId)
-        if (!consumed && orderSession.promoRecordId) {
-          await incrementPromoUsage(orderSession.promoRecordId)
-        }
-      }
+      await settlePaidOrderCritical({
+        orderId,
+        packId: pack.id,
+        quantity: pack.qty,
+        kv,
+        settlePromo: async () => {
+          if (!orderSession.promoCode) return
+          const consumed = await consumePromoReservation(orderId)
+          if (!consumed && orderSession.promoRecordId) {
+            await incrementPromoUsage(orderSession.promoRecordId)
+          }
+        },
+      })
     } catch (err) {
       await logErrorToAirtable(`Critical fulfillment failure (Order: ${orderId})`, err, {
         route: "/api/order/verify",
@@ -416,7 +427,11 @@ export async function POST(request: NextRequest) {
         paymentId,
         severity: "critical",
       }).catch(() => {})
+      throw err
     }
+
+    await completePaymentClaim(paymentId)
+    claimedPaymentId = null
 
     // Email dedup — webhook may also fire sendOrderConfirmationEmail; claim
     // the key here so only one path sends.
@@ -623,23 +638,33 @@ function createSuccessResponse(options: {
   addOns?: CheckoutAddOnRecord[]
   pending?: boolean
 }) {
+  const receiptToken = createReceiptToken({
+    packId: options.pack.id,
+    qty: options.pack.qty,
+    orderId: options.orderId,
+    receiptId: options.receiptId,
+    packTitle: options.pack.title,
+    price: options.chargedAmount,
+    pricing: options.pricing,
+    promoCode: options.promoCode,
+    addOns: options.addOns,
+    shippingName: options.shippingName,
+    shippingCity: options.shippingCity,
+    shippingState: options.shippingState,
+    pending: options.pending,
+  })
   const response = NextResponse.json({
     ok: true,
     ...(options.pending ? { pending: true } : {}),
-    receiptToken: createReceiptToken({
-      packId: options.pack.id,
-      qty: options.pack.qty,
-      orderId: options.orderId,
-      receiptId: options.receiptId,
-      packTitle: options.pack.title,
-      price: options.chargedAmount,
-      pricing: options.pricing,
-      promoCode: options.promoCode,
-      addOns: options.addOns,
-      shippingName: options.shippingName,
-      shippingCity: options.shippingCity,
-      shippingState: options.shippingState,
-    }),
+    receiptToken,
+  })
+
+  response.cookies.set(RECEIPT_COOKIE, receiptToken, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/thanks",
+    maxAge: RECEIPT_COOKIE_MAX_AGE_SECONDS,
   })
 
   response.cookies.set(ORDER_SESSION_COOKIE, "", {

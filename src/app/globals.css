@@ -60,7 +60,7 @@ a:focus-visible,
 select:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgba(176, 0, 32, 0.8);
+  outline: 2px solid rgba(255, 92, 115, 0.95);
   outline-offset: 3px;
 }
 
@@ -776,4 +776,11 @@ button.btn:hover {
   background:
     radial-gradient(1000px 600px at 50% 10%, rgba(176,0,32,0.10), transparent 50%),
     radial-gradient(800px 400px at 50% 90%, rgba(200,80,40,0.05), transparent 60%);
+}
+
+/* Full-panel snapping needs enough vertical room to keep each scene legible. */
+@media (max-height: 700px) {
+  .bloodthirst-ritual-scroll {
+    scroll-snap-type: none;
+  }
 }

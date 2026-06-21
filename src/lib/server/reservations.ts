@@ -1,6 +1,9 @@
 import type { KVNamespace } from "@/lib/server/kv"
 import {
+  getSupabaseReservationById,
   insertSupabaseReservation,
+  isSupabaseConfigured,
+  restoreConsumedSupabaseReservation,
   transitionSupabaseReservation,
 } from "@/lib/server/supabase"
 import { releaseStockByPack } from "@/lib/server/inventory"
@@ -44,22 +47,51 @@ export async function createReservation(opts: {
  * counter itself is applied by decrementStock; this only retires the hold so it
  * can never later be released or expired.
  */
-export async function consumeReservation(reservationId: string): Promise<void> {
-  await transitionSupabaseReservation(reservationId, "consumed").catch(() => null)
+export type ConsumeReservationResult = "consumed" | "already_consumed" | "released" | "expired" | "missing" | "unavailable"
+
+export async function consumeReservation(reservationId: string): Promise<ConsumeReservationResult> {
+  if (!isSupabaseConfigured()) return "missing"
+  try {
+    const consumed = await transitionSupabaseReservation(reservationId, "consumed")
+    if (consumed) return "consumed"
+    const existing = await getSupabaseReservationById(reservationId)
+    if (!existing) return "missing"
+    if (existing.status === "consumed") return "already_consumed"
+    if (existing.status === "reserved") return "unavailable"
+    return existing.status
+  } catch (err) {
+    console.error(`consumeReservation failed for ${reservationId}:`, err)
+    return "unavailable"
+  }
+}
+
+export async function restoreConsumedReservation(reservationId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return
+  const restored = await restoreConsumedSupabaseReservation(reservationId)
+  if (!restored) throw new Error(`Unable to restore consumed reservation ${reservationId}`)
 }
 
 /**
- * Release a reservation's held stock exactly once. Returns true if THIS call won
- * the atomic transition (and therefore released the counter), false if the
- * reservation was already settled/released/expired or doesn't exist — letting
- * the caller decide whether to fall back to a legacy release.
+ * Release a reservation's held stock exactly once. The explicit result keeps
+ * callers from treating an already-settled row or a database outage as a
+ * missing legacy row and releasing the same stock twice.
  */
+export type ReleaseReservationResult = "released" | "settled" | "missing" | "unavailable"
+
 export async function releaseReservation(
   reservationId: string,
   kv?: KVNamespace | null,
-): Promise<boolean> {
-  const won = await transitionSupabaseReservation(reservationId, "released").catch(() => null)
-  if (!won) return false
-  await releaseStockByPack(won.pack_id, won.quantity, kv)
-  return true
+): Promise<ReleaseReservationResult> {
+  if (!isSupabaseConfigured()) return "missing"
+  try {
+    const won = await transitionSupabaseReservation(reservationId, "released")
+    if (won) {
+      await releaseStockByPack(won.pack_id, won.quantity, kv)
+      return "released"
+    }
+    return (await getSupabaseReservationById(reservationId)) ? "settled" : "missing"
+  } catch (err) {
+    console.error(`releaseReservation failed for ${reservationId}:`, err)
+    return "unavailable"
+  }
 }

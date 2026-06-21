@@ -50,6 +50,7 @@ export type ReceiptPayload = {
   shippingName?: string
   shippingCity?: string
   shippingState?: string
+  pending?: boolean
 }
 
 type SubscriptionPayload = {
@@ -69,9 +70,11 @@ const singleUseStore = globalThis.__unholySingleUseStore ?? new Map<string, numb
 globalThis.__unholySingleUseStore = singleUseStore
 
 export const ORDER_SESSION_COOKIE = "unholy-order-session"
+export const RECEIPT_COOKIE = "unholy-receipt"
+export const RECEIPT_COOKIE_MAX_AGE_SECONDS = 2 * 60 * 60
 
 const ORDER_SESSION_TTL_MS = 60 * 60 * 1000
-const RECEIPT_TTL_MS = 2 * 60 * 60 * 1000
+const RECEIPT_TTL_MS = RECEIPT_COOKIE_MAX_AGE_SECONDS * 1000
 const PAYMENT_REPLAY_TTL_MS = 24 * 60 * 60 * 1000
 const SUBSCRIPTION_TTL_MS = 24 * 60 * 60 * 1000
 

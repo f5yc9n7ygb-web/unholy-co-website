@@ -9,13 +9,14 @@ import * as THREE from "three"
 type MobileCanStageProps = {
   onReady?: () => void
   onFirstDrag?: () => void
+  onError?: () => void
 }
 
 const FRONT = Math.PI - 1.1
 const damp = (current: number, target: number, speed: number, delta: number) =>
   THREE.MathUtils.lerp(current, target, 1 - Math.exp(-speed * Math.min(delta, 0.1)))
 
-export function MobileCanStage({ onReady, onFirstDrag }: MobileCanStageProps) {
+export function MobileCanStage({ onReady, onFirstDrag, onError }: MobileCanStageProps) {
   const motionRef = useRef({
     current: FRONT,
     target: FRONT,
@@ -53,8 +54,7 @@ export function MobileCanStage({ onReady, onFirstDrag }: MobileCanStageProps) {
   return (
     <div
       className="absolute inset-0 touch-pan-y"
-      role="img"
-      aria-label="Interactive BloodThirst can"
+      aria-hidden="true"
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId)
         if (inertiaRef.current) cancelAnimationFrame(inertiaRef.current)
@@ -107,7 +107,7 @@ export function MobileCanStage({ onReady, onFirstDrag }: MobileCanStageProps) {
         {/* Gate both onReady and the can render on the GLB resolving — the model
             is deliberately not preloaded, so useGLTF/useTexture will suspend. */}
         <Suspense fallback={null}>
-          <SceneController invalidateRef={invalidateRef} onReady={onReady} />
+          <SceneController invalidateRef={invalidateRef} onReady={onReady} onError={onError} />
           <Can motionRef={motionRef} />
         </Suspense>
       </Canvas>
@@ -118,9 +118,11 @@ export function MobileCanStage({ onReady, onFirstDrag }: MobileCanStageProps) {
 function SceneController({
   invalidateRef,
   onReady,
+  onError,
 }: {
   invalidateRef: React.MutableRefObject<(() => void) | null>
   onReady?: () => void
+  onError?: () => void
 }) {
   const { gl, invalidate } = useThree()
   const frames = useRef(0)
@@ -130,11 +132,17 @@ function SceneController({
     invalidateRef.current = invalidate
     gl.toneMapping = THREE.ACESFilmicToneMapping
     gl.toneMappingExposure = 1.08
+    const handleContextLost = (event: Event) => {
+      event.preventDefault()
+      onError?.()
+    }
+    gl.domElement.addEventListener("webglcontextlost", handleContextLost)
     invalidate()
     return () => {
       invalidateRef.current = null
+      gl.domElement.removeEventListener("webglcontextlost", handleContextLost)
     }
-  }, [gl, invalidate, invalidateRef])
+  }, [gl, invalidate, invalidateRef, onError])
 
   useFrame(() => {
     if (fired.current) return

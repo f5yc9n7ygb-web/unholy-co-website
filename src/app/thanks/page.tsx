@@ -1,4 +1,6 @@
+import { cookies } from "next/headers"
 import { readReceiptToken } from "@/lib/server/order-session"
+import { RECEIPT_COOKIE } from "@/lib/server/order-session"
 import { ThanksContent } from "./ThanksContent"
 
 export const metadata = {
@@ -14,7 +16,8 @@ type ThanksPageProps = {
 export default async function ThanksPage({ searchParams }: ThanksPageProps) {
   const resolvedSearchParams = (await searchParams) || {}
   const receiptParam = resolvedSearchParams.receipt
-  const receiptToken = Array.isArray(receiptParam) ? receiptParam[0] : receiptParam
+  const legacyReceiptToken = Array.isArray(receiptParam) ? receiptParam[0] : receiptParam
+  const receiptToken = legacyReceiptToken || (await cookies()).get(RECEIPT_COOKIE)?.value
   const receipt = readReceiptToken(receiptToken)
 
   return (

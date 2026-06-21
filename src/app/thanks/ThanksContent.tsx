@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { useEffect, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, type ReactNode } from "react"
 import { usePostHog } from "posthog-js/react"
 import { TransitionLink } from "@/components/ux/TransitionLink"
 import { trackPixel } from "@/lib/meta-pixel"
@@ -22,6 +22,7 @@ type ReceiptSummary = {
   shippingName?: string
   shippingCity?: string
   shippingState?: string
+  pending?: boolean
 } | null
 
 const nextSteps = [
@@ -37,9 +38,16 @@ const fadeUp = (delay = 0) => ({
 })
 
 export function ThanksContent({ receipt }: { receipt: ReceiptSummary }) {
-  const isVerified = Boolean(receipt)
+  const isVerified = Boolean(receipt && !receipt.pending)
   const posthog = usePostHog()
   const total = receiptTotal(receipt)
+
+  useLayoutEffect(() => {
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has("receipt")) return
+    url.searchParams.delete("receipt")
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
+  }, [])
 
   useEffect(() => {
     // The BloodThirst finale locks the document while it seals. A route handoff

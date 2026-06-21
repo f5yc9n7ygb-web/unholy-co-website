@@ -2,6 +2,7 @@
 
 import { BadgeCheck, Gift, X } from "lucide-react"
 import type React from "react"
+import { useEffect, useRef } from "react"
 import { CHECKOUT_ADD_ON_CONFIG, NOTE_TONES, type NoteTone } from "@/lib/shop/addon-config"
 
 type MobileAddOnsSheetProps = {
@@ -51,14 +52,57 @@ export function MobileAddOnsSheet({
   onLedgerConsentChange,
   onEngage,
 }: MobileAddOnsSheetProps) {
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
   const note = CHECKOUT_ADD_ON_CONFIG.cursed_note
   const ledger = CHECKOUT_ADD_ON_CONFIG.unholy_ledger
   const enabledCount = Number(noteEnabled) + Number(ledgerEnabled && ledgerConsent)
 
+  useEffect(() => {
+    if (!open) return
+    const previousOverflow = document.body.style.overflow
+    const trigger = triggerRef.current
+    document.body.style.overflow = "hidden"
+    const sheet = sheetRef.current
+    const focusable = () => Array.from(sheet?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) || [])
+    requestAnimationFrame(() => focusable()[0]?.focus())
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        onOpenChange(false)
+        return
+      }
+      if (event.key !== "Tab") return
+      const items = focusable()
+      if (!items.length) return
+      const first = items[0]!
+      const last = items[items.length - 1]!
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("keydown", onKeyDown)
+      document.body.style.overflow = previousOverflow
+      trigger?.focus()
+    }
+  }, [onOpenChange, open])
+
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
+        aria-expanded={open}
+        aria-controls="mobile-add-ons-sheet"
         onClick={() => {
           onEngage?.()
           onOpenChange(true)
@@ -79,21 +123,27 @@ export function MobileAddOnsSheet({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[80] md:hidden" onPointerDown={onEngage}>
-          <button
-            type="button"
-            aria-label="Close add-ons"
+        <div className="fixed inset-0 z-[80]" onPointerDown={onEngage}>
+          <div
+            aria-hidden="true"
             className="absolute inset-0 bg-black/70"
             onClick={() => onOpenChange(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[88svh] overflow-y-auto border-t border-bone/15 bg-[#090909] px-4 pb-5 pt-3 shadow-[0_-30px_80px_rgba(0,0,0,0.7)]">
+          <div
+            ref={sheetRef}
+            id="mobile-add-ons-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-add-ons-title"
+            className="absolute inset-x-0 bottom-0 max-h-[88svh] overflow-y-auto border-t border-bone/15 bg-[#090909] px-4 pb-5 pt-3 shadow-[0_-30px_80px_rgba(0,0,0,0.7)]"
+          >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-bone/20" aria-hidden />
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="font-mono text-[10px] uppercase tracking-[0.32em] text-blood/80">
                   Add-ons
                 </p>
-                <h3 className="font-cinzel text-2xl font-black uppercase text-offwhite">
+                <h3 id="mobile-add-ons-title" className="font-cinzel text-2xl font-black uppercase text-offwhite">
                   Make It Worse
                 </h3>
               </div>
@@ -120,11 +170,13 @@ export function MobileAddOnsSheet({
                   <div className="mt-4 space-y-4">
                     <div>
                       <FieldLabel>Choose note type</FieldLabel>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Note tone">
                         {NOTE_TONES.map((tone) => (
                           <button
                             key={tone}
                             type="button"
+                            role="radio"
+                            aria-checked={noteTone === tone}
                             onClick={() => onNoteToneChange(tone)}
                             className={`border px-3 py-2 text-left text-xs transition-colors active:scale-[0.98] ${
                               noteTone === tone

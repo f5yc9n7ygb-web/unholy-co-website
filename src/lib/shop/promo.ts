@@ -29,6 +29,7 @@ import {
   linkPromoReservation,
   consumePromoReservationByOrder,
   releasePromoReservationByOrder,
+  getExpiredPromoReservationOrderIds,
   type SupabasePromoCode,
 } from "@/lib/server/supabase"
 
@@ -256,8 +257,7 @@ export async function reservePromoUsage(
 
 /** Link a reserved promo slot to its Razorpay order id once the order exists. */
 export async function linkPromoReservationToOrder(reservationId: string, orderId: string): Promise<void> {
-  await linkPromoReservation(reservationId, orderId).catch((err) =>
-    console.error("linkPromoReservation failed:", err))
+  await linkPromoReservation(reservationId, orderId)
 }
 
 /**
@@ -272,6 +272,15 @@ export async function consumePromoReservation(orderId: string): Promise<boolean>
 /** Release a promo reservation on failure/cancel/supersede (only-once). */
 export async function releasePromoReservation(orderId: string): Promise<boolean> {
   return releasePromoReservationByOrder(orderId).catch(() => false)
+}
+
+export async function releaseExpiredPromoReservations(limit = 100): Promise<{ found: number; released: number }> {
+  const orderIds = await getExpiredPromoReservationOrderIds(limit)
+  let released = 0
+  for (const orderId of orderIds) {
+    if (await releasePromoReservationByOrder(orderId)) released++
+  }
+  return { found: orderIds.length, released }
 }
 
 function calculateDiscount(promo: PromoCode, orderTotal: number): number {

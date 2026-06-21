@@ -12,8 +12,10 @@ function PostHogPageView() {
   useEffect(() => {
     if (!pathname || pathname === lastPath.current) return
     lastPath.current = pathname
+    const currentUrl = new URL(window.location.href)
+    currentUrl.searchParams.delete("receipt")
     posthog.capture("$pageview", {
-      $current_url: window.location.href,
+      $current_url: currentUrl.toString(),
     })
   }, [pathname])
 

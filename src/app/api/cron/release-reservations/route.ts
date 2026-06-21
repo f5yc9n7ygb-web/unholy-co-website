@@ -7,9 +7,12 @@ import {
 import { isAuthorizedCron } from "@/lib/server/security"
 import { releaseStockByPack } from "@/lib/server/inventory"
 import {
+  getExpiredSupabaseReservations,
   getSupabaseOrdersByStatusesBefore,
   updateSupabaseOrderByRazorpayOrderId,
 } from "@/lib/server/supabase"
+import { releaseReservation } from "@/lib/server/reservations"
+import { releaseExpiredPromoReservations } from "@/lib/shop/promo"
 
 /**
  * POST /api/cron/release-reservations
@@ -49,6 +52,24 @@ export async function POST(request: NextRequest) {
     const pendingCutoff = new Date(Date.now() - PENDING_SAFETY_AGE_MS).toISOString()
     const errors: string[] = []
 
+    const expiredPromos = await releaseExpiredPromoReservations(100).catch((err) => {
+      errors.push(`expired promo reservations: ${err?.message || String(err)}`)
+      return { found: 0, released: 0 }
+    })
+
+    const expiredReservations = await getExpiredSupabaseReservations(100).catch((err) => {
+      errors.push(`supabase expired reservations: ${err?.message || String(err)}`)
+      return []
+    })
+    let reservationRowsReleased = 0
+    for (const reservation of expiredReservations) {
+      const result = await releaseReservation(reservation.reservation_id)
+      if (result === "released") reservationRowsReleased++
+      if (result === "unavailable") {
+        errors.push(`reservation ${reservation.reservation_id}: release unavailable`)
+      }
+    }
+
     // pending: created_at > 72h ago (safety net for carts the abandoned-cart cron never processed)
     // email_2_sent: email_2_sent_at > 24h ago (the abandoned-cart cron stamps this column when
     //   it sends email 2 — exact parity with the Airtable "Email 2 Sent At" formula).
@@ -70,6 +91,7 @@ export async function POST(request: NextRequest) {
     })
 
     let supabaseCartsExpired = 0
+    const releasedSupabaseOrderIds = new Set<string>()
     for (const cart of staleSupabaseCarts) {
       const sourcePayload = cart.source_payload || {}
       const packId = String(sourcePayload.packId || "")
@@ -77,8 +99,11 @@ export async function POST(request: NextRequest) {
       if (!packId || qty <= 0) continue
 
       try {
-        await releaseStockByPack(packId, qty)
+        const releaseResult = await releaseReservation(cart.razorpay_order_id)
+        if (releaseResult === "missing") await releaseStockByPack(packId, qty)
+        if (releaseResult === "unavailable") throw new Error("reservation ledger unavailable")
         await updateSupabaseOrderByRazorpayOrderId(cart.razorpay_order_id, { status: "expired" })
+        releasedSupabaseOrderIds.add(cart.razorpay_order_id)
         supabaseCartsExpired++
       } catch (err: any) {
         errors.push(`supabase cart ${cart.razorpay_order_id}: ${err?.message || String(err)}`)
@@ -110,7 +135,7 @@ export async function POST(request: NextRequest) {
     let supabaseDuplicatesSkipped = 0
     for (const cart of staleCarts) {
       const razorpayOrderId = String(cart.fields["Razorpay Order ID"] || "")
-      if (razorpayOrderId && seenOrderIds.has(razorpayOrderId)) {
+      if (razorpayOrderId && releasedSupabaseOrderIds.has(razorpayOrderId)) {
         // Already handled in the Supabase pass — flip Airtable status so we don't
         // see it again next run, but don't decrement Reserved a second time.
         cartsToExpire.push(cart.id)
@@ -157,6 +182,10 @@ export async function POST(request: NextRequest) {
       cartsExpired: cartsToExpire.length,
       supabaseCartsExpired,
       supabaseDuplicatesSkipped,
+      reservationRowsFound: expiredReservations.length,
+      reservationRowsReleased,
+      promoReservationRowsFound: expiredPromos.found,
+      promoReservationRowsReleased: expiredPromos.released,
       errors,
     })
   } catch (error: any) {

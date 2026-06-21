@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/lib/server/supabase", () => ({
+  isSupabaseConfigured: vi.fn(() => true),
+  getSupabaseReservationById: vi.fn(),
+  restoreConsumedSupabaseReservation: vi.fn(() => Promise.resolve(true)),
   insertSupabaseReservation: vi.fn(() => Promise.resolve(null)),
   transitionSupabaseReservation: vi.fn(),
 }))
@@ -10,9 +13,11 @@ vi.mock("@/lib/server/inventory", () => ({
 
 import { consumeReservation, releaseReservation } from "./reservations"
 import { transitionSupabaseReservation } from "@/lib/server/supabase"
+import { getSupabaseReservationById } from "@/lib/server/supabase"
 import { releaseStockByPack } from "@/lib/server/inventory"
 
 const transition = vi.mocked(transitionSupabaseReservation)
+const getReservation = vi.mocked(getSupabaseReservationById)
 const releaseCounter = vi.mocked(releaseStockByPack)
 
 const row = (overrides: Partial<{ pack_id: string; quantity: number }> = {}) => ({
@@ -31,21 +36,23 @@ describe("releaseReservation — release exactly once", () => {
   it("releases the counter when it wins the atomic transition", async () => {
     transition.mockResolvedValueOnce(row())
     const ok = await releaseReservation("order_1", null)
-    expect(ok).toBe(true)
+    expect(ok).toBe("released")
     expect(releaseCounter).toHaveBeenCalledWith("pack6", 6, null)
   })
 
   it("does NOT release the counter again once already released (no over-release)", async () => {
     transition.mockResolvedValueOnce(null) // guard matched 0 rows — already released
+    getReservation.mockResolvedValueOnce(row())
     const ok = await releaseReservation("order_1", null)
-    expect(ok).toBe(false)
+    expect(ok).toBe("settled")
     expect(releaseCounter).not.toHaveBeenCalled()
   })
 
   it("returns false (no counter touch) for an unknown/consumed reservation", async () => {
     transition.mockResolvedValueOnce(null)
+    getReservation.mockResolvedValueOnce(null)
     const ok = await releaseReservation("order_missing", null)
-    expect(ok).toBe(false)
+    expect(ok).toBe("missing")
     expect(releaseCounter).not.toHaveBeenCalled()
   })
 })
@@ -60,8 +67,9 @@ describe("consumeReservation", () => {
 
   it("a consumed reservation can no longer be released (transition guard returns null)", async () => {
     transition.mockResolvedValueOnce(null) // status is 'consumed', not 'reserved'
+    getReservation.mockResolvedValueOnce({ ...row(), status: "consumed" })
     const ok = await releaseReservation("order_1", null)
-    expect(ok).toBe(false)
+    expect(ok).toBe("settled")
     expect(releaseCounter).not.toHaveBeenCalled()
   })
 })

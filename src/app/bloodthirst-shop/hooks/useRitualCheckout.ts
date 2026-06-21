@@ -5,6 +5,10 @@ import { PACKS, type Pack } from "@/lib/shop/catalog"
 import { createReceiptPricing, readReceiptPricing, type ReceiptPricing } from "@/lib/shop/receipt"
 import type { ShippingForm } from "@/lib/shop/types"
 import { generateEventId, trackPixel } from "@/lib/meta-pixel"
+import {
+  INDIAN_STATES_AND_UNION_TERRITORIES,
+  isValidIndianMobile,
+} from "@/lib/shop/checkout-validation"
 import { usePageTransition } from "@/context/TransitionContext"
 
 declare global {
@@ -35,14 +39,7 @@ export type CheckoutAddOn = {
 
 export const GSTIN_REGEX = /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/
 
-export const INDIAN_STATES = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
-  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
-  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
-  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
-  "Delhi", "Chandigarh", "Puducherry",
-]
+export const INDIAN_STATES = INDIAN_STATES_AND_UNION_TERRITORIES
 
 export function validateForm(form: ShippingForm): FormErrors {
   // The order of error insertion equals the visual DOM order and the focus-jump order, so future edits should preserve it.
@@ -51,7 +48,7 @@ export function validateForm(form: ShippingForm): FormErrors {
   if (!form.email.trim()) errors.email = "Email is required"
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = "Invalid email"
   if (!form.phone.trim()) errors.phone = "Phone is required"
-  else if (!/^[6-9]\d{9}$/.test(form.phone.replace(/\D/g, "")))
+  else if (!isValidIndianMobile(form.phone))
     errors.phone = "Enter 10-digit mobile number"
   if (!form.address.trim()) errors.address = "Address is required"
   if (!form.city.trim()) errors.city = "City is required"
@@ -213,6 +210,10 @@ export function useRitualCheckout({
       eventId,
     )
   }, [])
+
+  const trackCurrentAddToCart = useCallback(() => {
+    trackAddToCart(selected, effectiveTotal)
+  }, [effectiveTotal, selected, trackAddToCart])
 
   const selectPack = useCallback((pack: Pack) => {
     if (pack.id === selected.id) return
@@ -387,7 +388,7 @@ export function useRitualCheckout({
 
   const goToReceipt = useCallback(() => {
     if (!receiptToken) return
-    navigate(`/thanks?receipt=${encodeURIComponent(receiptToken)}`)
+    navigate("/thanks")
   }, [navigate, receiptToken])
 
   return {
@@ -410,6 +411,7 @@ export function useRitualCheckout({
     sign,
     receiptToken,
     goToReceipt,
+    trackCurrentAddToCart,
     isSealed: phase === "sealed",
     isSubmitting: phase === "submitting",
   }
