@@ -12,7 +12,7 @@ const MIN_DISPLAY = 600
 
 // Paid-traffic landing pages skip the intro — every second of brand theatre
 // before the product costs conversions on cold ad clicks.
-const SKIP_ROUTES = ["/buy", "/bloodthirst-shop"]
+const SKIP_ROUTES = ["/buy", "/sin", "/bloodthirst-shop"]
 
 export function Preloader() {
   const pathname = usePathname()

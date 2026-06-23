@@ -31,31 +31,37 @@ const EMPTY_DRAFT: AddOnDraft = {
   ledgerConsent: false,
 }
 
-export function useCheckoutAddOnDraft() {
+/**
+ * @param storageKey localStorage key for the add-on draft. Defaults to the
+ * site-wide key shared by /bloodthirst-shop + mobile. Surfaces with their own
+ * isolated cart (e.g. /sin's private `unholy_cart_sin`) should pass a matching
+ * private key so add-on state can't leak across pages.
+ */
+export function useCheckoutAddOnDraft(storageKey: string = STORAGE_KEY) {
   const [draft, setDraft] = useState<AddOnDraft>(EMPTY_DRAFT)
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY)
+      const saved = localStorage.getItem(storageKey)
       if (saved) setDraft((current) => ({ ...current, ...JSON.parse(saved) }))
     } catch {
       // Checkout remains usable when storage is unavailable or malformed.
     }
     setHydrated(true)
-  }, [])
+  }, [storageKey])
 
   useEffect(() => {
     if (!hydrated) return
     const timeout = window.setTimeout(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
+        localStorage.setItem(storageKey, JSON.stringify(draft))
       } catch {
         // Persistence is a convenience, not a checkout dependency.
       }
     }, 250)
     return () => window.clearTimeout(timeout)
-  }, [draft, hydrated])
+  }, [draft, hydrated, storageKey])
 
   const checkoutAddOns = useMemo<CheckoutAddOn[]>(() => {
     const items: CheckoutAddOn[] = []

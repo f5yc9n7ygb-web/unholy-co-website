@@ -784,3 +784,55 @@ button.btn:hover {
     scroll-snap-type: none;
   }
 }
+
+/* ===== /sin "BLACK ROOM" MICRO-MOTION =====
+   Global so the keyframes are SSR-safe — referenced from inline styles in
+   SinHero, which styled-jsx scoping would otherwise rename out from under. */
+@keyframes sin-seam {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes sin-breathe {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: translateY(-50%) scale(0.97);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.03);
+  }
+}
+
+/* Slow cold-light sweep across the spotlit can in the hero. A single
+   translucent band travelling left→right; pure compositor transform, cheap. */
+@keyframes sin-sweep {
+  0% {
+    transform: translateX(-120%) skewX(-12deg);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  72%,
+  100% {
+    transform: translateX(220%) skewX(-12deg);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="sin-seam"],
+  [style*="sin-breathe"],
+  [style*="sin-sweep"] {
+    animation: none !important;
+  }
+}

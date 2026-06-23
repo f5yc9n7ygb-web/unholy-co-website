@@ -21,6 +21,11 @@ export type FormErrors = Partial<Record<keyof ShippingForm, string>>
 
 export type CheckoutPhase = "idle" | "submitting" | "sealed" | "error"
 
+/** Why the checkout errored. "validation" = the user just missed a field
+ * (recoverable, no support needed); "system" = a real gateway/payment/verify
+ * failure where offering "contact support" is appropriate. */
+export type CheckoutErrorKind = "validation" | "system"
+
 export type AppliedPromo = {
   code: string
   discountType: "percentage" | "flat"
@@ -70,6 +75,14 @@ type Args = {
   razorpayKey?: string
   /** Per-page starting pack (e.g. /buy anchors cold traffic on the 6-pack). Saved carts still win. */
   defaultPackId?: string
+  /**
+   * localStorage cart key. Defaults to the site-wide "unholy_cart" (shared by
+   * /shop, /buy, /bloodthirst-shop). A page that advertises its own anchor —
+   * e.g. /sin's deliberately lower ₹699 hero — passes a PRIVATE key so a cart
+   * saved on another surface (like /buy's ₹1,200 pack6) can't silently override
+   * the pack it shows, which would make the hero price and checkout disagree.
+   */
+  storageKey?: string
   checkoutAddOns?: CheckoutAddOn[]
   /** Mobile ritual fires AddToCart when a pack is actively selected. */
   addToCartOnPackSelect?: boolean
@@ -82,6 +95,7 @@ const DEFAULT_PACK = PACKS.find((p) => p.id === "pack6") || PACKS[0]
 export function useRitualCheckout({
   razorpayKey,
   defaultPackId,
+  storageKey = "unholy_cart",
   checkoutAddOns = [],
   addToCartOnPackSelect = false,
   suppressCheckoutAddToCart = false,
@@ -97,6 +111,7 @@ export function useRitualCheckout({
   const [cartHydrated, setCartHydrated] = useState(false)
   const [phase, setPhase] = useState<CheckoutPhase>("idle")
   const [payError, setPayError] = useState<string | null>(null)
+  const [payErrorKind, setPayErrorKind] = useState<CheckoutErrorKind | null>(null)
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null)
   const [serverPricing, setServerPricing] = useState<ReceiptPricing | null>(null)
   const [receiptToken, setReceiptToken] = useState<string | null>(null)
@@ -118,11 +133,12 @@ export function useRitualCheckout({
     addToCartEventIds.current = {}
   }, [addOnSignature])
 
-  // Restore cart on mount (shared key with /shop). ViewContent waits for this
+  // Restore cart on mount (key defaults to the site-wide "unholy_cart"; pages
+  // with their own anchor pass a private storageKey). ViewContent waits for this
   // effect so server markup and the first client render keep the same pack.
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("unholy_cart")
+      const saved = localStorage.getItem(storageKey)
       if (saved) {
         const data = JSON.parse(saved)
         if (data.packId) {
@@ -135,7 +151,7 @@ export function useRitualCheckout({
       }
     } catch { /* ignore */ }
     setCartHydrated(true)
-  }, [])
+  }, [storageKey])
 
   // Persist
   useEffect(() => {
@@ -143,13 +159,13 @@ export function useRitualCheckout({
     const t = setTimeout(() => {
       try {
         localStorage.setItem(
-          "unholy_cart",
+          storageKey,
           JSON.stringify({ packId: selected.id, shipping: form })
         )
       } catch { /* ignore */ }
     }, 300)
     return () => clearTimeout(t)
-  }, [cartHydrated, selected, form])
+  }, [cartHydrated, selected, form, storageKey])
 
   useEffect(() => {
     if (!cartHydrated || viewContentFired.current) return
@@ -260,6 +276,7 @@ export function useRitualCheckout({
       setTouched(new Set(Object.keys(form)))
       // Surface a recoverable error so consumer can scroll the form into view
       setPayError("Complete the sigil. Some fields are missing.")
+      setPayErrorKind("validation")
       setPhase("error")
 
       const firstField = Object.keys(allErrors)[0]
@@ -275,11 +292,13 @@ export function useRitualCheckout({
 
     if (!razorpayKey || typeof window === "undefined" || !window.Razorpay) {
       setPayError("Payment gateway is not configured.")
+      setPayErrorKind("system")
       setPhase("error")
       return
     }
 
     setPayError(null)
+    setPayErrorKind(null)
     setPhase("submitting")
 
     if (!suppressCheckoutAddToCart) {
@@ -354,7 +373,7 @@ export function useRitualCheckout({
             if (typeof verification.receiptToken !== "string" || !verification.receiptToken) {
               throw new Error("Your payment was verified, but the receipt could not be opened. Please contact rituals@theunholy.co")
             }
-            try { localStorage.removeItem("unholy_cart") } catch {}
+            try { localStorage.removeItem(storageKey) } catch {}
             setConfirmedTotal(
               Number.isFinite(orderAmount) && orderAmount > 0
                 ? orderAmount / 100
@@ -364,6 +383,7 @@ export function useRitualCheckout({
             setPhase("sealed")
           } catch (error: any) {
             setPayError(error?.message || "Payment verification failed.")
+            setPayErrorKind("system")
             setPhase("error")
           }
         },
@@ -377,14 +397,16 @@ export function useRitualCheckout({
       rz.on("payment.failed", (resp: any) => {
         const reason = resp?.error?.description || "Payment was declined. Try a different method."
         setPayError(reason)
+        setPayErrorKind("system")
         setPhase("error")
       })
       rz.open()
     } catch (e: any) {
       setPayError(e?.message || "Payment failed to initialize.")
+      setPayErrorKind("system")
       setPhase("error")
     }
-  }, [appliedPromo, checkoutAddOns, effectiveTotal, form, phase, razorpayKey, selected, suppressCheckoutAddToCart, trackAddToCart])
+  }, [appliedPromo, checkoutAddOns, effectiveTotal, form, phase, razorpayKey, selected, storageKey, suppressCheckoutAddToCart, trackAddToCart])
 
   const goToReceipt = useCallback(() => {
     if (!receiptToken) return
@@ -400,6 +422,7 @@ export function useRitualCheckout({
     blurField,
     phase,
     payError,
+    payErrorKind,
     appliedPromo,
     pricing,
     grossTotal,
