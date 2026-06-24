@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { ShippingForm } from "@/lib/shop/types"
 import {
   GSTIN_REGEX,
@@ -43,6 +43,97 @@ export function SinContactFields({ form, errors, onChange, onBlur }: FieldGroupP
 /** Step 2 — where it haunts. Address + GST (folded). */
 export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroupProps) {
   const [gstOpen, setGstOpen] = useState(false)
+  const [pincodeLookup, setPincodeLookup] = useState<PincodeLookupState>({
+    status: "idle",
+    message: "",
+  })
+  const requestIdRef = useRef(0)
+  const manualLocationVersionRef = useRef(0)
+  const lookupAppliedVersionRef = useRef(-1)
+
+  useEffect(() => {
+    const pincode = form.pincode.trim()
+    requestIdRef.current += 1
+
+    if (pincode.length === 0) {
+      setPincodeLookup({ status: "idle", message: "" })
+      return
+    }
+
+    if (!/^\d{6}$/.test(pincode)) {
+      setPincodeLookup({
+        status: "idle",
+        message: pincode.length >= 6 ? "Enter a valid 6-digit pincode." : "",
+      })
+      return
+    }
+
+    const requestId = requestIdRef.current
+    const manualVersionAtStart = manualLocationVersionRef.current
+    const controller = new AbortController()
+    setPincodeLookup({ status: "loading", message: "Looking up city and state..." })
+
+    const t = window.setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/pincode/lookup?pincode=${encodeURIComponent(pincode)}`,
+          { signal: controller.signal }
+        )
+        const data = await res.json()
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return
+
+        if (!res.ok || !data?.ok || !data.city || !data.state) {
+          setPincodeLookup({
+            status: "error",
+            message: data?.error || "Lookup failed. Enter city and state manually.",
+          })
+          return
+        }
+
+        const canApplyLookup = manualLocationVersionRef.current === manualVersionAtStart
+        if (canApplyLookup) {
+          lookupAppliedVersionRef.current = manualVersionAtStart
+          onChange("city", String(data.city))
+          onChange("state", String(data.state))
+        }
+
+        setPincodeLookup({
+          status: "success",
+          message: canApplyLookup
+            ? "City and state filled. You can edit them if needed."
+            : "Pincode found. Keeping your manual city and state.",
+        })
+      } catch {
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return
+        setPincodeLookup({
+          status: "error",
+          message: "Lookup failed. Enter city and state manually.",
+        })
+      }
+    }, 250)
+
+    return () => {
+      window.clearTimeout(t)
+      controller.abort()
+    }
+  }, [form.pincode, onChange])
+
+  const handleChange = (field: keyof ShippingForm, value: string) => {
+    if (field === "pincode") {
+      onChange(field, value.replace(/\D/g, "").slice(0, 6))
+      return
+    }
+
+    if (field === "city" || field === "state") {
+      if (manualLocationVersionRef.current === lookupAppliedVersionRef.current) {
+        lookupAppliedVersionRef.current = -1
+      } else {
+        manualLocationVersionRef.current += 1
+      }
+    }
+
+    onChange(field, value)
+  }
 
   const closeGst = () => {
     setGstOpen(false)
@@ -57,9 +148,25 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
         {SIN_BUY.shippingLabel}
       </p>
 
-      <Field label="Address" field="address" value={form.address} error={errors.address} onChange={onChange} onBlur={onBlur} placeholder="House, street, locality" />
+      <Field label="Address" field="address" value={form.address} error={errors.address} onChange={handleChange} onBlur={onBlur} placeholder="House, street, locality" />
+      <Field label="Pincode" field="pincode" value={form.pincode} error={errors.pincode} onChange={handleChange} onBlur={onBlur} placeholder="6-digit" />
+      {pincodeLookup.message && !errors.pincode && (
+        <p
+          id="rf-pincode-lookup"
+          role={pincodeLookup.status === "error" ? "alert" : "status"}
+          className={`-mt-2 font-mono text-[10px] uppercase tracking-wider ${
+            pincodeLookup.status === "success"
+              ? "text-green-400/85"
+              : pincodeLookup.status === "loading"
+              ? "text-bone/45"
+              : "text-red-400"
+          }`}
+        >
+          {pincodeLookup.message}
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="City" field="city" value={form.city} error={errors.city} onChange={onChange} onBlur={onBlur} placeholder="City" />
+        <Field label="City" field="city" value={form.city} error={errors.city} onChange={handleChange} onBlur={onBlur} placeholder="City" />
         <div>
           <label htmlFor="rf-state" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.3em] text-bone/55">
             State
@@ -68,7 +175,7 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
             <select
               id="rf-state"
               value={form.state}
-              onChange={(e) => onChange("state", e.target.value)}
+              onChange={(e) => handleChange("state", e.target.value)}
               onBlur={() => onBlur("state")}
               aria-invalid={Boolean(errors.state)}
               aria-describedby={errors.state ? "rf-state-error" : undefined}
@@ -90,7 +197,6 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
           )}
         </div>
       </div>
-      <Field label="Pincode" field="pincode" value={form.pincode} error={errors.pincode} onChange={onChange} onBlur={onBlur} placeholder="6-digit" />
 
       {/* GST — folded away by default */}
       {!gstOpen ? (
@@ -113,6 +219,11 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
       )}
     </div>
   )
+}
+
+type PincodeLookupState = {
+  status: "idle" | "loading" | "success" | "error"
+  message: string
 }
 
 function Field({
