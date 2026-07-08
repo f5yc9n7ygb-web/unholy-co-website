@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { PACKS, type Pack } from "@/lib/shop/catalog"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { PACKS, getPackById, type Pack } from "@/lib/shop/catalog"
 import { createReceiptPricing, readReceiptPricing, type ReceiptPricing } from "@/lib/shop/receipt"
 import type { ShippingForm } from "@/lib/shop/types"
 import { generateEventId, trackPixel } from "@/lib/meta-pixel"
@@ -88,6 +88,12 @@ type Args = {
   addToCartOnPackSelect?: boolean
   /** Mobile ritual suppresses the later pre-Razorpay AddToCart to avoid double counting. */
   suppressCheckoutAddToCart?: boolean
+  /** Optional order surface so the API can apply route-specific availability rules. */
+  checkoutSource?: string
+  /** Optional pack allowlist for surfaces with hidden or special SKUs. */
+  allowedPackIds?: readonly string[]
+  /** Optional cleanup hook for surface-specific draft state after payment verifies. */
+  onCheckoutSuccess?: () => void
 }
 
 const DEFAULT_PACK = PACKS.find((p) => p.id === "pack6") || PACKS[0]
@@ -99,11 +105,24 @@ export function useRitualCheckout({
   checkoutAddOns = [],
   addToCartOnPackSelect = false,
   suppressCheckoutAddToCart = false,
+  checkoutSource,
+  allowedPackIds,
+  onCheckoutSuccess,
 }: Args) {
   const { navigate } = usePageTransition()
+  const allowedPackSet = useMemo(
+    () => allowedPackIds?.length ? new Set<string>(allowedPackIds) : null,
+    [allowedPackIds]
+  )
+  const getAllowedPackById = useCallback((id: string) => {
+    const pack = getPackById(id)
+    if (!pack) return null
+    if (allowedPackSet && !allowedPackSet.has(pack.id)) return null
+    return pack
+  }, [allowedPackSet])
 
   const [selected, setSelected] = useState<Pack>(
-    () => PACKS.find((p) => p.id === defaultPackId) || DEFAULT_PACK
+    () => getAllowedPackById(defaultPackId ?? "") || getAllowedPackById(DEFAULT_PACK.id) || DEFAULT_PACK
   )
   const [form, setForm] = useState<ShippingForm>(EMPTY_FORM)
   const [errors, setErrors] = useState<FormErrors>({})
@@ -142,7 +161,7 @@ export function useRitualCheckout({
       if (saved) {
         const data = JSON.parse(saved)
         if (data.packId) {
-          const pack = PACKS.find((p) => p.id === data.packId)
+          const pack = getAllowedPackById(data.packId)
           if (pack) setSelected(pack)
         }
         if (data.shipping) {
@@ -151,7 +170,7 @@ export function useRitualCheckout({
       }
     } catch { /* ignore */ }
     setCartHydrated(true)
-  }, [storageKey])
+  }, [getAllowedPackById, storageKey])
 
   // Persist
   useEffect(() => {
@@ -232,6 +251,7 @@ export function useRitualCheckout({
   }, [effectiveTotal, selected, trackAddToCart])
 
   const selectPack = useCallback((pack: Pack) => {
+    if (allowedPackSet && !allowedPackSet.has(pack.id)) return
     if (pack.id === selected.id) return
     setSelected(pack)
     setAppliedPromo(null)
@@ -253,7 +273,7 @@ export function useRitualCheckout({
     if (addToCartOnPackSelect) {
       trackAddToCart(pack, pack.price + addOnTotal)
     }
-  }, [addOnTotal, addToCartOnPackSelect, selected.id, trackAddToCart])
+  }, [addOnTotal, addToCartOnPackSelect, allowedPackSet, selected.id, trackAddToCart])
 
   const applyPromo = useCallback((promo: AppliedPromo) => {
     setAppliedPromo(promo)
@@ -269,6 +289,13 @@ export function useRitualCheckout({
 
   const sign = useCallback(async () => {
     if (phase === "submitting" || phase === "sealed") return
+
+    if (allowedPackSet && !allowedPackSet.has(selected.id)) {
+      setPayError("This pack is not available on this checkout.")
+      setPayErrorKind("validation")
+      setPhase("error")
+      return
+    }
 
     const allErrors = validateForm(form)
     if (Object.keys(allErrors).length > 0) {
@@ -328,6 +355,7 @@ export function useRitualCheckout({
           shipping: form,
           promoCode: appliedPromo?.code || undefined,
           promoRecordId: appliedPromo?.promoRecordId || undefined,
+          source: checkoutSource || undefined,
           addOns: checkoutAddOns.map((item) => ({
             id: item.id,
             data: item.data || {},
@@ -370,16 +398,21 @@ export function useRitualCheckout({
                   : "We could not verify your payment immediately. Please contact rituals@theunholy.co"
               )
             }
-            if (typeof verification.receiptToken !== "string" || !verification.receiptToken) {
+            const receiptReference =
+              typeof verification.receiptRef === "string" && verification.receiptRef
+                ? verification.receiptRef
+                : verification.receiptToken
+            if (typeof receiptReference !== "string" || !receiptReference) {
               throw new Error("Your payment was verified, but the receipt could not be opened. Please contact rituals@theunholy.co")
             }
             try { localStorage.removeItem(storageKey) } catch {}
+            onCheckoutSuccess?.()
             setConfirmedTotal(
               Number.isFinite(orderAmount) && orderAmount > 0
                 ? orderAmount / 100
                 : effectiveTotal
             )
-            setReceiptToken(verification.receiptToken)
+            setReceiptToken(receiptReference)
             setPhase("sealed")
           } catch (error: any) {
             setPayError(error?.message || "Payment verification failed.")
@@ -406,11 +439,11 @@ export function useRitualCheckout({
       setPayErrorKind("system")
       setPhase("error")
     }
-  }, [appliedPromo, checkoutAddOns, effectiveTotal, form, phase, razorpayKey, selected, storageKey, suppressCheckoutAddToCart, trackAddToCart])
+  }, [allowedPackSet, appliedPromo, checkoutAddOns, checkoutSource, effectiveTotal, form, onCheckoutSuccess, phase, razorpayKey, selected, storageKey, suppressCheckoutAddToCart, trackAddToCart])
 
   const goToReceipt = useCallback(() => {
     if (!receiptToken) return
-    navigate("/thanks")
+    navigate(`/thanks?receiptRef=${encodeURIComponent(receiptToken)}`)
   }, [navigate, receiptToken])
 
   return {

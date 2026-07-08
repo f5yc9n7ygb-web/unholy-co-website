@@ -10,6 +10,7 @@ import {
   ORDER_SESSION_COOKIE,
   RECEIPT_COOKIE,
   RECEIPT_COOKIE_MAX_AGE_SECONDS,
+  createReceiptReference,
   createReceiptToken,
   readOrderSessionToken,
 } from "@/lib/server/order-session"
@@ -184,7 +185,7 @@ export async function POST(request: NextRequest) {
       // fulfilment path (persists the order, decrements stock, consumes promo,
       // creates the shipment, sends the email). Return a receipt so the customer
       // still reaches /thanks; the webhook completes fulfilment once capture lands.
-      return createSuccessResponse({
+      return await createSuccessResponse({
         pack,
         orderId,
         chargedAmount,
@@ -266,7 +267,7 @@ export async function POST(request: NextRequest) {
 
       await sendMetaPurchaseForOrder({ orderSession, pack, orderId, chargedAmount })
 
-      return createSuccessResponse({
+      return await createSuccessResponse({
         pack,
         orderId,
         chargedAmount,
@@ -326,7 +327,7 @@ export async function POST(request: NextRequest) {
         customerEmail: orderSession.shipping.email,
       }).catch((err) => console.error("Abandoned cart update failed:", err))
       await sendMetaPurchaseForOrder({ orderSession, pack, orderId, chargedAmount })
-      return createSuccessResponse({
+      return await createSuccessResponse({
         pack, orderId, chargedAmount,
         pricing, promoCode: orderSession.promoCode, receiptId: orderSession.receiptId,
         shippingName: orderSession.shipping.name,
@@ -566,7 +567,7 @@ export async function POST(request: NextRequest) {
 
     await sendMetaPurchaseForOrder({ orderSession, pack, orderId, chargedAmount })
 
-    return createSuccessResponse({
+    return await createSuccessResponse({
       pack,
       orderId,
       chargedAmount,
@@ -625,7 +626,7 @@ function isValidSignature(orderId: string, paymentId: string, signature: string,
   return timingSafeEqual(expectedBuf, receivedBuf)
 }
 
-function createSuccessResponse(options: {
+async function createSuccessResponse(options: {
   pack: NonNullable<ReturnType<typeof getPackById>>
   orderId: string
   chargedAmount: number
@@ -653,9 +654,12 @@ function createSuccessResponse(options: {
     shippingState: options.shippingState,
     pending: options.pending,
   })
+  const receiptRef = await createReceiptReference(receiptToken, await getKVNamespace())
   const response = NextResponse.json({
     ok: true,
     ...(options.pending ? { pending: true } : {}),
+    receiptRef,
+    // Kept for older clients; current clients should put only receiptRef in URLs.
     receiptToken,
   })
 

@@ -23,6 +23,7 @@ import {
   updateSupabaseInventory,
 } from "@/lib/server/supabase"
 import { escapeAirtableValue } from "@/lib/server/security"
+import { isSpecialPackId } from "@/lib/shop/catalog"
 import type { KVNamespace } from "@/lib/server/kv"
 
 const INVENTORY_TABLE = "Inventory"
@@ -188,11 +189,13 @@ async function updateAirtableInventoryMirror(packId: string, fields: Record<stri
  * Check if a pack has sufficient stock.
  * Available = Stock - Reserved (accounts for in-progress checkouts).
  * Returns { available: true } if inventory table is missing (graceful skip).
+ * Special/stunt SKUs fail closed because they are intentionally scarce and
+ * easy to forget when seeding inventory.
  */
 export async function checkStock(packId: string, requiredQty: number): Promise<StockInfo> {
   const inv = await getInventoryRecord(packId)
   if (!inv) {
-    return { available: true, stock: -1, recordId: null }
+    return { available: !isSpecialPackId(packId), stock: -1, recordId: null }
   }
   const effectiveStock = inv.stock - inv.reserved
   return {
@@ -219,7 +222,7 @@ export async function reserveStock(
   return withInventoryLock(packId, kv, async () => {
     try {
       const inv = await getInventoryRecord(packId)
-      if (!inv) return true // inventory not set up, skip
+      if (!inv) return !isSpecialPackId(packId) // normal SKUs degrade open; stunt SKUs require seeded stock
 
       const effectiveStock = inv.stock - inv.reserved
       if (effectiveStock < qty) return false

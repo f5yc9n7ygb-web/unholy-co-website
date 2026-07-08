@@ -35,7 +35,7 @@ export function SinHero({
   return (
     <section
       id="sin-hero"
-      className="relative flex min-h-[100dvh] flex-col overflow-hidden px-5 pb-7 pt-20 md:px-10 md:pb-12 md:pt-28"
+      className="relative flex min-h-[100svh] flex-col overflow-hidden px-5 pb-5 pt-16 sm:pb-7 sm:pt-20 md:min-h-[100dvh] md:px-10 md:pb-12 md:pt-28"
     >
       {/* ── Spotlit can backdrop ── */}
       <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
@@ -55,7 +55,7 @@ export function SinHero({
           alt="BloodThirst — matte-black 500ml can of natural mineral water"
           fetchPriority="high"
           decoding="async"
-          className="absolute bottom-[6%] right-[-22%] z-0 h-[64%] w-auto max-w-none object-contain opacity-0 animate-step-in sm:right-[-12%] md:right-[3%] md:h-[82%] lg:right-[6%]"
+          className="absolute bottom-[10%] right-[-14%] z-0 h-[56%] w-auto max-w-none object-contain opacity-0 animate-step-in sm:right-[-8%] sm:h-[64%] md:right-[3%] md:h-[82%] lg:right-[6%]"
           style={{ animationDelay: "0.05s" }}
         />
         {/* readability scrim — keeps the type crisp over the metal */}
@@ -90,6 +90,30 @@ export function SinHero({
         </div>
       </div>
 
+      {/* ── Specimen annotations — museum hairline callouts on the can (lg+).
+             Decorative chrome: the same facts live in the spec seam below, so
+             this whole layer stays aria-hidden. ── */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-[5] hidden lg:block">
+        {SIN_HERO.annotations.map((a, i) => (
+          <div
+            key={a.label}
+            className="absolute right-[25%] flex items-center gap-3 opacity-0 animate-step-in xl:right-[24%]"
+            style={{ top: `${a.y}%`, animationDelay: `${0.9 + i * 0.14}s` }}
+          >
+            <span className="text-right">
+              <span className="block font-mono text-[9px] uppercase tracking-[0.3em] text-offwhite/80">
+                {a.label}
+              </span>
+              <span className="block font-mono text-[8px] uppercase tracking-[0.24em] text-bone/45">
+                {a.note}
+              </span>
+            </span>
+            <span className="h-px w-14 bg-gradient-to-r from-transparent via-bone/40 to-blood/80 xl:w-24" />
+            <span className="h-1.5 w-1.5 rounded-full border border-blood/80 bg-blood/30" />
+          </div>
+        ))}
+      </div>
+
       {/* ── Content ── */}
       <div className="relative z-10 flex flex-1 flex-col">
         <p
@@ -102,7 +126,7 @@ export function SinHero({
           </span>
         </p>
 
-        <h1 className="mt-7 font-cinzel text-[clamp(2.9rem,13vw,7.5rem)] font-black uppercase leading-[0.88] tracking-[-0.01em] text-offwhite md:mt-9">
+        <h1 className="mt-5 font-cinzel text-[clamp(2.55rem,12.5vw,7.5rem)] font-black uppercase leading-[0.88] tracking-normal text-offwhite md:mt-9">
           {SIN_HERO.headline.map((line, i) => {
             const last = i === SIN_HERO.headline.length - 1
             return (
@@ -125,7 +149,7 @@ export function SinHero({
         </h1>
 
         <p
-          className="mt-7 max-w-[30rem] border-l-2 border-blood/70 pl-4 text-sm leading-relaxed text-bone/72 opacity-0 animate-step-in md:text-[15px]"
+          className="mt-5 max-w-[20rem] border-l-2 border-blood/70 pl-3 text-[13px] leading-[1.5] text-bone/72 opacity-0 animate-step-in sm:max-w-[30rem] sm:pl-4 sm:text-sm md:text-[15px]"
           style={{ animationDelay: "0.5s" }}
         >
           {SIN_HERO.subject}
@@ -133,13 +157,13 @@ export function SinHero({
 
         {/* ── Offer block: price chip + CTA (above the fold) ── */}
         <div
-          className="mt-8 opacity-0 animate-step-in md:mt-10"
+          className="mt-5 opacity-0 animate-step-in md:mt-10"
           style={{ animationDelay: "0.62s" }}
         >
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-4">
             {/* live "from" price chip */}
             <div className="inline-flex items-stretch self-start border border-bone/20 bg-black/45 backdrop-blur-sm">
-              <div className="flex flex-col justify-center gap-1 border-r border-bone/15 px-4 py-3">
+              <div className="flex flex-col justify-center gap-1 border-r border-bone/15 px-3 py-2.5 sm:px-4 sm:py-3">
                 <span className="font-mono text-[8px] uppercase tracking-[0.32em] text-blood/90">
                   {SIN_HERO.chipLabel}
                 </span>
@@ -147,8 +171,8 @@ export function SinHero({
                   {entry.qty} cans · ₹{entry.perCan}/can
                 </span>
               </div>
-              <div className="flex items-center px-5">
-                <span className="font-cinzel text-3xl font-black tabular-nums leading-none text-offwhite md:text-4xl">
+              <div className="flex items-center px-4 sm:px-5">
+                <span className="font-cinzel text-2xl font-black tabular-nums leading-none text-offwhite sm:text-3xl md:text-4xl">
                   ₹{entry.price.toLocaleString("en-IN")}
                 </span>
               </div>
@@ -158,7 +182,7 @@ export function SinHero({
             <button
               type="button"
               onClick={onBuy}
-              className="group inline-flex items-center justify-center gap-3 border border-blood bg-blood px-8 py-4 font-mono text-xs font-bold uppercase tracking-[0.35em] text-offwhite shadow-[0_18px_60px_-12px_rgba(176,0,32,0.7)] transition-colors duration-300 hover:bg-[#c4072a] sm:px-10"
+              className="group inline-flex items-center justify-center gap-3 border border-blood bg-blood px-8 py-3.5 font-mono text-xs font-bold uppercase tracking-[0.35em] text-offwhite shadow-[0_18px_60px_-12px_rgba(176,0,32,0.7)] transition-colors duration-300 hover:bg-[#c4072a] sm:px-10 sm:py-4"
             >
               {SIN_HERO.ctaPrimary}
               <span
@@ -169,7 +193,7 @@ export function SinHero({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-            <span className="font-mono text-[9px] uppercase tracking-[0.24em] text-bone/40">
+            <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-bone/40 sm:text-[9px] sm:tracking-[0.24em]">
               {SIN_HERO.chipNote} · down to ₹{floorPerCan}/can by the crate
             </span>
           </div>
@@ -177,7 +201,7 @@ export function SinHero({
           {/* honest urgency — live dispatch cutoff + first-run edition, no counts */}
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
             <SinDispatch />
-            <span className="font-mono text-[9px] uppercase tracking-[0.24em] text-bone/40">
+            <span className="hidden font-mono text-[9px] uppercase tracking-[0.24em] text-bone/40 sm:inline">
               {SIN_DISPATCH.editionNote}
             </span>
           </div>
@@ -185,7 +209,7 @@ export function SinHero({
 
         {/* ── Trust seam pinned to the bottom of the fold ── */}
         <div
-          className="mt-auto pt-9 opacity-0 animate-step-in"
+          className="mt-auto pt-5 opacity-0 animate-step-in sm:pt-9"
           style={{ animationDelay: "0.78s" }}
         >
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-bone/15 pt-3">

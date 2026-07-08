@@ -1,44 +1,51 @@
 "use client"
 
 import Script from "next/script"
-import Link from "next/link"
-import type { Route } from "next"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AnimatePresence, MotionConfig, motion } from "framer-motion"
 
 import { useRitualCheckout } from "@/app/bloodthirst-shop/hooks/useRitualCheckout"
 import { useCheckoutAddOnDraft } from "@/app/bloodthirst-shop/hooks/useCheckoutAddOnDraft"
 import { PhaseClose } from "@/app/bloodthirst-shop/components/PhaseClose"
+import { BlackGloveModal } from "@/app/bloodthirst-shop/components/PremiumInquiry"
 import { getPackById } from "@/lib/shop/catalog"
-import { SIN_AVAILABLE_PACK_IDS, SIN_ENTRY_PACK_ID, SIN_FOOTER } from "@/content/sin"
+import { SIN_CHECKOUT_PACK_IDS } from "@/lib/shop/checkout-availability"
+import { SIN_ENTRY_PACK_ID } from "@/content/sin"
+import { MASS_TICKER } from "@/content/sin-mass"
 
-import { SinHero, SpecSeam } from "./components/SinHero"
-import { SinExhibit } from "./components/SinExhibit"
-import { SinCheckout } from "./components/SinCheckout"
 import { SinCheckoutSheet } from "./components/SinCheckoutSheet"
-import { SinValue } from "./components/SinValue"
-import { SinProof } from "./components/SinProof"
-import { SinVersus } from "./components/SinVersus"
-import { SinFaq } from "./components/SinFaq"
-import { SinFinal } from "./components/SinFinal"
-import { SinTeaser } from "./components/SinTeaser"
-import { SinVault } from "./components/SinVault"
-import { SinStickyBar } from "./components/SinStickyBar"
-import { Atmosphere } from "./components/Atmosphere"
-import { Reveal } from "./components/Reveal"
-import { Kicker } from "./components/marks"
+import { ScrollBlood } from "./components/ScrollBlood"
+import { MassHeader } from "./mass/MassHeader"
+import { MassHero } from "./mass/MassHero"
+import { MassObject } from "./mass/MassObject"
+import { MassBuy } from "./mass/MassBuy"
+import { MassWhy } from "./mass/MassWhy"
+import { MassSticky } from "./mass/MassSticky"
+import { MassProof } from "./mass/MassProof"
+import { MassTease } from "./mass/MassTease"
+import { MassVersus } from "./mass/MassVersus"
+import { MassFaq } from "./mass/MassFaq"
+import { MassVault } from "./mass/MassVault"
+import { MassFinal } from "./mass/MassFinal"
+import { MassSignals } from "./mass/MassSignals"
+import { Hazard, Ticker } from "./mass/theme"
 
 /** Tracks whether Razorpay's checkout.js is usable yet — drives the loading /
  * retry CTA states so the user never sees the hook's "not configured" path
  * just because the script hasn't finished loading. */
 type RazorpayStatus = "loading" | "ready" | "error"
 
-const SUPPORT_LINKS: Array<{ label: string; href: Route }> = [
-  { label: "FAQ", href: "/faq" },
-  { label: "Track", href: "/track" },
-  { label: "Refunds", href: "/refund" },
-  { label: "Contact", href: "/contact" },
-]
+/** Private cart key — must match the useRitualCheckout storageKey below so the
+ *  Do Not Buy handlers can write it synchronously. */
+const SIN_CART_KEY = "unholy_cart_sin"
+
+function writeCart(packId: string, shipping: unknown) {
+  try {
+    localStorage.setItem(SIN_CART_KEY, JSON.stringify({ packId, shipping }))
+  } catch {
+    /* storage unavailable — selection still works for this render */
+  }
+}
 
 export function SinClient({
   razorpayKey,
@@ -47,23 +54,22 @@ export function SinClient({
   razorpayKey?: string
   defaultPackId?: string
 }) {
-  // Cursed Note add-on draft (the single piece of theater allowed onto the
-  // checkout spine). Private storage key — like the cart, /sin must not inherit
-  // add-on state saved on /bloodthirst-shop (and vice versa).
+  // Add-on draft (Cursed Note + Unholy Ledger). Private storage key — /sin
+  // must not inherit add-on state saved on /bloodthirst-shop (and vice versa).
   const addOnDraft = useCheckoutAddOnDraft("unholy_addons_sin")
 
   // Private cart key: /sin's available-pack set can differ from /buy or /shop,
   // so it must not inherit a pack saved elsewhere. Keep its cart to itself.
-  // addToCartOnPackSelect feeds Meta cleaner funnel signal as packs are chosen;
-  // suppressCheckoutAddToCart avoids double-counting against the add-on total
-  // (mirrors MobileRitual) — InitiateCheckout carries the add-on-inclusive value.
   const checkout = useRitualCheckout({
     razorpayKey,
     defaultPackId,
-    storageKey: "unholy_cart_sin",
+    storageKey: SIN_CART_KEY,
     checkoutAddOns: addOnDraft.checkoutAddOns,
     addToCartOnPackSelect: true,
     suppressCheckoutAddToCart: true,
+    checkoutSource: "sin",
+    allowedPackIds: SIN_CHECKOUT_PACK_IDS,
+    onCheckoutSuccess: addOnDraft.clearDraft,
   })
   const { isSealed, goToReceipt, sign, isSubmitting } = checkout
 
@@ -71,7 +77,9 @@ export function SinClient({
   const [scriptKey, setScriptKey] = useState(0)
   const [connecting, setConnecting] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [blackGloveOpen, setBlackGloveOpen] = useState(false)
   const pendingPay = useRef(false)
+  const prevPackIdRef = useRef<string | null>(null)
 
   const scrollToBuy = useCallback(() => {
     document
@@ -79,7 +87,7 @@ export function SinClient({
       ?.scrollIntoView({ behavior: "smooth", block: "start" })
   }, [])
 
-  // Teaser → vault. Anchor-scrolls down to the on-page vault (no off-site leak).
+  // Tease band → vault. Anchor-scrolls down to the on-page shelf (no off-site leak).
   const scrollToVault = useCallback(() => {
     document
       .getElementById("sin-vault")
@@ -87,14 +95,46 @@ export function SinClient({
   }, [])
 
   const openSheet = useCallback(() => setSheetOpen(true), [])
-  const closeSheet = useCallback(() => setSheetOpen(false), [])
+
+  const clearQueuedPayment = useCallback(() => {
+    pendingPay.current = false
+    setConnecting(false)
+  }, [])
+
+  // Closing the sheet restores the previous pack if we were buying the special
+  // "Do Not Buy" SKU (which temporarily takes over `selected`).
+  const closeSheet = useCallback(() => {
+    clearQueuedPayment()
+    setSheetOpen(false)
+    if (checkout.selected.id === "donotbuy") {
+      const prev =
+        getPackById(prevPackIdRef.current || defaultPackId || "") || getPackById(SIN_ENTRY_PACK_ID)
+      if (prev) {
+        writeCart(prev.id, checkout.form)
+        checkout.selectPack(prev)
+      }
+    }
+  }, [checkout, clearQueuedPayment, defaultPackId])
+
+  // "Do Not Buy" — the buyable stunt. Take over `selected` with the hidden SKU,
+  // clear any add-ons (the crate already bundles them), and open checkout. The
+  // cart is written SYNCHRONOUSLY so a re-mount restores donotbuy from storage
+  // rather than clobbering it back to the prior pack.
+  const onDoNotBuy = useCallback(() => {
+    const dnb = getPackById("donotbuy")
+    if (!dnb) return
+    if (checkout.selected.id !== "donotbuy") prevPackIdRef.current = checkout.selected.id
+    addOnDraft.setNoteEnabled(false)
+    addOnDraft.setLedgerEnabled(false)
+    writeCart("donotbuy", checkout.form)
+    checkout.selectPack(dnb)
+    setSheetOpen(true)
+  }, [checkout, addOnDraft])
 
   // Pay handler. Only ever calls sign() once Razorpay's script is actually
   // present, so the gateway-not-configured branch can't fire on a slow load.
-  // If the script is still loading we queue the intent and show a connecting
-  // state; if it failed we re-mount the <Script> and retry.
   const onPay = useCallback(() => {
-    if (isSubmitting) return
+    if (isSubmitting || connecting || pendingPay.current) return
     if (typeof window !== "undefined" && window.Razorpay) {
       setConnecting(false)
       sign()
@@ -106,22 +146,22 @@ export function SinClient({
       setRzStatus("loading")
       setScriptKey((k) => k + 1)
     }
-  }, [isSubmitting, rzStatus, sign])
+  }, [connecting, isSubmitting, rzStatus, sign])
 
   // Fire the queued payment the moment the script becomes usable.
   useEffect(() => {
-    if (rzStatus !== "ready" || !pendingPay.current) return
+    if (rzStatus !== "ready" || !pendingPay.current || !sheetOpen) return
     pendingPay.current = false
     setConnecting(false)
     sign()
-  }, [rzStatus, sign])
+  }, [rzStatus, sheetOpen, sign])
 
-  // Guard against older /sin localStorage restoring a single or 3-pack after
-  // those packs were temporarily removed from this paid funnel.
+  // Guard against older /sin localStorage restoring a pack outside this paid
+  // funnel. The shared allowlist includes the hidden "Do Not Buy" stunt SKU.
   useEffect(() => {
     if (
-      SIN_AVAILABLE_PACK_IDS.includes(
-        checkout.selected.id as (typeof SIN_AVAILABLE_PACK_IDS)[number]
+      SIN_CHECKOUT_PACK_IDS.includes(
+        checkout.selected.id as (typeof SIN_CHECKOUT_PACK_IDS)[number]
       )
     ) {
       return
@@ -151,29 +191,30 @@ export function SinClient({
 
   return (
     <MotionConfig reducedMotion="user">
+      {/* Warm the gateway origins early — the sheet-open → Razorpay handoff is
+          the highest-intent moment on the page; shave the TLS setup off it. */}
+      <link rel="preconnect" href="https://checkout.razorpay.com" />
+      <link rel="preconnect" href="https://api.razorpay.com" />
       <Script
         key={scriptKey}
         src="https://checkout.razorpay.com/v1/checkout.js"
         strategy="afterInteractive"
         onReady={() => setRzStatus("ready")}
         onLoad={() => setRzStatus("ready")}
-        onError={() => setRzStatus("error")}
-      />
-
-      {/* Black-room ground: near-black velvet with one soft spotlight overhead.
-          Static gradients — no JS, no heavy filters. */}
-      <div aria-hidden className="fixed inset-0 z-0 bg-[#070707]" />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 z-0"
-        style={{
-          background:
-            "radial-gradient(120% 70% at 50% -8%, rgba(176,0,32,0.14), transparent 55%), radial-gradient(80% 50% at 50% 0%, rgba(246,246,246,0.05), transparent 60%)",
+        onError={() => {
+          clearQueuedPayment()
+          setRzStatus("error")
         }}
       />
-      <Atmosphere />
 
-      <SlimHeader onBuy={scrollToBuy} />
+      {/* Flat ink ground — the RED MASS is slabs and hard rules, no spotlights. */}
+      <div aria-hidden className="fixed inset-0 z-0 bg-[#050505]" />
+
+      {/* reading-progress seam — hidden once the order is sealed */}
+      {!isSealed && <ScrollBlood />}
+
+      <MassHeader onBuy={scrollToBuy} />
+      <MassSignals />
 
       <AnimatePresence>
         {!isSealed && (
@@ -184,60 +225,34 @@ export function SinClient({
             transition={{ duration: 0.5 }}
             className="relative z-10"
           >
-            <SinHero onBuy={scrollToBuy} />
-            <SpecSeam />
-            <SinExhibit />
-            <SinCheckout
+            <MassHero onBuy={scrollToBuy} />
+            <Ticker items={MASS_TICKER} tone="blood" />
+            <MassObject />
+            <MassBuy
               selected={checkout.selected}
               onSelect={checkout.selectPack}
               onAcquire={openSheet}
             />
-            <Reveal>
-              <SinValue selected={checkout.selected} onBuy={scrollToBuy} />
-            </Reveal>
-            <SinProof />
-            <SinTeaser onPick={scrollToVault} />
-            <Reveal>
-              <SinVersus onBuy={scrollToBuy} />
-            </Reveal>
-            <Reveal>
-              <SinFaq />
-            </Reveal>
-            <SinVault />
-            <Reveal>
-              <SinFinal onBuy={scrollToBuy} />
-            </Reveal>
-
-            <footer className="relative z-10 border-t border-bone/12 px-6 py-14 text-center">
-              <nav
-                aria-label="BloodThirst support"
-                className="mb-7 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 font-mono text-[9px] uppercase tracking-[0.32em] text-bone/45"
-              >
-                {SUPPORT_LINKS.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="transition-colors hover:text-blood"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </nav>
-              <div className="flex justify-center">
-                <Kicker>{SIN_FOOTER.footnote}</Kicker>
-              </div>
-              <p className="mt-6 font-mono text-[9px] uppercase tracking-[0.5em] text-bone/25">
-                {SIN_FOOTER.endMark}
-              </p>
-            </footer>
+            <MassWhy selected={checkout.selected} />
+            <Ticker items={MASS_TICKER} tone="paper" speed={32} />
+            <MassProof />
+            <MassTease onOpen={scrollToVault} />
+            <MassVersus onBuy={scrollToBuy} />
+            <Hazard />
+            <MassFaq />
+            <MassVault
+              onBlackGlove={() => setBlackGloveOpen(true)}
+              onDoNotBuy={onDoNotBuy}
+            />
+            <MassFinal onBuy={scrollToBuy} />
           </motion.div>
         )}
       </AnimatePresence>
 
       {!isSealed && (
-        <SinStickyBar
+        <MassSticky
           selected={checkout.selected}
-          total={checkout.selected.price}
+          total={checkout.effectiveTotal}
           onTap={openSheet}
         />
       )}
@@ -270,7 +285,20 @@ export function SinClient({
         onRecipientChange={addOnDraft.setRecipientName}
         noteContext={addOnDraft.noteContext}
         onNoteContextChange={addOnDraft.setNoteContext}
+        ledgerEnabled={addOnDraft.ledgerEnabled}
+        onLedgerToggle={addOnDraft.setLedgerEnabled}
+        ledgerName={addOnDraft.ledgerName}
+        onLedgerNameChange={addOnDraft.setLedgerName}
+        ledgerCity={addOnDraft.ledgerCity}
+        onLedgerCityChange={addOnDraft.setLedgerCity}
+        ledgerConfession={addOnDraft.ledgerConfession}
+        onLedgerConfessionChange={addOnDraft.setLedgerConfession}
+        ledgerConsent={addOnDraft.ledgerConsent}
+        onLedgerConsentChange={addOnDraft.setLedgerConsent}
       />
+
+      {/* Black Glove — reuse the existing "drop your details" inquiry modal. */}
+      {blackGloveOpen && <BlackGloveModal onClose={() => setBlackGloveOpen(false)} />}
 
       {/* Post-payment finale — reuse the ritual page's wax-seal close as-is. */}
       <AnimatePresence>
@@ -280,7 +308,7 @@ export function SinClient({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed inset-0 z-[20] overflow-y-auto bg-[#070707]"
+            className="fixed inset-0 z-[20] overflow-y-auto bg-[#050505]"
           >
             <PhaseClose
               selected={checkout.selected}
@@ -292,30 +320,5 @@ export function SinClient({
         )}
       </AnimatePresence>
     </MotionConfig>
-  )
-}
-
-/* ── Slim header — brand mark + jump-to-buy. No nav maze for cold traffic. ── */
-function SlimHeader({ onBuy }: { onBuy: () => void }) {
-  return (
-    <header className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex items-center justify-between gap-4 bg-gradient-to-b from-[#070707] via-[#070707]/75 to-transparent px-5 py-3 md:px-10 md:py-4">
-      <Link
-        href="/"
-        className="pointer-events-auto font-cinzel text-xs font-black uppercase tracking-[0.45em] text-offwhite/85 transition-colors hover:text-offwhite"
-      >
-        UNHOLY CO.
-      </Link>
-      <span className="hidden font-mono text-[8px] uppercase tracking-[0.4em] text-bone/35 md:inline">
-        BLOODTHIRST · BATCH 001
-      </span>
-      <button
-        type="button"
-        onClick={onBuy}
-        className="pointer-events-auto inline-flex items-center gap-2 border border-bone/20 bg-black/40 px-4 py-2.5 font-mono text-[9px] uppercase tracking-[0.3em] text-bone/80 backdrop-blur-sm transition-colors hover:border-blood/60 hover:text-blood md:text-[10px]"
-      >
-        <span>acquire</span>
-        <span aria-hidden className="inline-block h-px w-5 bg-bone/40" />
-      </button>
-    </header>
   )
 }

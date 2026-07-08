@@ -4,7 +4,7 @@ import type { Pack } from "@/lib/shop/catalog"
 import { SIN_BUY } from "@/content/sin"
 import { SinPacks } from "./SinPacks"
 import { SinDispatch } from "./SinDispatch"
-import { Kicker } from "./marks"
+import { SectionTitle } from "./marks"
 import { Reveal } from "./Reveal"
 
 /**
@@ -34,15 +34,13 @@ export function SinCheckout({
       className="relative z-10 mx-auto w-full max-w-3xl scroll-mt-20 px-5 pb-20 pt-16 md:px-8 md:pb-28 md:pt-24"
     >
       <Reveal>
-        <header className="mb-9 md:mb-12">
-          <Kicker>{SIN_BUY.kicker}</Kicker>
-          <h2 className="mt-4 font-cinzel text-[clamp(2rem,6vw,3.6rem)] font-black uppercase leading-[1.0] tracking-[-0.01em] text-offwhite">
-            {SIN_BUY.title}
-          </h2>
-          <p className="mt-3 text-sm leading-relaxed text-bone/60 md:text-base">
-            {SIN_BUY.subtitle}
-          </p>
-        </header>
+        <SectionTitle
+          kicker={SIN_BUY.kicker}
+          title={SIN_BUY.title}
+          index="02"
+          subtitle={SIN_BUY.subtitle}
+          className="mb-9 md:mb-12"
+        />
       </Reveal>
 
       <Reveal delay={80}>

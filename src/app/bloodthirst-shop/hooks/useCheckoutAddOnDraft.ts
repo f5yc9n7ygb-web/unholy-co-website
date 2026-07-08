@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { CHECKOUT_ADD_ON_CONFIG, type NoteTone } from "@/lib/shop/addon-config"
 import type { CheckoutAddOn } from "./useRitualCheckout"
@@ -98,6 +98,15 @@ export function useCheckoutAddOnDraft(storageKey: string = STORAGE_KEY) {
   const bind = <Key extends keyof AddOnDraft>(key: Key) =>
     (value: AddOnDraft[Key]) => setDraft((current) => ({ ...current, [key]: value }))
 
+  const clearDraft = useCallback(() => {
+    setDraft(EMPTY_DRAFT)
+    try {
+      localStorage.removeItem(storageKey)
+    } catch {
+      // Persistence is a convenience, not a checkout dependency.
+    }
+  }, [storageKey])
+
   return {
     ...draft,
     setNoteEnabled: bind("noteEnabled"),
@@ -109,6 +118,7 @@ export function useCheckoutAddOnDraft(storageKey: string = STORAGE_KEY) {
     setLedgerCity: bind("ledgerCity"),
     setLedgerConfession: bind("ledgerConfession"),
     setLedgerConsent: bind("ledgerConsent"),
+    clearDraft,
     checkoutAddOns,
   }
 }

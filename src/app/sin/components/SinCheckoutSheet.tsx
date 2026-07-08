@@ -17,6 +17,7 @@ import type { NoteTone } from "@/lib/shop/addon-config"
 import { SIN_BUY } from "@/content/sin"
 import { CONTACT_FIELDS, SinContactFields, SinShippingFields } from "./SinForm"
 import { SinCursedNote } from "./SinCursedNote"
+import { SinLedger } from "./SinLedger"
 import { SinDispatch } from "./SinDispatch"
 
 /**
@@ -59,6 +60,17 @@ type Props = {
   onRecipientChange: (value: string) => void
   noteContext: string
   onNoteContextChange: (value: string) => void
+  // Unholy Ledger add-on
+  ledgerEnabled: boolean
+  onLedgerToggle: (next: boolean) => void
+  ledgerName: string
+  onLedgerNameChange: (v: string) => void
+  ledgerCity: string
+  onLedgerCityChange: (v: string) => void
+  ledgerConfession: string
+  onLedgerConfessionChange: (v: string) => void
+  ledgerConsent: boolean
+  onLedgerConsentChange: (v: boolean) => void
 }
 
 export function SinCheckoutSheet(props: Props) {
@@ -96,11 +108,25 @@ function SheetBody({
   onRecipientChange,
   noteContext,
   onNoteContextChange,
+  ledgerEnabled,
+  onLedgerToggle,
+  ledgerName,
+  onLedgerNameChange,
+  ledgerCity,
+  onLedgerCityChange,
+  ledgerConfession,
+  onLedgerConfessionChange,
+  ledgerConsent,
+  onLedgerConsentChange,
 }: Props) {
   const [step, setStep] = useState<1 | 2>(1)
+  // "Do Not Buy" is a fixed-price stunt SKU, so optional add-on cards are
+  // hidden for it rather than silently changing its deliberately weird price.
+  const isBundled = selected.id === "donotbuy"
   const panelRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const total = pricing.total.toLocaleString("en-IN")
+  const [addOnError, setAddOnError] = useState<string | null>(null)
 
   // Focus trap + Escape, scoped to the panel.
   useEffect(() => {
@@ -150,6 +176,10 @@ function SheetBody({
     return () => cancelAnimationFrame(t)
   }, [step])
 
+  useEffect(() => {
+    setAddOnError(null)
+  }, [ledgerCity, ledgerConsent, ledgerEnabled, ledgerName, noteContext, noteEnabled, recipientName])
+
   // Step 1 → 2: gate on the contact subset using the hook's own validator.
   const continueToShipping = () => {
     CONTACT_FIELDS.forEach(onBlur)
@@ -164,6 +194,18 @@ function SheetBody({
       return
     }
     setStep(2)
+  }
+
+  const pay = () => {
+    if (noteEnabled && (!recipientName.trim() || !noteContext.trim())) {
+      setAddOnError("Add the Cursed Note recipient and context before checkout.")
+      return
+    }
+    if (ledgerEnabled && ledgerConsent && (!ledgerName.trim() || !ledgerCity.trim())) {
+      setAddOnError("Add the Ledger display name and city before checkout.")
+      return
+    }
+    onPay()
   }
 
   const ctaLabel = isSubmitting
@@ -192,25 +234,25 @@ function SheetBody({
         aria-modal="true"
         aria-label="Secure checkout"
         tabIndex={-1}
-        className="fixed inset-x-0 bottom-0 z-[75] flex max-h-[94dvh] flex-col border-t border-bone/15 bg-[#0a0a0a] md:inset-0 md:m-auto md:h-fit md:max-h-[88vh] md:max-w-lg md:border"
+        className="fixed inset-x-0 bottom-0 z-[75] flex max-h-[94dvh] flex-col border-t-2 border-blood bg-[#050505] md:inset-0 md:m-auto md:h-fit md:max-h-[88vh] md:max-w-lg md:border-2"
         initial={{ opacity: 0, y: 48 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 48 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
         {/* ── Header: pack + total + close ── */}
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-bone/12 px-5 py-4 md:px-7">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b-2 border-offwhite/12 px-5 py-4 md:px-7">
           <div className="min-w-0">
-            <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-bone/45">
+            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.3em] text-bone/50">
               {selected.title} · {selected.qty} cans · ₹{selected.perCan}/can
             </p>
-            <p className="mt-1 font-cinzel text-2xl font-black tabular-nums leading-none text-offwhite">
+            <p className="mt-1 font-anton text-3xl tabular-nums leading-none text-offwhite">
               ₹{total}
             </p>
             <button
               type="button"
               onClick={onClose}
-              className="mt-2 font-mono text-[9px] uppercase tracking-[0.28em] text-bone/45 underline decoration-bone/25 underline-offset-4 transition-colors hover:text-offwhite"
+              className="mt-2 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-bone/45 underline decoration-blood decoration-2 underline-offset-4 transition-colors hover:text-offwhite"
             >
               ← change pack
             </button>
@@ -219,50 +261,63 @@ function SheetBody({
             type="button"
             onClick={onClose}
             aria-label="Close checkout"
-            className="shrink-0 border border-bone/15 px-3 py-2 font-mono text-xs text-bone/60 transition-colors hover:border-blood/60 hover:text-blood"
+            className="shrink-0 border-2 border-offwhite/20 px-3 py-2 font-mono text-xs font-bold text-bone/60 transition-colors hover:border-blood hover:text-blood"
           >
             ✕
           </button>
         </header>
 
         {/* ── Step indicator ── */}
-        <div className="flex shrink-0 items-center gap-3 border-b border-bone/12 px-5 py-3 md:px-7">
+        <div className="flex shrink-0 items-center gap-3 border-b-2 border-offwhite/12 px-5 py-3 md:px-7">
           <StepDot n={1} label="Contact" active={step === 1} done={step > 1} onClick={() => setStep(1)} />
-          <span aria-hidden className="h-px flex-1 bg-bone/12" />
+          <span aria-hidden className="h-[2px] flex-1 bg-offwhite/12" />
           <StepDot n={2} label="Ship & pay" active={step === 2} done={false} />
         </div>
 
-        {/* ── Body ── */}
+        {/* ── Body (scrolls) — the CTA lives in the pinned footer below, so the
+               pay action can never scroll out of reach on a small phone. ── */}
         <div ref={bodyRef} className="flex-1 overflow-y-auto px-5 py-5 md:px-7">
           {step === 1 ? (
             <div className="space-y-5">
-              <SinContactFields form={form} errors={errors} onChange={onChange} onBlur={onBlur} />
-              <button
-                type="button"
-                onClick={continueToShipping}
-                className="group inline-flex w-full items-center justify-center gap-3 border border-blood bg-blood px-8 py-4 font-mono text-xs font-bold uppercase tracking-[0.3em] text-offwhite transition-colors duration-300 hover:bg-[#c4072a]"
-              >
-                Continue to shipping
-                <span aria-hidden className="inline-block h-px w-5 bg-offwhite/70 transition-all duration-300 group-hover:w-9" />
-              </button>
-              <p className="text-center font-mono text-[9px] uppercase tracking-[0.3em] text-bone/45">
-                {SIN_BUY.ctaFinePrint}
+              <p className="font-mono text-[9px] uppercase tracking-[0.28em] text-bone/45">
+                {SIN_BUY.sheetHint}
               </p>
+              <SinContactFields form={form} errors={errors} onChange={onChange} onBlur={onBlur} />
             </div>
           ) : (
             <div className="space-y-6">
               <SinShippingFields form={form} errors={errors} onChange={onChange} onBlur={onBlur} />
 
-              <SinCursedNote
-                enabled={noteEnabled}
-                onToggle={onNoteToggle}
-                tone={noteTone}
-                onToneChange={onNoteToneChange}
-                recipientName={recipientName}
-                onRecipientChange={onRecipientChange}
-                context={noteContext}
-                onContextChange={onNoteContextChange}
-              />
+              {isBundled ? (
+                <p className="border border-bone/12 bg-black/30 px-4 py-3 font-mono text-[10px] uppercase leading-relaxed tracking-[0.2em] text-bone/55">
+                  This crate is a fixed-price stunt. Optional add-ons are not available here — just pay.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <SinCursedNote
+                    enabled={noteEnabled}
+                    onToggle={onNoteToggle}
+                    tone={noteTone}
+                    onToneChange={onNoteToneChange}
+                    recipientName={recipientName}
+                    onRecipientChange={onRecipientChange}
+                    context={noteContext}
+                    onContextChange={onNoteContextChange}
+                  />
+                  <SinLedger
+                    enabled={ledgerEnabled}
+                    onToggle={onLedgerToggle}
+                    name={ledgerName}
+                    onNameChange={onLedgerNameChange}
+                    city={ledgerCity}
+                    onCityChange={onLedgerCityChange}
+                    confession={ledgerConfession}
+                    onConfessionChange={onLedgerConfessionChange}
+                    consent={ledgerConsent}
+                    onConsentChange={onLedgerConsentChange}
+                  />
+                </div>
+              )}
 
               <div className="h-px w-full bg-gradient-to-r from-blood/50 via-bone/15 to-transparent" />
 
@@ -274,38 +329,6 @@ function SheetBody({
                 onApplyPromo={onApplyPromo}
                 onRemovePromo={onRemovePromo}
               />
-
-              <button
-                type="button"
-                onClick={onPay}
-                disabled={isSubmitting}
-                aria-busy={ctaBusy}
-                className="group relative inline-flex w-full items-center justify-center gap-3 overflow-hidden border border-blood bg-blood px-8 py-5 text-center font-mono text-xs font-bold uppercase tracking-[0.28em] text-offwhite shadow-[0_22px_70px_-14px_rgba(176,0,32,0.75)] transition-colors duration-300 hover:bg-[#c4072a] disabled:cursor-not-allowed disabled:opacity-70 md:text-sm md:tracking-[0.32em]"
-              >
-                {ctaBusy && (
-                  <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-offwhite" />
-                )}
-                <span>{ctaLabel}</span>
-                {!ctaBusy && (
-                  <span aria-hidden className="inline-block h-px w-5 bg-offwhite/70 transition-all duration-300 group-hover:w-9" />
-                )}
-              </button>
-
-              {payError && (
-                <div className="text-center" role="alert">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-blood">
-                    {payError}
-                  </p>
-                  {payErrorKind !== "validation" && (
-                    <Link
-                      href="/contact"
-                      className="mt-2 inline-block font-mono text-[10px] uppercase tracking-[0.28em] text-bone/55 underline decoration-bone/30 underline-offset-4 transition-colors hover:text-offwhite"
-                    >
-                      Contact support
-                    </Link>
-                  )}
-                </div>
-              )}
 
               <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 font-mono text-[9px] uppercase tracking-[0.26em] text-bone/45">
                 <SinDispatch compact />
@@ -319,6 +342,76 @@ function SheetBody({
             </div>
           )}
         </div>
+
+        {/* ── Pinned CTA footer — always visible, whatever the body scroll ── */}
+        <footer className="shrink-0 border-t-2 border-offwhite/12 bg-[#050505] px-5 pb-4 pt-3 md:px-7">
+          {step === 1 ? (
+            <>
+              <button
+                type="button"
+                onClick={continueToShipping}
+                className="inline-flex w-full items-center justify-center gap-3 border-2 border-offwhite bg-blood px-8 py-3.5 font-anton text-xl uppercase tracking-[0.08em] text-offwhite shadow-[4px_4px_0_#F6F6F6] transition-[transform,box-shadow] duration-150 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#F6F6F6] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none"
+              >
+                Continue to shipping
+                <span aria-hidden>→</span>
+              </button>
+              <p className="mt-2.5 text-center font-mono text-[9px] font-bold uppercase tracking-[0.3em] text-bone/45">
+                {SIN_BUY.ctaFinePrint}
+              </p>
+            </>
+          ) : (
+            <>
+              {addOnError && (
+                <p className="mb-2.5 text-center font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-blood" role="alert">
+                  {addOnError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={pay}
+                disabled={ctaBusy}
+                aria-busy={ctaBusy}
+                className="inline-flex w-full items-center justify-center gap-3 border-2 border-offwhite bg-blood px-8 py-4 text-center font-anton text-xl uppercase tracking-[0.08em] text-offwhite shadow-[4px_4px_0_#F6F6F6] transition-[transform,box-shadow] duration-150 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#F6F6F6] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-70 md:text-2xl"
+              >
+                {ctaBusy && (
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-offwhite" />
+                )}
+                <span>{ctaLabel}</span>
+                {!ctaBusy && <span aria-hidden>→</span>}
+              </button>
+
+              {payError ? (
+                <div className="mt-2.5 text-center" role="alert">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-blood">
+                    {payError}
+                  </p>
+                  {payErrorKind !== "validation" && (
+                    <Link
+                      href="/contact"
+                      className="mt-1.5 inline-block font-mono text-[10px] uppercase tracking-[0.28em] text-bone/55 underline decoration-bone/30 underline-offset-4 transition-colors hover:text-offwhite"
+                    >
+                      Contact support
+                    </Link>
+                  )}
+                </div>
+              ) : (
+                <div
+                  aria-label={SIN_BUY.payMethods}
+                  className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5"
+                >
+                  {SIN_BUY.payMethodList.map((method) => (
+                    <span
+                      key={method}
+                      className="border border-offwhite/25 px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-bone/70"
+                    >
+                      {method}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </footer>
       </motion.div>
     </>
   )
@@ -344,19 +437,19 @@ function StepDot({
       className="inline-flex items-center gap-2"
     >
       <span
-        className={`inline-flex h-5 w-5 items-center justify-center border font-mono text-[10px] ${
+        className={`inline-flex h-6 w-6 items-center justify-center border-2 font-anton text-xs ${
           active
-            ? "border-blood bg-blood text-offwhite"
+            ? "border-offwhite bg-blood text-offwhite shadow-[2px_2px_0_#F6F6F6]"
             : done
-            ? "border-blood/50 text-blood"
-            : "border-bone/20 text-bone/45"
+            ? "border-blood text-blood"
+            : "border-offwhite/20 text-bone/45"
         }`}
       >
         {done ? "✓" : n}
       </span>
       <span
-        className={`font-mono text-[9px] uppercase tracking-[0.28em] ${
-          active ? "text-offwhite/85" : "text-bone/45"
+        className={`font-mono text-[9px] font-bold uppercase tracking-[0.28em] ${
+          active ? "text-offwhite/90" : "text-bone/45"
         }`}
       >
         {label}
@@ -385,6 +478,7 @@ function PromoAndSummary({
   const [promoInput, setPromoInput] = useState("")
   const [promoLoading, setPromoLoading] = useState(false)
   const [promoError, setPromoError] = useState<string | null>(null)
+  const promoOrderTotal = selected.price + addOns.reduce((sum, item) => sum + item.price, 0)
 
   const applyPromo = async () => {
     if (!promoInput.trim() || promoLoading) return
@@ -394,7 +488,7 @@ function PromoAndSummary({
       const res = await fetch("/api/promo/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: promoInput.trim(), orderTotal: selected.price }),
+        body: JSON.stringify({ code: promoInput.trim(), orderTotal: promoOrderTotal }),
       })
       const data = await res.json()
       if (!res.ok || !data?.ok) {
@@ -441,11 +535,11 @@ function PromoAndSummary({
           )}
           <LedgerRow label="Shipping" value="Free" accent />
         </div>
-        <div className="mt-4 flex items-end justify-between gap-4 border-t border-bone/15 pt-4">
-          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-bone/50">
+        <div className="mt-4 flex items-end justify-between gap-4 border-t-2 border-offwhite/15 pt-4">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-bone/50">
             Total (incl. GST)
           </span>
-          <span className="font-cinzel text-2xl font-black tabular-nums text-offwhite">
+          <span className="font-anton text-3xl tabular-nums text-offwhite">
             ₹{pricing.total.toLocaleString("en-IN")}
           </span>
         </div>

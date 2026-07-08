@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { INDIAN_STATES_AND_UNION_TERRITORIES } from "@/lib/shop/checkout-validation"
 import { getKVNamespace } from "@/lib/server/kv"
-import { checkRateLimit } from "@/lib/server/security"
+import { checkRateLimit, validateRequestOriginOrReferer } from "@/lib/server/security"
 
 const PINCODE_REGEX = /^\d{6}$/
 const INDIA_POST_ENDPOINT = "https://api.postalpincode.in/pincode"
@@ -39,6 +39,11 @@ type IndiaPostResponse = {
 }
 
 export async function GET(request: NextRequest) {
+  const originCheck = validateRequestOriginOrReferer(request)
+  if (!originCheck.ok) {
+    return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 })
+  }
+
   const pincode = request.nextUrl.searchParams.get("pincode")?.trim()
 
   if (!pincode || !PINCODE_REGEX.test(pincode)) {

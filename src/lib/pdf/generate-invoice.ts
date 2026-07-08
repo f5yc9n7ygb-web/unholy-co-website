@@ -35,6 +35,18 @@ export type InvoiceData = {
   invoiceSeq?: number
   /** Exact invoice number to render when repairing already-issued PDFs */
   invoiceNumber?: string
+  /** Unit label for the main invoice line. Defaults to the existing Can label. */
+  unit?: string
+  /** Explicit product lines for invoices that contain multiple SKUs. */
+  items?: Array<{
+    description: string
+    subDescription?: string
+    hsn?: string
+    quantity: number
+    unit?: string
+    /** GST-inclusive line amount before invoice-level discount */
+    grossInclusiveAmount: number
+  }>
   /**
    * Override the interstate/intra-state determination. Used when reissuing an
    * invoice for a migrated row whose state was corrected after the original
@@ -162,6 +174,7 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     customerName, customerEmail, customerPhone,
     shippingAddress, shippingCity, shippingState, shippingPincode,
     timestamp, promoCode, discountAmount, buyerGstNumber, buyerBusinessName,
+    unit, items,
     addOns = [],
   } = data
 
@@ -172,19 +185,29 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
   const addOnInvoiceLines = normalizeInvoiceAddOns(addOns)
   const addOnGrossPaise = addOnInvoiceLines.reduce((sum, line) => sum + line.grossInclusivePaise, 0)
   const packGrossInclusivePaise = Math.max(0, originalAmountPaise - addOnGrossPaise)
+  const productInvoiceLines = items?.length
+    ? items.map((item) => ({
+        description: item.description,
+        subDescription: item.subDescription || "Natural Mineral Water",
+        hsn: item.hsn || "2201",
+        quantity: item.quantity,
+        unit: item.unit || "Can",
+        grossInclusivePaise: toPaise(item.grossInclusiveAmount),
+      }))
+    : [{
+        description: `BloodThirst — ${pack}`,
+        subDescription: "Natural Mineral Water",
+        hsn: "2201",
+        quantity,
+        unit: unit || "Can",
+        grossInclusivePaise: packGrossInclusivePaise,
+      }]
   const grossInvoiceLines = [
-    {
-      description: `BloodThirst — ${pack}`,
-      subDescription: "Natural Mineral Water",
-      hsn: "2201",
-      quantity,
-      unit: "Can",
-      grossInclusivePaise: packGrossInclusivePaise,
-    },
+    ...productInvoiceLines,
     ...addOnInvoiceLines,
   ].filter((line) => line.grossInclusivePaise > 0)
   const discountAllocations = allocatePaise(discountPaise, grossInvoiceLines.map((line) => line.grossInclusivePaise))
-  const invoiceLines = grossInvoiceLines.map((line, index) => {
+  let invoiceLines = grossInvoiceLines.map((line, index) => {
     const lineDiscountPaise = discountAllocations[index] || 0
     const netInclusivePaise = Math.max(0, line.grossInclusivePaise - lineDiscountPaise)
     const grossLineTaxablePaise = taxExclusivePaise(line.grossInclusivePaise)
@@ -196,6 +219,24 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
       discountTaxablePaise: Math.max(0, grossLineTaxablePaise - taxableLinePaise),
     }
   })
+  if (invoiceLines.length > 1) {
+    const lastIndex = invoiceLines.length - 1
+    const grossTaxableAdjustment = taxExclusivePaise(originalAmountPaise)
+      - invoiceLines.reduce((sum, line) => sum + line.grossTaxablePaise, 0)
+    const taxableAdjustment = taxExclusivePaise(amountPaise)
+      - invoiceLines.reduce((sum, line) => sum + line.taxablePaise, 0)
+    invoiceLines = invoiceLines.map((line, index) => {
+      if (index !== lastIndex) return line
+      const grossTaxablePaise = line.grossTaxablePaise + grossTaxableAdjustment
+      const taxablePaise = line.taxablePaise + taxableAdjustment
+      return {
+        ...line,
+        grossTaxablePaise,
+        taxablePaise,
+        discountTaxablePaise: Math.max(0, grossTaxablePaise - taxablePaise),
+      }
+    })
+  }
   const grossTaxablePaise = invoiceLines.reduce((sum, line) => sum + line.grossTaxablePaise, 0)
   const taxablePaise = invoiceLines.reduce((sum, line) => sum + line.taxablePaise, 0)
   const discountTaxablePaise = invoiceLines.reduce((sum, line) => sum + line.discountTaxablePaise, 0)
@@ -300,8 +341,6 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Uint8Array>
     page.drawText(buyerBusinessName, {
       x: leftMargin, y, size: 10, font: fontBold, color: black,
     })
-    y -= 14
-    page.drawText(`c/o ${customerName}`, { x: leftMargin, y, size: 9, font: fontRegular, color: grey })
     y -= 14
   } else {
     page.drawText(customerName || "Customer", {

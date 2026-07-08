@@ -36,7 +36,11 @@ function useDispatchState(): DispatchState | null {
         h > 0
           ? `${h}h ${String(m).padStart(2, "0")}m`
           : `${m}m ${String(s).padStart(2, "0")}s`
-      setState({ open: true, remaining })
+      // Only commit when the rendered string actually changes (above the hour
+      // mark it flips once a minute) — spares a per-second re-render.
+      setState((prev) =>
+        prev?.open === true && prev.remaining === remaining ? prev : { open: true, remaining }
+      )
     }
     tick()
     const id = window.setInterval(tick, 1000)

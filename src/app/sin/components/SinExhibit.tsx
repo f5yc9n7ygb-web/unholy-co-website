@@ -17,12 +17,12 @@ export function SinExhibit() {
   return (
     <section className="relative z-10 mx-auto w-full max-w-6xl px-5 py-20 md:px-10 md:py-28">
       <Reveal>
-        <SectionTitle kicker={SIN_EXHIBIT.kicker} title={SIN_EXHIBIT.title} />
-      </Reveal>
-      <Reveal delay={60}>
-        <p className="-mt-6 mb-9 max-w-2xl text-sm leading-relaxed text-bone/60 md:text-base">
-          {SIN_EXHIBIT.subtitle}
-        </p>
+        <SectionTitle
+          kicker={SIN_EXHIBIT.kicker}
+          title={SIN_EXHIBIT.title}
+          index="01"
+          subtitle={SIN_EXHIBIT.subtitle}
+        />
       </Reveal>
 
       <Reveal delay={100}>
@@ -31,11 +31,11 @@ export function SinExhibit() {
           role="list"
           aria-label="Product gallery"
         >
-          {SIN_EXHIBIT.shots.map((shot) => (
+          {SIN_EXHIBIT.shots.map((shot, i) => (
             <figure
               role="listitem"
               key={shot.cap}
-              className="group relative aspect-[3/4] w-[76%] shrink-0 snap-start overflow-hidden border border-bone/12 bg-[#0a0a0a] sm:w-[44%] md:w-auto"
+              className="group relative aspect-[3/4] w-[82%] shrink-0 snap-start overflow-hidden border border-bone/12 bg-[#0a0a0a] sm:w-[44%] md:w-auto"
             >
               <img
                 src={shot.src}
@@ -58,6 +58,13 @@ export function SinExhibit() {
                     "linear-gradient(to top, rgba(7,7,7,0.92) 4%, rgba(7,7,7,0.35) 34%, transparent 60%)",
                 }}
               />
+              {/* evidence frame number */}
+              <span
+                aria-hidden
+                className="absolute left-3 top-3 border border-bone/20 bg-black/50 px-1.5 py-0.5 font-mono text-[8px] tracking-[0.24em] text-bone/55 backdrop-blur-sm"
+              >
+                {String(i + 1).padStart(2, "0")}/{String(SIN_EXHIBIT.shots.length).padStart(2, "0")}
+              </span>
               <figcaption className="absolute inset-x-0 bottom-0 p-4 md:p-5">
                 <span className="block font-cinzel text-sm font-black uppercase tracking-[0.06em] text-offwhite md:text-base">
                   {shot.cap}

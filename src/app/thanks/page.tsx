@@ -1,5 +1,6 @@
 import { cookies } from "next/headers"
-import { readReceiptToken } from "@/lib/server/order-session"
+import { getKVNamespace } from "@/lib/server/kv"
+import { readReceiptReference, readReceiptToken } from "@/lib/server/order-session"
 import { RECEIPT_COOKIE } from "@/lib/server/order-session"
 import { ThanksContent } from "./ThanksContent"
 
@@ -16,8 +17,13 @@ type ThanksPageProps = {
 export default async function ThanksPage({ searchParams }: ThanksPageProps) {
   const resolvedSearchParams = (await searchParams) || {}
   const receiptParam = resolvedSearchParams.receipt
+  const receiptRefParam = resolvedSearchParams.receiptRef
   const legacyReceiptToken = Array.isArray(receiptParam) ? receiptParam[0] : receiptParam
-  const receiptToken = legacyReceiptToken || (await cookies()).get(RECEIPT_COOKIE)?.value
+  const receiptRef = Array.isArray(receiptRefParam) ? receiptRefParam[0] : receiptRefParam
+  const receiptTokenFromRef = receiptRef
+    ? await readReceiptReference(receiptRef, await getKVNamespace())
+    : null
+  const receiptToken = receiptTokenFromRef || legacyReceiptToken || (await cookies()).get(RECEIPT_COOKIE)?.value
   const receipt = readReceiptToken(receiptToken)
 
   return (

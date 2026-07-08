@@ -1,6 +1,47 @@
 import path from 'node:path'
 import { withSentryConfig } from '@sentry/nextjs'
 
+const isDev = process.env.NODE_ENV !== 'production'
+
+const csp = [
+  "default-src 'self'",
+  [
+    "script-src",
+    "'self'",
+    "'unsafe-inline'",
+    isDev ? "'unsafe-eval'" : "",
+    "https://checkout.razorpay.com",
+    "https://connect.facebook.net",
+  ].filter(Boolean).join(" "),
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https://www.facebook.com https://*.razorpay.com",
+  "font-src 'self' data:",
+  "media-src 'self' blob:",
+  "object-src 'none'",
+  "frame-src https://api.razorpay.com https://checkout.razorpay.com",
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self' https://api.razorpay.com",
+  [
+    "connect-src",
+    "'self'",
+    isDev ? "http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*" : "",
+    "https://*.posthog.com",
+    "https://eu.i.posthog.com",
+    "https://*.sentry.io",
+    "https://*.ingest.sentry.io",
+    "https://*.ingest.de.sentry.io",
+    "https://api.razorpay.com",
+    "https://checkout.razorpay.com",
+    "https://lumberjack.razorpay.com",
+    "https://www.facebook.com",
+    "https://connect.facebook.net",
+  ].filter(Boolean).join(" "),
+  "upgrade-insecure-requests",
+].join("; ")
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone', // Required for OpenNext Cloudflare adapter
@@ -54,15 +95,7 @@ const nextConfig = {
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
           {
             key: 'Content-Security-Policy',
-            value: [
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self' https://api.razorpay.com",
-              // Allow outbound connections to PostHog (analytics) and Sentry (error tracking)
-              // Sentry EU region uses *.ingest.de.sentry.io (multi-level subdomain, needs explicit rule)
-              "connect-src 'self' https://*.posthog.com https://eu.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://api.razorpay.com https://www.facebook.com https://connect.facebook.net",
-              "upgrade-insecure-requests",
-            ].join("; "),
+            value: csp,
           },
         ],
       },

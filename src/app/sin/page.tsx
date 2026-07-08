@@ -1,23 +1,33 @@
 import type { Metadata } from "next"
+import { Anton } from "next/font/google"
 import { PACKS, getPackById } from "@/lib/shop/catalog"
 import { SIN_ENTRY_PACK_ID } from "@/content/sin"
 import { SinClient } from "./SinClient"
 
 /**
- * /sin — "THE BLACK ROOM" BloodThirst landing page for cold Instagram traffic.
+ * /sin — "THE RED MASS" BloodThirst landing page for cold Instagram traffic.
  *
- * A premium spotlit-specimen experience that stays light: ISR (no
- * force-dynamic), no three.js / WebGL / GSAP / Lenis. Reuses the real ritual
- * checkout (useRitualCheckout) and the existing Razorpay + Meta Pixel
+ * Hype-drop brutalism: full-bleed black/blood slabs, Anton poster type, hard
+ * offset shadows, sticker-stamps, tickers. Stays light — ISR (no
+ * force-dynamic), no route-level three.js / WebGL / Lenis. Reuses the real
+ * ritual checkout (useRitualCheckout) and the existing Razorpay + Meta Pixel
  * plumbing — payments are NOT reinvented here.
  *
  * Kept out of the index (noindex) like /buy and /bloodthirst-shop.
  */
 export const revalidate = 60
 
-const TITLE = "BloodThirst — Drink in Cold Blood"
+/** RED MASS poster face — loaded route-locally so only /sin pays for it. */
+const anton = Anton({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-anton",
+  display: "swap",
+})
+
+const TITLE = "BloodThirst — Drink Like You Mean It"
 const DESCRIPTION =
-  "500ml Himalayan still mineral water in a matte-black can. Batch 001, first run. Available in 6, 12, and 24-can packs — FSSAI licensed, Razorpay secure, free India delivery."
+  "500ml Himalayan still mineral water in a matte-black can. Batch 001, first pressing. 6, 12 and 24-can drops — FSSAI licensed, Razorpay secure, free India delivery."
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -28,13 +38,15 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: "/sin",
-    images: [{ url: "/og-hero.png", width: 1200, height: 630, alt: "BloodThirst — UNHOLY CO." }],
+    // RED MASS poster card — links get forwarded on WhatsApp; the share card
+    // should look like the page it opens.
+    images: [{ url: "/og-sin.png", width: 1200, height: 630, alt: "BloodThirst — Drink Like You Mean It. Batch 001." }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/og-hero.png"],
+    images: ["/og-sin.png"],
   },
 }
 
@@ -47,5 +59,9 @@ export default function SinPage() {
   // aligned.
   const defaultPackId = (getPackById(SIN_ENTRY_PACK_ID) || PACKS[0]).id
 
-  return <SinClient razorpayKey={razorpayKey} defaultPackId={defaultPackId} />
+  return (
+    <div className={anton.variable}>
+      <SinClient razorpayKey={razorpayKey} defaultPackId={defaultPackId} />
+    </div>
+  )
 }

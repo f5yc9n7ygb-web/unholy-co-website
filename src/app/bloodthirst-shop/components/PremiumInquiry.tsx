@@ -248,12 +248,12 @@ export function DoNotBuyModal({ onClose, onTakeTrial }: { onClose: () => void; o
   return (
     <ModalFrame title="You clicked it. That's already concerning." onClose={onClose}>
       <p className="text-sm leading-relaxed text-bone/68">
-        66 cans, a signed crate, a cursed note, entry into the Unholy Ledger, and enough hydration to make your accountant uncomfortable. This one&apos;s an inquiry — we confirm stock and logistics (and your wellbeing) before anything is charged.
+        666 cans, a signed crate, a cursed note, entry into the Unholy Ledger, and enough hydration to make your accountant uncomfortable. This one&apos;s an inquiry — we confirm stock and logistics (and your wellbeing) before anything is charged.
       </p>
       <InquiryForm
         idPrefix="dnb"
-        inquiryType="Do Not Buy This (66 cans)"
-        contextLine="Do Not Buy This inquiry (₹66,666 — 66 cans, signed crate, ledger entry, founder judgement)."
+        inquiryType="Do Not Buy This (666 cans)"
+        contextLine="Do Not Buy This inquiry (₹66,666 — 666 cans, signed crate, ledger entry, founder judgement)."
         submitLabel="Proceed. I Am Unwell."
         sentMessage="Logged. Someone will reach out to confirm this poor decision before any payment."
         secondary={

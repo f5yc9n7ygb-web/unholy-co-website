@@ -24,6 +24,8 @@ const config: Config = {
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
         cinzel: ["var(--font-cinzel)", "Georgia", "serif"],
+        // Poster display face for /sin "RED MASS" (var set route-locally in sin/page.tsx)
+        anton: ["var(--font-anton)", "Impact", "Haettenschweiler", "sans-serif"],
       },
       keyframes: {
         stepIn: {

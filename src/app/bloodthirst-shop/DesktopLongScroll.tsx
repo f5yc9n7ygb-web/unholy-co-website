@@ -656,7 +656,7 @@ export function DesktopLongScroll({ razorpayKey }: { razorpayKey?: string }) {
                       <p className="text-xs uppercase text-blood">Do Not Buy This</p>
                       <h3 className="mt-2 font-cinzel text-4xl font-black uppercase text-offwhite">₹66,666</h3>
                       <p className="mt-4 max-w-2xl text-base leading-relaxed text-bone/66">
-                        66 cans. Signed crate. Ledger entry. Founder judgement. A financial decision your ancestors did not survive for.
+                        666 cans. Signed crate. Ledger entry. Founder judgement. A financial decision your ancestors did not survive for.
                       </p>
                     </div>
                     <button

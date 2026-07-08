@@ -21,11 +21,18 @@ export function SinPacks({
   )
   const starterPerCan = availablePacks[0]?.perCan ?? selected.perCan
 
+  // Columns must track the available-pack count (Tailwind needs literal class
+  // names) — a fixed grid-cols-5 leaves ghost columns when packs are hidden.
+  const mdCols =
+    { 2: "md:grid-cols-2", 3: "md:grid-cols-3", 4: "md:grid-cols-4" }[
+      availablePacks.length
+    ] ?? "md:grid-cols-5"
+
   return (
     <div
       role="radiogroup"
       aria-label="Choose your pack"
-      className="grid grid-cols-1 gap-2 md:grid-cols-5 md:gap-2.5"
+      className={`grid grid-cols-1 gap-2 md:gap-2.5 ${mdCols}`}
     >
       {availablePacks.map((pack) => {
         const active = pack.id === selected.id
@@ -40,6 +47,10 @@ export function SinPacks({
             className={`group relative flex items-center justify-between gap-4 overflow-hidden border px-4 pb-3.5 pt-7 text-left transition-all duration-300 md:flex-col md:items-start md:justify-start md:gap-0 md:px-4 md:py-5 md:min-h-[10.5rem] ${
               active
                 ? "border-blood bg-blood/[0.14] shadow-[0_0_44px_-12px_rgba(176,0,32,0.8)]"
+                : pack.tag
+                ? // anchor packs keep a blood edge + tint at rest, so the packs
+                  // we want chosen stay lit even when another is selected
+                  "border-blood/50 bg-blood/[0.05] hover:border-blood/80 hover:bg-blood/[0.09]"
                 : "border-bone/12 bg-black/40 hover:border-bone/30 hover:bg-black/60"
             }`}
           >

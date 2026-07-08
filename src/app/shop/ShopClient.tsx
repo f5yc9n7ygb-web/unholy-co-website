@@ -490,7 +490,11 @@ export function ShopClient({ razorpayKey }: { razorpayKey?: string }) {
             } catch {
               /* Ignore storage failures after payment. */
             }
-            router.push(`/thanks?receipt=${encodeURIComponent(verification.receiptToken)}`)
+            const receiptReference = verification.receiptRef || verification.receiptToken
+            if (!receiptReference) {
+              throw new Error("Payment verified, but the receipt could not be opened.")
+            }
+            router.push(`/thanks?receiptRef=${encodeURIComponent(receiptReference)}`)
           } catch (error: any) {
             setSubmitting(false)
             setPayError(error?.message || "Payment verification failed.")

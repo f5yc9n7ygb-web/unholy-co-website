@@ -51,3 +51,7 @@ FIX_BLANK_PAGE.md
 FIX_SUMMARY.md
 QUICK_FIX_SUMMARY.md
 VERIFICATION_GUIDE.md
+
+# Generated invoice/PDF batches (modern-bazaar tooling, not website code)
+output/
+outputs/

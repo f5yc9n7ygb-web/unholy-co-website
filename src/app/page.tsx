@@ -1,49 +1,29 @@
-import HomeHero from "@/components/home/HomeHero"
-import HomeShowcase from "@/components/home/Showcase"
-import HomeManifesto from "@/components/home/Manifesto"
-import HomeRitual from "@/components/home/HorizontalRitual"
-import HomeCTA from "@/components/home/CTA"
-import { Marquee } from "@/components/ux/Marquee"
-import { InteractiveQuiz } from "@/components/ux/InteractiveQuiz"
+import Hero2026 from "@/components/home2026/Hero2026"
+import { LedgerStrip } from "@/components/home2026/LedgerStrip"
+import Record2026 from "@/components/home2026/Record2026"
+import Gallery2026 from "@/components/home2026/Gallery2026"
+import Manifesto2026 from "@/components/home2026/Manifesto2026"
+import Ritual2026 from "@/components/home2026/Ritual2026"
+import Transmission2026 from "@/components/home2026/Transmission2026"
 
 export const revalidate = 60
 
-const marqueeItems = [
-  "BLOODTHIRST",
-  "UNHOLY CO",
-  "EST. MMXXV",
-  "NOT YOUR SALVATION",
-  "MINERAL WATER",
-]
-
+/**
+ * Homepage — 2026 "COLD LIGHT ARCHIVE" overhaul. The previous iteration
+ * (glass-bento + 400vh horizontal scroll-jack) lives on in git history and in
+ * the unused src/components/home/ directory; copy is centralized in
+ * src/content/home2026.ts.
+ */
 export default function HomePage() {
   return (
-    <>
-      <HomeHero />
-
-      {/* Scrolling brand marquee divider */}
-      <div className="py-5 border-y border-white/[0.04] overflow-hidden">
-        <Marquee speed={25} pauseOnHover={false}>
-          {marqueeItems.map((text) => (
-            <span key={text} className="flex items-center gap-8 mx-8 shrink-0">
-              <span className="text-bone/15 text-[10px] md:text-xs tracking-[0.35em] uppercase font-cinzel whitespace-nowrap">
-                {text}
-              </span>
-              <span className="text-blood/25 text-[10px]">&diams;</span>
-            </span>
-          ))}
-        </Marquee>
-      </div>
-
-      <HomeShowcase />
-      <HomeManifesto />
-      <HomeRitual />
-      <section className="relative overflow-hidden bg-[#050505] py-20 md:py-32 border-t border-white/[0.04]">
-        <div className="container px-4 sm:px-6">
-          <InteractiveQuiz />
-        </div>
-      </section>
-      <HomeCTA />
-    </>
+    <div className="relative bg-[#060606]">
+      <Hero2026 />
+      <LedgerStrip />
+      <Record2026 />
+      <Gallery2026 />
+      <Manifesto2026 />
+      <Ritual2026 />
+      <Transmission2026 />
+    </div>
   )
 }

@@ -62,12 +62,15 @@ type SubscriptionPayload = {
 declare global {
   var __unholyProcessedPayments: Map<string, number> | undefined
   var __unholySingleUseStore: Map<string, number> | undefined
+  var __unholyReceiptReferenceStore: Map<string, { token: string; expiresAt: number }> | undefined
 }
 
 const processedPayments = globalThis.__unholyProcessedPayments ?? new Map<string, number>()
 globalThis.__unholyProcessedPayments = processedPayments
 const singleUseStore = globalThis.__unholySingleUseStore ?? new Map<string, number>()
 globalThis.__unholySingleUseStore = singleUseStore
+const receiptReferenceStore = globalThis.__unholyReceiptReferenceStore ?? new Map<string, { token: string; expiresAt: number }>()
+globalThis.__unholyReceiptReferenceStore = receiptReferenceStore
 
 export const ORDER_SESSION_COOKIE = "unholy-order-session"
 export const RECEIPT_COOKIE = "unholy-receipt"
@@ -100,6 +103,38 @@ export function createReceiptToken(payload: ReceiptPayload) {
 
 export function readReceiptToken(token?: string | null) {
   return verifyEnvelope<"thanks-receipt", ReceiptPayload>(token, "thanks-receipt", RECEIPT_TTL_MS)
+}
+
+export async function createReceiptReference(receiptToken: string, kv?: KVNamespace | null) {
+  const ref = `rr_${randomBytes(18).toString("base64url")}`
+  if (kv) {
+    await kv.put(`receipt-ref:${ref}`, receiptToken, {
+      expirationTtl: RECEIPT_COOKIE_MAX_AGE_SECONDS,
+    })
+    return ref
+  }
+
+  const now = Date.now()
+  purgeReceiptReferences(now)
+  receiptReferenceStore.set(ref, { token: receiptToken, expiresAt: now + RECEIPT_TTL_MS })
+  return ref
+}
+
+export async function readReceiptReference(ref?: string | null, kv?: KVNamespace | null) {
+  if (!ref || !/^rr_[A-Za-z0-9_-]{20,}$/.test(ref)) return null
+
+  if (kv) {
+    return kv.get(`receipt-ref:${ref}`).catch(() => null)
+  }
+
+  const now = Date.now()
+  purgeReceiptReferences(now)
+  const stored = receiptReferenceStore.get(ref)
+  if (!stored || stored.expiresAt <= now) {
+    receiptReferenceStore.delete(ref)
+    return null
+  }
+  return stored.token
 }
 
 export function createSubscriptionToken(payload: SubscriptionPayload) {
@@ -285,6 +320,14 @@ function purgeSingleUseKeys(now: number) {
   for (const [key, expiresAt] of singleUseStore.entries()) {
     if (expiresAt <= now) {
       singleUseStore.delete(key)
+    }
+  }
+}
+
+function purgeReceiptReferences(now: number) {
+  for (const [key, record] of receiptReferenceStore.entries()) {
+    if (record.expiresAt <= now) {
+      receiptReferenceStore.delete(key)
     }
   }
 }

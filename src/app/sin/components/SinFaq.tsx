@@ -10,7 +10,7 @@ import { SectionTitle } from "./marks"
 export function SinFaq() {
   return (
     <section className="relative z-10 mx-auto w-full max-w-3xl px-5 py-20 md:px-10 md:py-28">
-      <SectionTitle kicker={SIN_FAQ.kicker} title={SIN_FAQ.title} />
+      <SectionTitle kicker={SIN_FAQ.kicker} title={SIN_FAQ.title} index="06" />
 
       <div className="divide-y divide-bone/12 border-y border-bone/12">
         {SIN_FAQ.items.map((item) => (

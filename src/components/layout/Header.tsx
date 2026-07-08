@@ -10,6 +10,7 @@ const NAV_ITEMS: Array<{
   eyebrow: string
   description: string
 }> = [
+  { label: "Shop", href: "/shop" as Route, eyebrow: "Batch 001", description: "The official drop. Matte-black cans, shipped cold, India-wide." },
   { label: "BloodThirst", href: "/bloodthirst" as Route, eyebrow: "Flagship elixir", description: "Matte-black cans. Obsidian finish. Ritual-grade hydration." },
   { label: "Drops", href: "/drops" as Route, eyebrow: "Limited runs", description: "Small-batch releases for night crawlers and back rooms." },
   { label: "Story", href: "/story" as Route, eyebrow: "Origin myth", description: "How BloodThirst was forged in neon glow and velvet darkness." },

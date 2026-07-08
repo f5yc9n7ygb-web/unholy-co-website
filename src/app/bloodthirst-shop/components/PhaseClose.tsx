@@ -10,7 +10,7 @@ import { CLOSE } from "@/content/bloodthirst"
  *
  * Plays after Razorpay verifies the payment. Wax-seal stamp via SVG path-draw,
  * then a gothic order summary in brand voice. After 6s of idle the user is
- * navigated to /thanks?receipt=... — or they can click through earlier.
+ * navigated to /thanks?receiptRef=... — or they can click through earlier.
  */
 export function PhaseClose({
   selected,

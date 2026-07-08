@@ -34,6 +34,17 @@ export const SIN_HERO = {
   /** Above-the-fold price chip framing (numbers injected from the available pack set). */
   chipLabel: "AVAILABLE NOW",
   chipNote: "Incl. all taxes · Free delivery",
+  /**
+   * Specimen annotations — museum-exhibit hairline callouts over the hero can
+   * (lg+ only; the phone fold has no room). Claims must stay defensible: no
+   * absolute "zero microplastics", no uncited numbers. `y` is % from the top of
+   * the hero, tuned to the can's on-screen position.
+   */
+  annotations: [
+    { y: 30, label: "MATTE-BLACK ALUMINIUM", note: "chills in minutes" },
+    { y: 52, label: "ONE LINE OF BLOOD", note: "on purpose" },
+    { y: 72, label: "500ML · STILL", note: "pH 7.18 · Himalayan" },
+  ],
 } as const
 
 /** Thin spec seam under the hero — proof the water is real, fast to scan. */
@@ -77,9 +88,9 @@ export const SIN_EXHIBIT = {
     "Matte-black aluminium. A blackletter mark. One line of blood. Photographed cold — look closely.",
   shots: [
     { src: "/bloodthirst-hero.webp", pos: "50% 42%", scale: 1, cap: "THE VESSEL", note: "500ml matte-black aluminium, rim-lit cold." },
-    { src: "/can.webp", pos: "50% 44%", scale: 1.7, cap: "THE MARK", note: "Blackletter wordmark. One drip of blood, on purpose." },
-    { src: "/bloodthirst-texture.webp", pos: "98% 50%", scale: 2.1, cap: "DAMNATION FACTS", note: "The back of the can tells the truth. Mostly." },
-    { src: "/can.webp", pos: "50% 88%", scale: 1.9, cap: "THE SEAL", note: "Natural mineral water. An Unholy Co. creation." },
+    { src: "/can-gallery.webp", pos: "50% 44%", scale: 1.7, cap: "THE MARK", note: "Blackletter wordmark. One drip of blood, on purpose." },
+    { src: "/bloodthirst-texture-gallery.webp", pos: "98% 50%", scale: 2.1, cap: "DAMNATION FACTS", note: "The back of the can tells the truth. Mostly." },
+    { src: "/can-gallery.webp", pos: "50% 88%", scale: 1.9, cap: "THE SEAL", note: "Natural mineral water. An Unholy Co. creation." },
   ],
 } as const
 
@@ -92,6 +103,12 @@ export const SIN_BUY = {
   ctaConnecting: "OPENING SECURE CHECKOUT",
   ctaRetry: "CHECKOUT UNAVAILABLE · TAP TO RETRY",
   ctaFinePrint: "Razorpay secure · UPI · Cards · Net banking",
+  /** Sheet chrome — kills perceived effort before it starts. */
+  sheetHint: "Two steps · no account · under a minute",
+  /** Chip-rendered payment rails — recognisable marks beat a dot-separated line. */
+  payMethodList: ["UPI", "GPay", "PhonePe", "Cards", "NetBanking"],
+  /** Payment rails, spelled out where the money changes hands. */
+  payMethods: "UPI · GPay · PhonePe · Cards · Netbanking",
   priceNote: "Incl. all taxes · Free delivery across India",
   gstToggle: "Need a GST invoice?",
   gstHint: "For business orders. We'll verify the GSTIN automatically.",
@@ -125,6 +142,28 @@ export const SIN_ADDON = {
   contextPlaceholder: "One detail. We'll make it personal.",
   addLabel: "Add the curse",
   addedLabel: "Curse added",
+} as const
+
+/**
+ * Unholy Ledger — the SECOND checkout add-on on /sin (the user moved it here
+ * from the vault). Title / price (₹666) / consent label are read from
+ * CHECKOUT_ADD_ON_CONFIG at the component; only seduction copy lives here.
+ * Rendered COLLAPSED in checkout step 2 below the Cursed Note. The public-record
+ * consent step is the hook's own — it never enters the order without it.
+ */
+export const SIN_LEDGER_ADDON = {
+  kicker: "OPTIONAL · ON THE RECORD",
+  title: "Sign the Unholy Ledger",
+  blurb:
+    "Your name, your city, a confession — entered into the public record. Permanent. We publish it; you live with it.",
+  nameLabel: "Display name or handle",
+  namePlaceholder: "@unholy_sinner",
+  cityLabel: "City",
+  cityPlaceholder: "Jaipur",
+  confessionLabel: "Confession (optional)",
+  confessionPlaceholder: "I said I was just curious. I lied.",
+  addLabel: "Sign the ledger",
+  addedLabel: "Signed",
 } as const
 
 export const SIN_VALUE = {
@@ -252,29 +291,30 @@ export const SIN_VAULT = {
     "Past the water, there's a smaller, stranger collection. Screenshot it. Just don't say we invited you.",
   items: [
     {
+      kind: "blackglove",
       file: "BT/001 · X01",
       name: "THE BLACK GLOVE",
       status: "BY INVITATION",
-      line: "Hand-delivered by a courier in a black glove. You don't apply. You get chosen.",
-      note: "Concierge tier · approval only",
+      line: "Hand-delivered by the founder, in a black glove, because normal shipping lacks emotional damage. You don't apply. You get chosen.",
+      note: "Concierge tier · ₹1,00,000",
+      action: "REQUEST AN INVITATION",
     },
     {
+      kind: "donotbuy",
       file: "BT/001 · X02",
       name: "DO NOT BUY",
       status: "FORBIDDEN",
-      line: "The one pack we're openly begging you to leave alone. You won't.",
-      note: "Consider this your warning",
-    },
-    {
-      file: "BT/001 · X03",
-      name: "THE UNHOLY LEDGER",
-      status: "₹666",
-      line: "Your name, your city, your confession — entered into the public record. Forever.",
-      note: "A wall of the converted",
+      line: "666 cans and a signed crate. The one pack we're openly begging you to leave alone. You won't.",
+      // %PRICE% replaced with the live donotbuy SKU price in-component.
+      note: "If you're unwell enough · %PRICE%",
+      action: "BUY IT ANYWAY",
     },
   ],
-  cta: "ENTER THE RITUAL",
-  ctaHref: "/bloodthirst-shop",
+  /** Soft discovery thread only — the full 3D ritual, for the genuinely curious.
+   *  Subordinate to the on-page actions; the page no longer pushes buyers off. */
+  ritualNote: "Prefer the full ritual, in 3D?",
+  ritualCta: "Descend into /bloodthirst-shop",
+  ritualHref: "/bloodthirst-shop",
 } as const
 
 export const SIN_FOOTER = {

@@ -53,8 +53,36 @@ export const PACKS: Pack[] = [
   },
 ]
 
+/**
+ * One-off / stunt SKUs that must be purchasable and SERVER-PRICE-VALIDATED via
+ * getPackById, but must NEVER appear in the normal pack racks (~10 components
+ * iterate PACKS). Kept out of PACKS so no rack renders them; the /sin "Do Not
+ * Buy" stunt selects this directly. Same security path — the order API reads the
+ * price from here, never the client.
+ */
+export const SPECIAL_PACKS: Pack[] = [
+  {
+    id: "donotbuy",
+    // 666 cans for ₹66,666 (~₹100/can) — a DELIBERATE loss, written off as a
+    // marketing stunt. Kept at ₹66,666 (not ₹6,66,666) because Razorpay rejects
+    // amounts above the account's max-order cap ("amount exceeds maximum"), so
+    // the larger number isn't chargeable; this one is. The stunt has to actually
+    // work if someone's unhinged enough to buy it.
+    title: "Do Not Buy This",
+    qty: 666,
+    price: 66666,
+    perCan: 100,
+    blurb:
+      "666 cans and a signed crate. We told you not to.",
+  },
+]
+
 export function getPackById(id: string) {
-  return PACKS.find((pack) => pack.id === id) || null
+  return [...PACKS, ...SPECIAL_PACKS].find((pack) => pack.id === id) || null
+}
+
+export function isSpecialPackId(id: string) {
+  return SPECIAL_PACKS.some((pack) => pack.id === id)
 }
 
 /**

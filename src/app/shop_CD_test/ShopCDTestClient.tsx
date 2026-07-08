@@ -259,7 +259,11 @@ export function ShopCDTestClient({ razorpayKey }: { razorpayKey?: string }) {
             } catch {
               /* noop */
             }
-            navigate(`/thanks?receipt=${encodeURIComponent(verification.receiptToken)}`)
+            const receiptReference = verification.receiptRef || verification.receiptToken
+            if (!receiptReference) {
+              throw new Error("Payment verified, but the receipt could not be opened.")
+            }
+            navigate(`/thanks?receiptRef=${encodeURIComponent(receiptReference)}`)
           } catch (error: any) {
             setPayError(error?.message || "Payment verification failed.")
             setLoading(false)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { ShippingForm } from "@/lib/shop/types"
 import {
   GSTIN_REGEX,
@@ -49,18 +49,36 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
   })
   const requestIdRef = useRef(0)
   const manualLocationVersionRef = useRef(0)
-  const lookupAppliedVersionRef = useRef(-1)
+  const lookupOwnedFieldsRef = useRef({ city: false, state: false })
+  const cityRef = useRef(form.city)
+  const stateRef = useRef(form.state)
+
+  cityRef.current = form.city
+  stateRef.current = form.state
+
+  const clearLookupOwnedLocation = useCallback(() => {
+    if (lookupOwnedFieldsRef.current.city) {
+      lookupOwnedFieldsRef.current.city = false
+      onChange("city", "")
+    }
+    if (lookupOwnedFieldsRef.current.state) {
+      lookupOwnedFieldsRef.current.state = false
+      onChange("state", "")
+    }
+  }, [onChange])
 
   useEffect(() => {
     const pincode = form.pincode.trim()
     requestIdRef.current += 1
 
     if (pincode.length === 0) {
+      clearLookupOwnedLocation()
       setPincodeLookup({ status: "idle", message: "" })
       return
     }
 
     if (!/^\d{6}$/.test(pincode)) {
+      clearLookupOwnedLocation()
       setPincodeLookup({
         status: "idle",
         message: pincode.length >= 6 ? "Enter a valid 6-digit pincode." : "",
@@ -83,6 +101,7 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
         if (controller.signal.aborted || requestId !== requestIdRef.current) return
 
         if (!res.ok || !data?.ok || !data.city || !data.state) {
+          clearLookupOwnedLocation()
           setPincodeLookup({
             status: "error",
             message: data?.error || "Lookup failed. Enter city and state manually.",
@@ -91,20 +110,38 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
         }
 
         const canApplyLookup = manualLocationVersionRef.current === manualVersionAtStart
-        if (canApplyLookup) {
-          lookupAppliedVersionRef.current = manualVersionAtStart
+        const shouldFillCity =
+          canApplyLookup && (!cityRef.current.trim() || lookupOwnedFieldsRef.current.city)
+        const shouldFillState =
+          canApplyLookup && (!stateRef.current || lookupOwnedFieldsRef.current.state)
+
+        if (shouldFillCity) {
+          lookupOwnedFieldsRef.current.city = true
           onChange("city", String(data.city))
+        }
+        if (shouldFillState) {
+          lookupOwnedFieldsRef.current.state = true
           onChange("state", String(data.state))
+        }
+
+        if (canApplyLookup) {
+          const filledAny = shouldFillCity || shouldFillState
+          setPincodeLookup({
+            status: "success",
+            message: filledAny
+              ? "City and state checked. You can edit them if needed."
+              : "Pincode found. Keeping your manual city and state.",
+          })
+          return
         }
 
         setPincodeLookup({
           status: "success",
-          message: canApplyLookup
-            ? "City and state filled. You can edit them if needed."
-            : "Pincode found. Keeping your manual city and state.",
+          message: "Pincode found. Keeping your manual city and state.",
         })
       } catch {
         if (controller.signal.aborted || requestId !== requestIdRef.current) return
+        clearLookupOwnedLocation()
         setPincodeLookup({
           status: "error",
           message: "Lookup failed. Enter city and state manually.",
@@ -116,7 +153,7 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
       window.clearTimeout(t)
       controller.abort()
     }
-  }, [form.pincode, onChange])
+  }, [clearLookupOwnedLocation, form.pincode, onChange])
 
   const handleChange = (field: keyof ShippingForm, value: string) => {
     if (field === "pincode") {
@@ -125,11 +162,8 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
     }
 
     if (field === "city" || field === "state") {
-      if (manualLocationVersionRef.current === lookupAppliedVersionRef.current) {
-        lookupAppliedVersionRef.current = -1
-      } else {
-        manualLocationVersionRef.current += 1
-      }
+      manualLocationVersionRef.current += 1
+      lookupOwnedFieldsRef.current[field] = false
     }
 
     onChange(field, value)
@@ -149,22 +183,6 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
       </p>
 
       <Field label="Address" field="address" value={form.address} error={errors.address} onChange={handleChange} onBlur={onBlur} placeholder="House, street, locality" />
-      <Field label="Pincode" field="pincode" value={form.pincode} error={errors.pincode} onChange={handleChange} onBlur={onBlur} placeholder="6-digit" />
-      {pincodeLookup.message && !errors.pincode && (
-        <p
-          id="rf-pincode-lookup"
-          role={pincodeLookup.status === "error" ? "alert" : "status"}
-          className={`-mt-2 font-mono text-[10px] uppercase tracking-wider ${
-            pincodeLookup.status === "success"
-              ? "text-green-400/85"
-              : pincodeLookup.status === "loading"
-              ? "text-bone/45"
-              : "text-red-400"
-          }`}
-        >
-          {pincodeLookup.message}
-        </p>
-      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="City" field="city" value={form.city} error={errors.city} onChange={handleChange} onBlur={onBlur} placeholder="City" />
         <div>
@@ -179,8 +197,8 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
               onBlur={() => onBlur("state")}
               aria-invalid={Boolean(errors.state)}
               aria-describedby={errors.state ? "rf-state-error" : undefined}
-              className={`w-full appearance-none border bg-black/55 px-4 py-3 font-mono text-sm uppercase tracking-wider outline-none transition-colors duration-200 focus:border-blood/70 ${
-                errors.state ? "border-blood/70" : "border-bone/12"
+              className={`w-full appearance-none border-2 bg-[#0d0d0d] px-4 py-3 font-mono text-sm font-bold uppercase tracking-wider outline-none transition-colors duration-150 focus:border-blood ${
+                errors.state ? "border-blood" : "border-offwhite/15"
               } ${form.state ? "text-offwhite" : "text-bone/35"}`}
             >
               <option value="" disabled>Select</option>
@@ -197,6 +215,22 @@ export function SinShippingFields({ form, errors, onChange, onBlur }: FieldGroup
           )}
         </div>
       </div>
+      <Field label="Pincode" field="pincode" value={form.pincode} error={errors.pincode} onChange={handleChange} onBlur={onBlur} placeholder="6-digit" />
+      {pincodeLookup.message && !errors.pincode && (
+        <p
+          id="rf-pincode-lookup"
+          role={pincodeLookup.status === "error" ? "alert" : "status"}
+          className={`-mt-2 font-mono text-[10px] uppercase tracking-wider ${
+            pincodeLookup.status === "success"
+              ? "text-green-400/85"
+              : pincodeLookup.status === "loading"
+              ? "text-bone/45"
+              : "text-red-400"
+          }`}
+        >
+          {pincodeLookup.message}
+        </p>
+      )}
 
       {/* GST — folded away by default */}
       {!gstOpen ? (
@@ -264,8 +298,8 @@ function Field({
         onBlur={() => onBlur(field)}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-error` : undefined}
-        className={`w-full border bg-black/55 px-4 py-3 font-mono text-sm tracking-wider text-offwhite placeholder:text-bone/40 outline-none transition-colors duration-200 focus:border-blood/70 ${
-          error ? "border-blood/70" : "border-bone/12"
+        className={`w-full border-2 bg-[#0d0d0d] px-4 py-3 font-mono text-sm font-bold tracking-wider text-offwhite placeholder:font-normal placeholder:text-bone/40 outline-none transition-colors duration-150 focus:border-blood ${
+          error ? "border-blood" : "border-offwhite/15"
         }`}
       />
       {error && (
@@ -336,7 +370,7 @@ function GstLookupField({
   }
 
   return (
-    <div className="border border-bone/10 bg-black/35 px-4 py-4">
+    <div className="border-2 border-offwhite/12 bg-[#0a0a0a] px-4 py-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="font-mono text-[10px] uppercase tracking-[0.32em] text-bone/45">
           Business / GST invoice
@@ -371,8 +405,8 @@ function GstLookupField({
               handleBlur()
             }
           }}
-          className={`w-full border bg-black/55 px-4 py-3 font-mono text-sm uppercase tracking-wider text-offwhite placeholder:text-bone/40 outline-none transition-colors duration-200 focus:border-blood/70 ${
-            error ? "border-blood/70" : "border-bone/12"
+          className={`w-full border-2 bg-[#0d0d0d] px-4 py-3 font-mono text-sm font-bold uppercase tracking-wider text-offwhite placeholder:font-normal placeholder:text-bone/40 outline-none transition-colors duration-150 focus:border-blood ${
+            error ? "border-blood" : "border-offwhite/15"
           }`}
         />
         {loading && (

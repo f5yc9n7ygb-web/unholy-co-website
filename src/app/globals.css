@@ -829,10 +829,87 @@ button.btn:hover {
   }
 }
 
+/* ===== 2026 HOMEPAGE ("COLD LIGHT ARCHIVE") MICRO-MOTION =====
+   Opacity-only breathe for the hero light pool — deliberately no transform in
+   the keyframes so it can never override the element's centering translate. */
+@keyframes home-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ===== /sin "RED MASS" MICRO-MOTION =====
+   Global so keyframes referenced from inline styles survive SSR. */
+
+/* Infinite ticker — content rendered twice, band translates by exactly half. */
+@keyframes mass-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Poster elements slam in: slight overshoot, no fade-longer-than-needed. */
+@keyframes mass-slam {
+  0% {
+    opacity: 0;
+    transform: translateY(26px) scale(0.98);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.005);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Sticker pop — for rotated stamp chips. */
+@keyframes mass-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(var(--mass-rot, -4deg));
+  }
+  75% {
+    transform: scale(1.06) rotate(var(--mass-rot, -4deg));
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(var(--mass-rot, -4deg));
+  }
+}
+
+/* Soft pulse for the dispatch dot on the red bar (black dot, so opacity). */
+@keyframes mass-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [style*="sin-seam"],
   [style*="sin-breathe"],
-  [style*="sin-sweep"] {
+  [style*="sin-sweep"],
+  [style*="home-breathe"],
+  [style*="mass-slam"],
+  [style*="mass-pop"],
+  [style*="mass-blink"] {
+    animation: none !important;
+  }
+
+  /* Ticker keeps position 0 — first copy of the content stays readable. */
+  [style*="mass-ticker"] {
     animation: none !important;
   }
 }

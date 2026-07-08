@@ -34,8 +34,8 @@ export function SinCursedNote({
 }) {
   return (
     <div
-      className={`border transition-colors duration-300 ${
-        enabled ? "border-blood/45 bg-blood/[0.05]" : "border-bone/12 bg-black/30"
+      className={`border-2 transition-colors duration-300 ${
+        enabled ? "border-blood bg-blood/[0.07]" : "border-offwhite/12 bg-[#0a0a0a]"
       }`}
     >
       <div className="flex items-center justify-between gap-4 p-4 md:p-5">
@@ -43,7 +43,7 @@ export function SinCursedNote({
           <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-blood/80">
             {SIN_ADDON.kicker}
           </p>
-          <h4 className="mt-1 font-cinzel text-base font-black uppercase leading-none text-offwhite md:text-lg">
+          <h4 className="mt-1 font-anton text-lg uppercase leading-none tracking-[0.04em] text-offwhite md:text-xl">
             {SIN_ADDON.title}
             <span className="ml-2 align-middle font-mono text-[10px] tracking-[0.18em] text-bone/45">
               +₹{NOTE.price}
@@ -57,10 +57,10 @@ export function SinCursedNote({
           type="button"
           onClick={() => onToggle(!enabled)}
           aria-pressed={enabled}
-          className={`shrink-0 border px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] transition-colors ${
+          className={`shrink-0 border-2 px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] transition-colors ${
             enabled
-              ? "border-blood bg-blood text-offwhite"
-              : "border-bone/20 text-bone/70 hover:border-blood/60 hover:text-blood"
+              ? "border-offwhite bg-blood text-offwhite shadow-[3px_3px_0_#F6F6F6]"
+              : "border-offwhite/25 text-bone/70 hover:border-blood hover:text-blood"
           }`}
         >
           {enabled ? SIN_ADDON.addedLabel : SIN_ADDON.addLabel}
@@ -68,7 +68,7 @@ export function SinCursedNote({
       </div>
 
       {enabled && (
-        <div className="space-y-4 border-t border-bone/12 p-4 md:p-5">
+        <div className="space-y-4 border-t-2 border-offwhite/12 p-4 md:p-5">
           <div>
             <FieldLabel>{SIN_ADDON.toneLabel}</FieldLabel>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label={SIN_ADDON.toneLabel}>
@@ -79,10 +79,10 @@ export function SinCursedNote({
                   role="radio"
                   aria-checked={tone === t}
                   onClick={() => onToneChange(t)}
-                  className={`border px-3 py-2 text-left font-mono text-[10px] uppercase tracking-[0.12em] transition-colors ${
+                  className={`border-2 px-3 py-2 text-left font-mono text-[10px] uppercase tracking-[0.12em] transition-colors ${
                     tone === t
-                      ? "border-blood bg-blood/18 text-offwhite"
-                      : "border-bone/12 text-bone/60 hover:border-bone/30"
+                      ? "border-blood bg-blood text-offwhite"
+                      : "border-offwhite/15 text-bone/60 hover:border-offwhite/40"
                   }`}
                 >
                   {t}
@@ -97,7 +97,7 @@ export function SinCursedNote({
               value={recipientName}
               onChange={(e) => onRecipientChange(e.target.value)}
               placeholder={SIN_ADDON.recipientPlaceholder}
-              className="mt-1.5 w-full border border-bone/12 bg-black/55 px-4 py-3 font-mono text-sm tracking-wider text-offwhite placeholder:text-bone/40 outline-none transition-colors focus:border-blood/70"
+              className="mt-1.5 w-full border-2 border-offwhite/15 bg-[#0d0d0d] px-4 py-3 font-mono text-sm tracking-wider text-offwhite placeholder:text-bone/40 outline-none transition-colors focus:border-blood"
             />
           </label>
 
@@ -108,7 +108,7 @@ export function SinCursedNote({
               onChange={(e) => onContextChange(e.target.value)}
               placeholder={SIN_ADDON.contextPlaceholder}
               rows={3}
-              className="mt-1.5 w-full resize-none border border-bone/12 bg-black/55 px-4 py-3 text-sm leading-relaxed text-offwhite placeholder:text-bone/40 outline-none transition-colors focus:border-blood/70"
+              className="mt-1.5 w-full resize-none border-2 border-offwhite/15 bg-[#0d0d0d] px-4 py-3 text-sm leading-relaxed text-offwhite placeholder:text-bone/40 outline-none transition-colors focus:border-blood"
             />
           </label>
         </div>

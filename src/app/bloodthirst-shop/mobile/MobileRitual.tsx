@@ -487,7 +487,7 @@ export function MobileRitual({ razorpayKey }: { razorpayKey?: string }) {
                   Do Not Buy This · ₹66,666
                 </span>
                 <span className="mt-1 block text-sm leading-snug text-bone/64">
-                  66 cans. Signed crate. Founder judgement. Ancestrally inadvisable.
+                  666 cans. Signed crate. Founder judgement. Ancestrally inadvisable.
                 </span>
               </span>
               <span className="shrink-0 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-offwhite">

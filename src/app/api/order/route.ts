@@ -18,6 +18,7 @@ import {
 import { getMetaAttributionFromRequest } from "@/lib/server/meta-capi"
 import type { CheckoutAddOnRecord } from "@/lib/shop/addons"
 import { CHECKOUT_ADD_ON_CONFIG, isCheckoutAddOnId } from "@/lib/shop/addon-config"
+import { isPackAllowedForCheckoutSource } from "@/lib/shop/checkout-availability"
 import { isValidIndianMobile, normalizeIndianPhone } from "@/lib/shop/checkout-validation"
 import {
   ORDER_BODY_LIMIT_BYTES,
@@ -76,11 +77,13 @@ export async function POST(request: NextRequest) {
       promoCode?: string
       promoRecordId?: string
       addOns?: Array<{ id?: string; data?: Record<string, unknown> }>
+      source?: string
     }>(body, ORDER_BODY_LIMIT_BYTES)
     const packId = sanitizeText(payload.packId, 32)
     const shipping = normalizeShipping(payload.shipping)
     const promoCode = sanitizeText(payload.promoCode, 30)
     const promoRecordId = sanitizeText(payload.promoRecordId, 64)
+    const checkoutSource = resolveCheckoutSource(request, payload.source)
     const pack = getPackById(packId)
     const addOns = normalizeAddOns(payload.addOns)
     const grossTotal = pack ? pack.price + addOns.reduce((sum, item) => sum + item.price, 0) : 0
@@ -88,6 +91,13 @@ export async function POST(request: NextRequest) {
     if (!pack) {
       return NextResponse.json(
         { ok: false, error: "Invalid pack selected." },
+        { status: 400 }
+      )
+    }
+
+    if (!isPackAllowedForCheckoutSource(checkoutSource, pack.id)) {
+      return NextResponse.json(
+        { ok: false, error: "This pack is not available on this checkout." },
         { status: 400 }
       )
     }
@@ -515,4 +525,23 @@ function validateShipping(shipping: ShippingForm) {
 
 export async function GET() {
   return NextResponse.json({ error: "Method not allowed. Use POST." }, { status: 405 })
+}
+
+function resolveCheckoutSource(request: NextRequest, source?: string) {
+  const referer = request.headers.get("referer")
+  if (referer) {
+    try {
+      const refererUrl = new URL(referer)
+      if (refererUrl.pathname === "/sin" || refererUrl.pathname.startsWith("/sin/")) {
+        return "sin"
+      }
+    } catch {
+      return ""
+    }
+  }
+
+  const normalizedSource = sanitizeText(source, 32).toLowerCase()
+  if (normalizedSource === "sin") return "sin"
+
+  return ""
 }

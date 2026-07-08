@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { checkRateLimit } from "@/lib/server/security"
+import { checkRateLimit, validateRequestOriginOrReferer } from "@/lib/server/security"
 import { getKVNamespace } from "@/lib/server/kv"
 
 const GSTIN_REGEX = /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/
 
 export async function GET(request: NextRequest) {
+  const originCheck = validateRequestOriginOrReferer(request)
+  if (!originCheck.ok) {
+    return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 })
+  }
+
   const gstin = request.nextUrl.searchParams.get("gstin")?.trim().toUpperCase()
 
   if (!gstin || !GSTIN_REGEX.test(gstin)) {

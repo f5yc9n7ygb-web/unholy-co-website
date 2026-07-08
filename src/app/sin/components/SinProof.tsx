@@ -13,7 +13,7 @@ export function SinProof() {
   return (
     <section className="relative z-10 mx-auto w-full max-w-5xl px-5 py-20 md:px-10 md:py-28">
       <Reveal>
-        <SectionTitle kicker={SIN_PROOF.kicker} title={SIN_PROOF.title} />
+        <SectionTitle kicker={SIN_PROOF.kicker} title={SIN_PROOF.title} index="04" />
       </Reveal>
       <Reveal delay={60}>
         <p className="-mt-6 mb-10 max-w-xl font-mono text-[11px] uppercase tracking-[0.24em] text-bone/45">

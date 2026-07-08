@@ -51,17 +51,36 @@ export function validateRequestOrigin(request: NextRequest) {
     return { ok: false as const, message: "Origin header is required." }
   }
 
-  const allowedOrigins = new Set(
-    [request.nextUrl.origin, process.env.PUBLIC_SITE_URL, process.env.NEXT_PUBLIC_SITE_URL]
-      .filter(Boolean)
-      .map((value) => normalizeOrigin(String(value)))
-  )
-
-  if (!allowedOrigins.has(normalizeOrigin(origin))) {
+  if (!isAllowedOrigin(request, origin)) {
     return { ok: false as const, message: "Origin is not allowed." }
   }
 
   return { ok: true as const }
+}
+
+export function validateRequestOriginOrReferer(request: NextRequest) {
+  const origin = request.headers.get("origin")?.trim()
+  if (origin) {
+    return isAllowedOrigin(request, origin)
+      ? { ok: true as const }
+      : { ok: false as const, message: "Origin is not allowed." }
+  }
+
+  const referer = request.headers.get("referer")?.trim()
+  if (!referer) {
+    return { ok: false as const, message: "Origin or referer header is required." }
+  }
+
+  try {
+    const refererOrigin = new URL(referer).origin
+    if (isAllowedOrigin(request, refererOrigin)) {
+      return { ok: true as const }
+    }
+  } catch {
+    return { ok: false as const, message: "Referer is invalid." }
+  }
+
+  return { ok: false as const, message: "Referer is not allowed." }
 }
 
 export function validateContentLength(request: NextRequest, maxBytes: number) {
@@ -220,6 +239,18 @@ export function parseJsonBody<T>(body: string, maxBytes: number): T {
 
 function normalizeOrigin(origin: string) {
   return origin.replace(/\/$/, "")
+}
+
+function getAllowedOrigins(request: NextRequest) {
+  return new Set(
+    [request.nextUrl.origin, process.env.PUBLIC_SITE_URL, process.env.NEXT_PUBLIC_SITE_URL]
+      .filter(Boolean)
+      .map((value) => normalizeOrigin(String(value)))
+  )
+}
+
+function isAllowedOrigin(request: NextRequest, origin: string) {
+  return getAllowedOrigins(request).has(normalizeOrigin(origin))
 }
 
 function purgeExpiredRateLimits(now: number) {

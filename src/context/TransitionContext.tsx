@@ -11,11 +11,13 @@ import {
 import { useRouter, usePathname } from "next/navigation"
 import Image from "next/image"
 import type { Route } from "next"
-import gsap from "gsap"
 
 type TransitionCtx = {
   navigate: (href: string) => void
 }
+
+type Gsap = typeof import("gsap").default
+type GsapTimeline = ReturnType<Gsap["timeline"]>
 
 const TransitionContext = createContext<TransitionCtx>({ navigate: () => {} })
 
@@ -39,8 +41,16 @@ export function TransitionProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const curtainRef = useRef<HTMLDivElement>(null)
   const wordmarkRef = useRef<HTMLDivElement>(null)
-  const tl = useRef<gsap.core.Timeline | null>(null)
+  const gsapRef = useRef<Gsap | null>(null)
+  const tl = useRef<GsapTimeline | null>(null)
   const isCovering = useRef(false)
+
+  const loadGsap = useCallback(async () => {
+    if (gsapRef.current) return gsapRef.current
+    const mod = await import("gsap")
+    gsapRef.current = mod.default
+    return mod.default
+  }, [])
 
   // Pathname changed → new page mounted → reveal
   useEffect(() => {
@@ -48,26 +58,33 @@ export function TransitionProvider({ children }: { children: ReactNode }) {
     isCovering.current = false
 
     // One frame delay so new page has painted before we pull back the curtain
-    gsap.delayedCall(0.04, () => {
-      if (tl.current) tl.current.kill()
-      tl.current = gsap.timeline()
-        // Wordmark exits upward
-        .to(wordmarkRef.current, {
-          opacity: 0,
-          y: -10,
-          duration: 0.18,
-          ease: "power2.in",
-        })
-        // Switch origin to top so curtain retracts upward
-        .set(curtainRef.current, { transformOrigin: "top center" })
-        // Curtain pulls up
-        .to(curtainRef.current, {
-          scaleY: 0,
-          duration: 0.55,
-          ease: "expo.inOut",
-        }, "-=0.08")
+    let cancelled = false
+    void loadGsap().then((gsap) => {
+      if (cancelled) return
+      gsap.delayedCall(0.04, () => {
+        if (tl.current) tl.current.kill()
+        tl.current = gsap.timeline()
+          // Wordmark exits upward
+          .to(wordmarkRef.current, {
+            opacity: 0,
+            y: -10,
+            duration: 0.18,
+            ease: "power2.in",
+          })
+          // Switch origin to top so curtain retracts upward
+          .set(curtainRef.current, { transformOrigin: "top center" })
+          // Curtain pulls up
+          .to(curtainRef.current, {
+            scaleY: 0,
+            duration: 0.55,
+            ease: "expo.inOut",
+          }, "-=0.08")
+      })
     })
-  }, [pathname])
+    return () => {
+      cancelled = true
+    }
+  }, [loadGsap, pathname])
 
   // Use a ref to track pathname so the callback doesn't need it as a dependency
   const pathnameRef = useRef(pathname)
@@ -76,35 +93,40 @@ export function TransitionProvider({ children }: { children: ReactNode }) {
   const navigate = useCallback(
     (href: string) => {
       if (href === pathnameRef.current) return
-      if (tl.current) tl.current.kill()
 
-      // Reset state
-      gsap.set(curtainRef.current, {
-        scaleY: 0,
-        transformOrigin: "bottom center",
-      })
-      gsap.set(wordmarkRef.current, { opacity: 0, y: 8 })
+      void loadGsap().then((gsap) => {
+        if (tl.current) tl.current.kill()
 
-      isCovering.current = true
-
-      tl.current = gsap.timeline({
-        onComplete: () => router.push(href as Route),
-      })
-        // Curtain rises from bottom
-        .to(curtainRef.current, {
-          scaleY: 1,
-          duration: 0.5,
-          ease: "expo.inOut",
+        // Reset state
+        gsap.set(curtainRef.current, {
+          scaleY: 0,
+          transformOrigin: "bottom center",
         })
-        // Wordmark drifts up into view at peak
-        .to(wordmarkRef.current, {
-          opacity: 1,
-          y: 0,
-          duration: 0.22,
-          ease: "power2.out",
-        }, "-=0.2")
+        gsap.set(wordmarkRef.current, { opacity: 0, y: 8 })
+
+        isCovering.current = true
+
+        tl.current = gsap.timeline({
+          onComplete: () => router.push(href as Route),
+        })
+          // Curtain rises from bottom
+          .to(curtainRef.current, {
+            scaleY: 1,
+            duration: 0.5,
+            ease: "expo.inOut",
+          })
+          // Wordmark drifts up into view at peak
+          .to(wordmarkRef.current, {
+            opacity: 1,
+            y: 0,
+            duration: 0.22,
+            ease: "power2.out",
+          }, "-=0.2")
+      }).catch(() => {
+        router.push(href as Route)
+      })
     },
-    [router]
+    [loadGsap, router]
   )
 
   return (

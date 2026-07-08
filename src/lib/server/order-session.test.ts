@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest"
 import {
+  createReceiptReference,
   createReceiptToken,
+  readReceiptReference,
   readReceiptToken,
   readOrderSessionToken,
 } from "./order-session"
@@ -39,5 +41,14 @@ describe("order-session signed tokens", () => {
     // A receipt token must not validate as an order-session token.
     expect(readOrderSessionToken(receipt)).toBeNull()
     expect(readReceiptToken(receipt)).not.toBeNull()
+  })
+
+  it("resolves opaque receipt references without exposing the signed token in URLs", async () => {
+    const token = createReceiptToken({ packId: "pack6", qty: 6, orderId: "order_ref" })
+    const ref = await createReceiptReference(token, null)
+
+    expect(ref).toMatch(/^rr_/)
+    expect(ref).not.toContain(".")
+    await expect(readReceiptReference(ref, null)).resolves.toBe(token)
   })
 })
