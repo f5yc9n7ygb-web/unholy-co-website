@@ -55,3 +55,7 @@ VERIFICATION_GUIDE.md
 # Generated invoice/PDF batches (modern-bazaar tooling, not website code)
 output/
 outputs/
+
+# Standalone modern-bazaar invoice tooling + review docs (not website code)
+scripts/*modern-bazaar*
+docs/*.docx
